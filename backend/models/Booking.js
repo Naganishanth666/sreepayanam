@@ -85,7 +85,7 @@ const bookingSchema = new mongoose.Schema({
 });
 
 // Pre-save hook to calculate pending amount
-bookingSchema.pre('save', function(next) {
+bookingSchema.pre('save', function() {
   this.pendingAmount = Math.max(0, this.totalAmount - this.paidAmount);
   
   // Auto-promote payment status
@@ -98,7 +98,6 @@ bookingSchema.pre('save', function(next) {
   }
   
   this.updatedAt = new Date();
-  next();
 });
 
 module.exports = mongoose.model('Booking', bookingSchema);

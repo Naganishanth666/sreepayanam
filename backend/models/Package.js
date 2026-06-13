@@ -61,7 +61,7 @@ const packageSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
-packageSchema.pre('save', function(next) {
+packageSchema.pre('save', function() {
   // Enforce a strict 10% profit margin standard on all tours
   this.profitMarginPercent = 10;
   if (this.baseCost) {
@@ -73,7 +73,6 @@ packageSchema.pre('save', function(next) {
     this.offerPrice = Math.round(this.baseCost * 1.10);
   }
   this.updatedAt = Date.now();
-  next();
 });
 
 module.exports = mongoose.model('Package', packageSchema);
