@@ -631,11 +631,17 @@ async function seedDatabase() {
   try {
     console.log('Connecting to database...');
     await mongoose.connect(MONGODB_URI);
-    console.log('Connected. Clearing existing packages...');
-    await Package.deleteMany({});
-    console.log('Packages cleared. Inserting 14 premium packages...');
-    await Package.insertMany(packages);
-    console.log('Database successfully seeded with full SreePayanam package catalog!');
+    
+    const count = await Package.countDocuments();
+    if (count === 0 || process.env.FORCE_SEED === 'true') {
+      console.log('Clearing existing packages...');
+      await Package.deleteMany({});
+      console.log('Inserting 14 premium packages...');
+      await Package.insertMany(packages);
+      console.log('Database successfully seeded with full SreePayanam package catalog!');
+    } else {
+      console.log(`Database already contains ${count} packages. Skipping seeding to prevent data loss. (Set FORCE_SEED=true to override).`);
+    }
     process.exit(0);
   } catch (err) {
     console.error('Seeding error:', err);
