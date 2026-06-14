@@ -5,12 +5,14 @@ import {
   MapPin, Clock, Users, Star, CheckCircle, XCircle,
   ChevronDown, ChevronUp, Share2, Download, Phone,
   Calendar, Tag, Home, Utensils, ArrowLeft, MessageCircle,
-  Plane, Car
+  Plane, Car, Lock
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const WHATSAPP_NUMBER = '919443217654'; // Real contact number
 
 const PackageDetails = () => {
+  const { isLoggedIn } = useAuth();
   const { id } = useParams();
   const navigate = useNavigate();
   const [pkg, setPkg] = useState(null);
@@ -186,7 +188,44 @@ const PackageDetails = () => {
           {/* Tab: Itinerary */}
           {activeTab === 'itinerary' && (
             <motion.div key="it" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-              {itinerary.length === 0 ? (
+              {!isLoggedIn ? (
+                <div style={{
+                  padding: '48px 24px',
+                  textAlign: 'center',
+                  background: 'white',
+                  borderRadius: 16,
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.02)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: '1px solid #cbd5e1'
+                }}>
+                  <div style={{
+                    background: 'rgba(239, 68, 68, 0.08)',
+                    color: '#ef4444',
+                    padding: 16,
+                    borderRadius: '50%',
+                    marginBottom: 16,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <Lock size={32} />
+                  </div>
+                  <h3 style={{ fontWeight: 800, color: 'var(--dark)', marginBottom: 8, fontSize: '1.25rem' }}>Itinerary Locked</h3>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', maxWidth: 440, lineHeight: 1.6, marginBottom: 24 }}>
+                    Log in or sign up for a free SreePayanam account to view the full, day-by-day travel plan and custom destinations!
+                  </p>
+                  <button 
+                    onClick={() => navigate('/login')}
+                    className="btn btn-primary"
+                    style={{ padding: '10px 24px', fontSize: '0.9rem', fontWeight: 700 }}
+                  >
+                    Log In / Sign Up
+                  </button>
+                </div>
+              ) : itinerary.length === 0 ? (
                 <div className="glass-card" style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>No itinerary added yet.</div>
               ) : itinerary.map((day, i) => (
                 <div key={i} className="glass-card" style={{ marginBottom: 12, overflow: 'hidden' }}>
@@ -278,51 +317,88 @@ const PackageDetails = () => {
         {/* Sidebar */}
         <div style={{ position: 'sticky', top: 90 }}>
           <div className="glass-card" style={{ padding: 28, marginBottom: 20 }}>
-            <h3 style={{ marginBottom: 4, color: 'var(--dark)', fontWeight: 700, fontSize: '1.2rem' }}>Book / Enquire</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: 20 }}>Secure your spot instantly or ask for callback details.</p>
-
-            <Link 
-              to={`/checkout?packageId=${pkg._id}`} 
-              className="btn btn-secondary" 
-              style={{ width: '100%', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontWeight: 800, fontSize: '1.02rem', textShadow: '0 1px 2px rgba(0,0,0,0.1)', marginBottom: 16 }}
-            >
-              ⚡ Book &amp; Pay Online
-            </Link>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, color: '#94a3b8', fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              <div style={{ flex: 1, height: 1, background: '#cbd5e1' }} />
-              <span>Or Ask callback</span>
-              <div style={{ flex: 1, height: 1, background: '#cbd5e1' }} />
-            </div>
-
-            {submitted ? (
-              <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                <div style={{ fontSize: '3rem', marginBottom: 12 }}>✅</div>
-                <h4 style={{ color: '#16a34a', marginBottom: 8 }}>Enquiry Submitted!</h4>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Our team will call you shortly.</p>
+            {!isLoggedIn ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '12px 0',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <div style={{
+                  background: 'rgba(99, 102, 241, 0.08)',
+                  color: 'var(--primary)',
+                  padding: 12,
+                  borderRadius: '50%',
+                  marginBottom: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Lock size={20} />
+                </div>
+                <h3 style={{ fontWeight: 800, color: 'var(--dark)', marginBottom: 8, fontSize: '1.1rem' }}>Booking & Enquiry Locked</h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', lineHeight: 1.45, marginBottom: 16 }}>
+                  Please log in or sign up first to book online, request callbacks, or send custom WhatsApp enquiries.
+                </p>
+                <button 
+                  onClick={() => navigate('/login')}
+                  className="btn btn-primary"
+                  style={{ width: '100%', padding: '10px 16px', fontSize: '0.88rem', fontWeight: 700 }}
+                >
+                  Log In / Sign Up
+                </button>
               </div>
             ) : (
-              <form onSubmit={handleEnquiry} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <input required className="input-field" placeholder="Your Name *" value={enquiry.name} onChange={e => setEnquiry(f => ({ ...f, name: e.target.value }))} />
-                <input required className="input-field" placeholder="Phone Number *" type="tel" value={enquiry.phone} onChange={e => setEnquiry(f => ({ ...f, phone: e.target.value }))} />
-                <input className="input-field" placeholder="Email Address" type="email" value={enquiry.email} onChange={e => setEnquiry(f => ({ ...f, email: e.target.value }))} />
-                <input className="input-field" type="date" value={enquiry.date} onChange={e => setEnquiry(f => ({ ...f, date: e.target.value }))} />
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <Users size={18} color="var(--text-muted)" />
-                  <input className="input-field" type="number" min="1" placeholder="Passengers" value={enquiry.passengers} onChange={e => setEnquiry(f => ({ ...f, passengers: e.target.value }))} />
-                </div>
-                <button type="submit" className="btn btn-primary" style={{ marginTop: 4, padding: '12px' }}>
-                  <Phone size={16} style={{ marginRight: 8 }} /> Request Callback
-                </button>
-              </form>
-            )}
+              <>
+                <h3 style={{ marginBottom: 4, color: 'var(--dark)', fontWeight: 700, fontSize: '1.2rem' }}>Book / Enquire</h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: 20 }}>Secure your spot instantly or ask for callback details.</p>
 
-            <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #e2e8f0' }}>
-              <a href={`https://wa.me/${WHATSAPP_NUMBER}?text=${waMessage}`} target="_blank" rel="noreferrer"
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, background: '#25d366', color: 'white', padding: '12px', borderRadius: 8, fontWeight: 700, textDecoration: 'none', marginBottom: 8 }}>
-                <MessageCircle size={18} /> Chat on WhatsApp
-              </a>
-            </div>
+                <Link 
+                  to={`/checkout?packageId=${pkg._id}`} 
+                  className="btn btn-secondary" 
+                  style={{ width: '100%', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontWeight: 800, fontSize: '1.02rem', textShadow: '0 1px 2px rgba(0,0,0,0.1)', marginBottom: 16 }}
+                >
+                  ⚡ Book &amp; Pay Online
+                </Link>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, color: '#94a3b8', fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  <div style={{ flex: 1, height: 1, background: '#cbd5e1' }} />
+                  <span>Or Ask callback</span>
+                  <div style={{ flex: 1, height: 1, background: '#cbd5e1' }} />
+                </div>
+
+                {submitted ? (
+                  <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                    <div style={{ fontSize: '3rem', marginBottom: 12 }}>✅</div>
+                    <h4 style={{ color: '#16a34a', marginBottom: 8 }}>Enquiry Submitted!</h4>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Our team will call you shortly.</p>
+                  </div>
+                ) : (
+                  <form onSubmit={handleEnquiry} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <input required className="input-field" placeholder="Your Name *" value={enquiry.name} onChange={e => setEnquiry(f => ({ ...f, name: e.target.value }))} />
+                    <input required className="input-field" placeholder="Phone Number *" type="tel" value={enquiry.phone} onChange={e => setEnquiry(f => ({ ...f, phone: e.target.value }))} />
+                    <input className="input-field" placeholder="Email Address" type="email" value={enquiry.email} onChange={e => setEnquiry(f => ({ ...f, email: e.target.value }))} />
+                    <input className="input-field" type="date" value={enquiry.date} onChange={e => setEnquiry(f => ({ ...f, date: e.target.value }))} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <Users size={18} color="var(--text-muted)" />
+                      <input className="input-field" type="number" min="1" placeholder="Passengers" value={enquiry.passengers} onChange={e => setEnquiry(f => ({ ...f, passengers: e.target.value }))} />
+                    </div>
+                    <button type="submit" className="btn btn-primary" style={{ marginTop: 4, padding: '12px' }}>
+                      <Phone size={16} style={{ marginRight: 8 }} /> Request Callback
+                    </button>
+                  </form>
+                )}
+
+                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #e2e8f0' }}>
+                  <a href={`https://wa.me/${WHATSAPP_NUMBER}?text=${waMessage}`} target="_blank" rel="noreferrer"
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, background: '#25d366', color: 'white', padding: '12px', borderRadius: 8, fontWeight: 700, textDecoration: 'none', marginBottom: 8 }}>
+                    <MessageCircle size={18} /> Chat on WhatsApp
+                  </a>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Offer badge */}

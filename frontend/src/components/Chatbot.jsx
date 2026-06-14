@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, X, Send, Bot, Sparkles, RefreshCw } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const Chatbot = () => {
+  const { isLoggedIn } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
     {
@@ -151,92 +153,134 @@ const Chatbot = () => {
               </div>
             </div>
 
-            {/* Message List */}
-            <div ref={listRef} style={{
-              flex: 1,
-              overflowY: 'auto',
-              padding: '16px 20px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-              background: '#f8fafc'
-            }}>
-              {messages.map((m, i) => (
-                <div key={i} style={{
-                  display: 'flex',
-                  justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start',
-                  alignItems: 'flex-end',
-                  gap: 8
-                }}>
-                  {m.role !== 'user' && (
-                    <div style={{ background: 'var(--primary)', width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <Bot size={14} color="white" />
-                    </div>
-                  )}
-                  <div style={{
-                    maxWidth: '80%',
-                    padding: '10px 14px',
-                    fontSize: '0.88rem',
-                    lineHeight: '1.45',
-                    borderRadius: m.role === 'user' ? '14px 14px 0 14px' : '14px 14px 14px 0',
-                    background: m.role === 'user' ? 'var(--primary)' : 'white',
-                    color: m.role === 'user' ? 'white' : 'var(--text-main)',
-                    boxShadow: '0 2px 5px rgba(0,0,0,0.04)'
-                  }}>
-                    {formatText(m.content)}
-                  </div>
-                </div>
-              ))}
-              {loading && (
-                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-                  <div style={{ background: 'var(--primary)', width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Bot size={14} color="white" />
-                  </div>
-                  <div style={{ background: 'white', padding: '10px 14px', borderRadius: '14px 14px 14px 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                    Typing...
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Input Form */}
-            <form onSubmit={handleSend} style={{
-              padding: '12px 16px',
-              background: 'white',
-              borderTop: '1px solid #f1f5f9',
-              display: 'flex',
-              gap: 8
-            }}>
-              <input
-                type="text"
-                placeholder="Type a message..."
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                style={{
-                  flex: 1,
-                  border: '1px solid #e2e8f0',
-                  borderRadius: 24,
-                  padding: '8px 16px',
-                  fontSize: '0.88rem',
-                  outline: 'none'
-                }}
-              />
-              <button type="submit" disabled={loading || !input.trim()} style={{
-                background: 'var(--primary)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '50%',
-                width: 36,
-                height: 36,
+            {!isLoggedIn ? (
+              <div style={{
+                flex: 1,
                 display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                cursor: 'pointer',
-                opacity: (loading || !input.trim()) ? 0.5 : 1
+                padding: '30px 24px',
+                textAlign: 'center',
+                background: '#f8fafc'
               }}>
-                <Send size={16} />
-              </button>
-            </form>
+                <div style={{
+                  background: 'rgba(99, 102, 241, 0.1)',
+                  padding: 16,
+                  borderRadius: '50%',
+                  marginBottom: 16,
+                  color: 'var(--primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Bot size={40} />
+                </div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--dark)', marginBottom: 10 }}>AI Travel Support</h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 20 }}>
+                  Log in or create a SreePayanam account to unlock our AI Travel assistant and plan your dream vacations!
+                </p>
+                <button
+                  onClick={() => {
+                    setIsOpen(false);
+                    window.location.href = '/login';
+                  }}
+                  className="btn btn-primary"
+                  style={{ width: '100%', padding: '10px 16px', fontSize: '0.9rem', fontWeight: 700 }}
+                >
+                  Log In / Sign Up
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Message List */}
+                <div ref={listRef} style={{
+                  flex: 1,
+                  overflowY: 'auto',
+                  padding: '16px 20px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 12,
+                  background: '#f8fafc'
+                }}>
+                  {messages.map((m, i) => (
+                    <div key={i} style={{
+                      display: 'flex',
+                      justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start',
+                      alignItems: 'flex-end',
+                      gap: 8
+                    }}>
+                      {m.role !== 'user' && (
+                        <div style={{ background: 'var(--primary)', width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <Bot size={14} color="white" />
+                        </div>
+                      )}
+                      <div style={{
+                        maxWidth: '80%',
+                        padding: '10px 14px',
+                        fontSize: '0.88rem',
+                        lineHeight: '1.45',
+                        borderRadius: m.role === 'user' ? '14px 14px 0 14px' : '14px 14px 14px 0',
+                        background: m.role === 'user' ? 'var(--primary)' : 'white',
+                        color: m.role === 'user' ? 'white' : 'var(--text-main)',
+                        boxShadow: '0 2px 5px rgba(0,0,0,0.04)'
+                      }}>
+                        {formatText(m.content)}
+                      </div>
+                    </div>
+                  ))}
+                  {loading && (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                      <div style={{ background: 'var(--primary)', width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Bot size={14} color="white" />
+                      </div>
+                      <div style={{ background: 'white', padding: '10px 14px', borderRadius: '14px 14px 14px 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                        Typing...
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Input Form */}
+                <form onSubmit={handleSend} style={{
+                  padding: '12px 16px',
+                  background: 'white',
+                  borderTop: '1px solid #f1f5f9',
+                  display: 'flex',
+                  gap: 8
+                }}>
+                  <input
+                    type="text"
+                    placeholder="Type a message..."
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    style={{
+                      flex: 1,
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 24,
+                      padding: '8px 16px',
+                      fontSize: '0.88rem',
+                      outline: 'none'
+                    }}
+                  />
+                  <button type="submit" disabled={loading || !input.trim()} style={{
+                    background: 'var(--primary)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: 36,
+                    height: 36,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    opacity: (loading || !input.trim()) ? 0.5 : 1
+                  }}>
+                    <Send size={16} />
+                  </button>
+                </form>
+              </>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

@@ -257,6 +257,96 @@ router.post('/plan', async (req, res) => {
   }
 });
 
+// 1.5 AI Structured Custom Tour Planner (B2C Customers)
+router.post('/plan-structured', async (req, res) => {
+  try {
+    const {
+      destination,
+      startingCity,
+      endingCity,
+      durationDays,
+      durationNights,
+      transportType,
+      hotelCategory,
+      travelType,
+      customPrompt
+    } = req.body;
+
+    const openai = getOpenAIClient(res);
+    if (!openai) return;
+
+    const systemPrompt = `
+      You are an expert AI Travel Planner & Assistant for "SreePayanam Tours & Travels".
+      Your goal is to design a highly personalized, realistic, and premium day-by-day travel itinerary based on the user's choices.
+      
+      User Selection:
+      - Destination: ${destination}
+      - Starting Point (Start City): ${startingCity || 'Not specified'}
+      - Ending Point (End City): ${endingCity || 'Not specified'}
+      - Duration: ${durationDays} Days / ${durationNights} Nights
+      - Transport Mode: ${transportType}
+      - Accommodation Level: ${hotelCategory}
+      - Tour Type / Vibe: ${travelType || 'General'}
+      - Additional Requests/Interests: ${customPrompt || 'None'}
+
+      Instructions:
+      1. Perform realistic travel research. Suggest genuine local hotels/resorts matching the requested accommodation level (${hotelCategory}).
+      2. Suggest authentic local dining options and cuisines to try.
+      3. Recommend concrete daily transfers matching the selected transport mode (${transportType}). If Flight or Train, specify realistic schedules or routes. If Car, mention realistic driving durations/distances.
+      4. Suggest a realistic price range for the overall trip in Indian Rupees (₹), e.g., "₹25,000 - ₹35,000 per person".
+      5. The output MUST be a valid JSON object ONLY. Do not write any markdown wrappers (like \`\`\`json), explanations, or trailing characters.
+
+      The JSON object MUST strictly conform to the following schema:
+      {
+        "title": "Inspiring and premium package title matching the vibe",
+        "destination": "${destination}",
+        "startingCity": "${startingCity || ''}",
+        "endingCity": "${endingCity || ''}",
+        "durationDays": ${Number(durationDays) || 5},
+        "durationNights": ${Number(durationNights) || 4},
+        "estimatedPrice": "Estimated price range in ₹ (e.g., ₹22,000 - ₹28,000 per person)",
+        "overview": "Thorough, engaging overview paragraph describing the customized experience.",
+        "itinerary": [
+          {
+            "day": 1,
+            "title": "Arrival & Leisure / Activity Title",
+            "activities": "Detailed description of activities for this day.",
+            "hotel": {
+              "name": "Name of a specific realistic hotel/resort matching ${hotelCategory} tier",
+              "rating": "${hotelCategory === 'Luxury' ? '5 Star Resort' : hotelCategory === 'Premium' ? '4 Star Hotel' : '3 Star Hotel / Homestay'}",
+              "desc": "1-2 sentence description of the stay experience."
+            },
+            "meal": "Recommended local meals, cuisines, or hotel dining for the day",
+            "transit": "Concrete transit recommendation for this day matching the chosen ${transportType} mode (e.g., flights, trains, road transfers with times/distances)"
+          }
+        ],
+        "inclusions": [
+          "Detailed inclusion items (e.g., Stay at recommended hotels, daily breakfasts, private AC vehicle for transfers)"
+        ],
+        "exclusions": [
+          "Detailed exclusion items (e.g., Flights/trains not matching selections, entry tickets to monuments, optional adventure sports)"
+        ]
+      }
+    `;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'You are an API that only returns pure, valid, parsed JSON conforming to the requested schema. Never output markdown format.' },
+        { role: 'user', content: systemPrompt }
+      ],
+      temperature: 0.7,
+    });
+
+    const cleanJsonText = completion.choices[0].message.content.trim().replace(/^```json/, '').replace(/```$/, '').trim();
+    const itineraryData = JSON.parse(cleanJsonText);
+    res.json(itineraryData);
+  } catch (error) {
+    console.error('AI Structured Plan Error:', error);
+    res.status(500).json({ message: 'Error compiling your customized itinerary' });
+  }
+});
+
 // 2. AI Package Content Generator (For Admin Dashboard)
 router.post('/generate-package', async (req, res) => {
   try {

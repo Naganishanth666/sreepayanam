@@ -28,7 +28,11 @@ function App() {
           <Route path="/packages"     element={<Packages />} />
           <Route path="/package/:id"  element={<PackageDetails />} />
           <Route path="/contact"      element={<ContactUs />} />
-          <Route path="/ai-assistant" element={<AiAssistant />} />
+          <Route path="/ai-assistant" element={
+            <ProtectedRoute>
+              <AiAssistant />
+            </ProtectedRoute>
+          } />
           <Route path="/login"        element={<Login />} />
 
           {/* Protected: Any logged-in user */}
