@@ -3,6 +3,8 @@ const Enquiry = require('../models/Enquiry');
 // Assuming we'll have an auth middleware later
 // const auth = require('../middleware/auth'); 
 
+const { sendEnquiryEmail } = require('../utils/mailer');
+
 const router = express.Router();
 
 // Submit a new enquiry (Public)
@@ -10,6 +12,12 @@ router.post('/', async (req, res) => {
   try {
     const newEnquiry = new Enquiry(req.body);
     await newEnquiry.save();
+    
+    // Trigger email alert asynchronously so client response is immediate
+    sendEnquiryEmail(newEnquiry.toObject()).catch(err => {
+      console.error('[EnquiryRoute] Email dispatch error:', err);
+    });
+
     res.status(201).json({ message: 'Enquiry submitted successfully', enquiry: newEnquiry });
   } catch (err) {
     console.error(err.message);

@@ -1,7 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const { OpenAI } = require('openai');
+const multer = require('multer');
+const { PDFParse } = require('pdf-parse');
 const Package = require('../models/Package');
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+});
 
 const IMAGE_PRESETS = {
   'Family Tours': [
@@ -257,9 +264,10 @@ router.post('/plan', async (req, res) => {
   }
 });
 
-// 1.5 AI Structured Custom Tour Planner (B2C Customers)
+// 1.5 AI Structured Custom Tour Planner (B2C Customers with detailed preferences)
 router.post('/plan-structured', async (req, res) => {
   try {
+    const preferences = req.body;
     const {
       destination,
       startingCity,
@@ -270,36 +278,42 @@ router.post('/plan-structured', async (req, res) => {
       hotelCategory,
       travelType,
       customPrompt
-    } = req.body;
+    } = preferences;
 
     const openai = getOpenAIClient(res);
     if (!openai) return;
 
+    // Convert preferences object to a readable string for the AI prompt
+    let formattedPreferences = '';
+    for (const [key, value] of Object.entries(preferences)) {
+      if (value !== undefined && value !== null && value !== '') {
+        const formattedKey = key
+          .split('_')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+        formattedPreferences += `- ${formattedKey}: ${value}\n`;
+      }
+    }
+
     const systemPrompt = `
       You are an expert AI Travel Planner & Assistant for "SreePayanam Tours & Travels".
-      Your goal is to design a highly personalized, realistic, and premium day-by-day travel itinerary based on the user's choices.
+      Your goal is to design a highly personalized, realistic, and premium day-by-day travel itinerary based on the user's detailed selections.
       
-      User Selection:
-      - Destination: ${destination}
-      - Starting Point (Start City): ${startingCity || 'Not specified'}
-      - Ending Point (End City): ${endingCity || 'Not specified'}
-      - Duration: ${durationDays} Days / ${durationNights} Nights
-      - Transport Mode: ${transportType}
-      - Accommodation Level: ${hotelCategory}
-      - Tour Type / Vibe: ${travelType || 'General'}
-      - Additional Requests/Interests: ${customPrompt || 'None'}
+      User Selection & Detailed Preferences:
+      ${formattedPreferences}
 
       Instructions:
-      1. Perform realistic travel research. Suggest genuine local hotels/resorts matching the requested accommodation level (${hotelCategory}).
-      2. Suggest authentic local dining options and cuisines to try.
-      3. Recommend concrete daily transfers matching the selected transport mode (${transportType}). If Flight or Train, specify realistic schedules or routes. If Car, mention realistic driving durations/distances.
-      4. Suggest a realistic price range for the overall trip in Indian Rupees (₹), e.g., "₹25,000 - ₹35,000 per person".
-      5. The output MUST be a valid JSON object ONLY. Do not write any markdown wrappers (like \`\`\`json), explanations, or trailing characters.
+      1. Perform realistic travel research. Suggest genuine local hotels/resorts matching the requested accommodation level (${hotelCategory || 'Premium'}).
+      2. Suggest authentic local dining options, meal plans, and cuisines to try based on the client's meal requirements and preferences.
+      3. Recommend concrete daily transfers matching the selected transport mode (${transportType || 'Flight/Train/Car'}). If Flight or Train, specify realistic schedules or routes. If Car, mention realistic driving durations/distances.
+      4. Suggest a realistic price range for the overall trip in Indian Rupees (₹), e.g., "₹25,000 - ₹35,000 per person" conforming to the budget constraints.
+      5. Include specific sightseeing spots, pace (e.g. slow, moderate, active) and entry tickets matching their sightseeing choices.
+      6. The output MUST be a valid JSON object ONLY. Do not write any markdown wrappers (like \`\`\`json), explanations, or trailing characters.
 
       The JSON object MUST strictly conform to the following schema:
       {
         "title": "Inspiring and premium package title matching the vibe",
-        "destination": "${destination}",
+        "destination": "${destination || ''}",
         "startingCity": "${startingCity || ''}",
         "endingCity": "${endingCity || ''}",
         "durationDays": ${Number(durationDays) || 5},
@@ -312,19 +326,19 @@ router.post('/plan-structured', async (req, res) => {
             "title": "Arrival & Leisure / Activity Title",
             "activities": "Detailed description of activities for this day.",
             "hotel": {
-              "name": "Name of a specific realistic hotel/resort matching ${hotelCategory} tier",
-              "rating": "${hotelCategory === 'Luxury' ? '5 Star Resort' : hotelCategory === 'Premium' ? '4 Star Hotel' : '3 Star Hotel / Homestay'}",
+              "name": "Name of a specific realistic hotel/resort matching the requested tier",
+              "rating": "Star rating details",
               "desc": "1-2 sentence description of the stay experience."
             },
             "meal": "Recommended local meals, cuisines, or hotel dining for the day",
-            "transit": "Concrete transit recommendation for this day matching the chosen ${transportType} mode (e.g., flights, trains, road transfers with times/distances)"
+            "transit": "Concrete transit recommendation for this day matching the transport preferences"
           }
         ],
         "inclusions": [
-          "Detailed inclusion items (e.g., Stay at recommended hotels, daily breakfasts, private AC vehicle for transfers)"
+          "Detailed inclusion items"
         ],
         "exclusions": [
-          "Detailed exclusion items (e.g., Flights/trains not matching selections, entry tickets to monuments, optional adventure sports)"
+          "Detailed exclusion items"
         ]
       }
     `;
@@ -344,6 +358,106 @@ router.post('/plan-structured', async (req, res) => {
   } catch (error) {
     console.error('AI Structured Plan Error:', error);
     res.status(500).json({ message: 'Error compiling your customized itinerary' });
+  }
+});
+
+// 1.6 AI PDF Brochure Parser & Package Creator (Admin only)
+router.post('/parse-brochure', upload.single('brochure'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No PDF brochure file uploaded.' });
+    }
+
+    const openai = getOpenAIClient(res);
+    if (!openai) return;
+
+    // Parse the PDF buffer to extract text
+    const parser = new PDFParse(new Uint8Array(req.file.buffer));
+    const pdfData = await parser.getText();
+    const pdfText = pdfData.text;
+
+    if (!pdfText || !pdfText.trim()) {
+      return res.status(400).json({ message: 'Could not extract readable text from the uploaded PDF.' });
+    }
+
+    console.log(`[PDF Parser] Successfully extracted ${pdfText.length} characters of text. Sending to OpenAI...`);
+
+    const generatorPrompt = `
+      You are an expert travel coordinator at "SreePayanam Tours & Travels".
+      Your task is to analyze the text content of a travel brochure PDF and extract all the distinct tour packages/itineraries found within it. A brochure may contain one or multiple different tour packages (e.g. South India Pilgrimage, Munnar Family Tour, etc.). Extract each distinct package separately.
+
+      Here is the text extracted from the PDF:
+      ---
+      ${pdfText}
+      ---
+
+      Please analyze the text above and output a JSON object containing a "packages" array. Each item in the array must conform to the schema below. Do not include markdown codeblocks or any additional commentary. Output ONLY valid JSON.
+      If information for a key is missing from the brochure text, generate highly professional, realistic values based on the destinations, or leave empty/default as indicated.
+
+      JSON Schema to conform to:
+      {
+        "packages": [
+          {
+            "title": "Title of the tour package. If not explicitly found, create a premium catchphrase title.",
+            "destination": "The primary destination/region (e.g. Kerala, Munnar, Dubai, Singapore, Europe)",
+            "packageCategory": "Either 'National' or 'International'. Determine this based on whether the destination is in India (National) or outside India (International).",
+            "tourType": "One of the following exact strings: 'Family Tours', 'Pilgrimage Tours', 'Honeymoon Tours', 'Hill Station Tours', 'Resort Packages', 'Weekend Tours', 'Group Tours', 'School / College Tours', 'Corporate Tours', 'Festival Tours', 'Cultural Tours', 'Medical Tours', 'Event / Sports Tours', 'Cruise Packages', 'Luxury Tours', 'Budget Tours', 'MICE Tours'. Choose the best match.",
+            "durationDays": number,
+            "durationNights": number,
+            "startingCity": "Starting city if mentioned, otherwise leave empty.",
+            "endingCity": "Ending city if mentioned, otherwise leave empty.",
+            "overview": "A thorough, engaging overview summarizing the highlights of this tour.",
+            "itinerary": [
+              {
+                "day": number,
+                "title": "Short title of the day's program",
+                "activities": "Detailed description of activities and sightseeing for the day",
+                "hotel": "Hotel stay recommendation details or tier",
+                "mealPlan": "Meal plan details (e.g. Breakfast, Lunch, Dinner or MAPAI/CP/EP) if mentioned",
+                "transport": "Local transfer details"
+              }
+            ],
+            "inclusions": ["List of included items, e.g. '3-star hotel stay', 'Daily breakfast', 'Airport transfers'"],
+            "exclusions": ["List of excluded items, e.g. 'Flight tickets', 'Personal expenses', 'Entry tickets'"],
+            "optionalAddons": ["Optional addons, e.g. 'Houseboat upgrade', 'Candlelight dinner'"],
+            "termsAndConditions": "Terms and conditions text if found, otherwise general terms",
+            "cancellationPolicy": "Cancellation policy text if found, otherwise general policy",
+            "originalPrice": number (If price is found in the brochure, put it here. If not, default to 19999),
+            "offerPrice": number (If a discounted price is found, put it here, otherwise leave null or default to 15999),
+            "isSpecialOffer": boolean,
+            "seoTitle": "catchy SEO title",
+            "seoMetaDescription": "engaging meta description"
+          }
+        ]
+      }
+    `;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'You are an API that only returns pure, valid, parsed JSON conforming to the requested schema. Never output markdown format.' },
+        { role: 'user', content: generatorPrompt }
+      ],
+      temperature: 0.3,
+    });
+
+    const cleanJsonText = completion.choices[0].message.content.trim().replace(/^```json/, '').replace(/```$/, '').trim();
+    const parsedData = JSON.parse(cleanJsonText);
+
+    // Normalize response: always ensure packages is an array of objects
+    let packages = [];
+    if (parsedData && parsedData.packages && Array.isArray(parsedData.packages)) {
+      packages = parsedData.packages;
+    } else if (Array.isArray(parsedData)) {
+      packages = parsedData;
+    } else if (typeof parsedData === 'object' && parsedData !== null) {
+      packages = [parsedData];
+    }
+
+    res.json({ packages });
+  } catch (error) {
+    console.error('PDF parsing/AI processing failed:', error);
+    res.status(500).json({ message: 'Failed to process PDF brochure content', error: error.message });
   }
 });
 

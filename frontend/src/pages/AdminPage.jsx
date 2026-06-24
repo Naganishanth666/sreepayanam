@@ -59,10 +59,96 @@ const AdminPage = () => {
   const [selectedFlight, setSelectedFlight] = useState(null);
   const [selectedTrain, setSelectedTrain] = useState(null);
   const [selectedCar, setSelectedCar] = useState(null);
+  const [selectedPdf, setSelectedPdf] = useState(null);
+  const [importingPdf, setImportingPdf] = useState(false);
+  const [parsedPackages, setParsedPackages] = useState([]);
+  const [expandedPrefs, setExpandedPrefs] = useState({});
 
   const handleParamChange = (e) => {
     const { name, value } = e.target;
     setBuilderParams(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handlePdfUpload = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedPdf(e.target.files[0]);
+      setParsedPackages([]);
+    }
+  };
+
+  const loadParsedPackage = (data) => {
+    setFormData({
+      title: data.title || '',
+      destination: data.destination || '',
+      packageCategory: data.packageCategory || 'National',
+      tourType: data.tourType || 'Family Tours',
+      startingCity: data.startingCity || '',
+      endingCity: data.endingCity || '',
+      durationDays: data.durationDays || '',
+      durationNights: data.durationNights || '',
+      overview: data.overview || '',
+      imageUrl: data.imageUrl || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800&q=80',
+      itinerary: Array.isArray(data.itinerary) ? data.itinerary.map(day => ({
+        day: day.day || 1,
+        title: day.title || '',
+        activities: day.activities || '',
+        hotel: day.hotel || '',
+        mealPlan: day.mealPlan || '',
+        transport: day.transport || ''
+      })) : [{ day: 1, title: '', activities: '', hotel: '', mealPlan: '', transport: '' }],
+      inclusions: Array.isArray(data.inclusions) ? data.inclusions.join('\n') : (data.inclusions || ''),
+      exclusions: Array.isArray(data.exclusions) ? data.exclusions.join('\n') : (data.exclusions || ''),
+      optionalAddons: Array.isArray(data.optionalAddons) ? data.optionalAddons.join('\n') : (data.optionalAddons || ''),
+      originalPrice: data.originalPrice || 19999,
+      offerPrice: data.offerPrice || 15999,
+      isSpecialOffer: !!data.isSpecialOffer,
+      offerValidity: data.offerValidity || '',
+      termsAndConditions: data.termsAndConditions || '',
+      cancellationPolicy: data.cancellationPolicy || '',
+      seoTitle: data.seoTitle || '',
+      seoMetaDescription: data.seoMetaDescription || '',
+      isActive: true
+    });
+    setSuccess(`🎉 Loaded "${data.title}" details into the form successfully!`);
+  };
+
+  const importFromPdf = async () => {
+    if (!selectedPdf) return;
+    setImportingPdf(true);
+    setError('');
+    setSuccess('');
+    setParsedPackages([]);
+    
+    const formDataObj = new FormData();
+    formDataObj.append('brochure', selectedPdf);
+
+    try {
+      const res = await fetch('/api/ai/parse-brochure', {
+        method: 'POST',
+        body: formDataObj
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to parse PDF brochure');
+
+      const packagesList = data.packages || [];
+      if (packagesList.length === 0) {
+        throw new Error('No packages could be extracted from this brochure.');
+      }
+
+      setParsedPackages(packagesList);
+
+      if (packagesList.length === 1) {
+        loadParsedPackage(packagesList[0]);
+        setSuccess('🎉 Successfully parsed and imported package details!');
+      } else {
+        setSuccess(`🎉 Found ${packagesList.length} distinct tour packages in the brochure! Choose one from the list below to populate the form.`);
+      }
+      setSelectedPdf(null);
+    } catch (err) {
+      setError(`PDF parsing failed: ${err.message}`);
+    } finally {
+      setImportingPdf(false);
+    }
   };
 
   const fetchSuggestedChoices = async () => {
@@ -598,6 +684,123 @@ const AdminPage = () => {
                 </div>
 
                 <div style={{ height: '1.5px', background: '#e2e8f0', margin: '14px 0' }} />
+
+                {/* PDF brochure importer */}
+                <div style={{ marginBottom: 20, padding: 18, background: '#eff6ff', borderRadius: 12, border: '1px dashed var(--primary)' }}>
+                  <h4 style={{ margin: '0 0 6px 0', fontSize: '0.9rem', fontWeight: 800, color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    📄 Quick Import from PDF Brochure
+                  </h4>
+                  <p style={{ margin: '0 0 12px 0', fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                    Upload a PDF brochure of the tour package. SreePayanam AI will extract all details, inclusions, price, and the day-by-day itinerary to pre-fill the form.
+                  </p>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      id="pdf-brochure-upload"
+                      style={{ display: 'none' }}
+                      onChange={handlePdfUpload}
+                    />
+                    <label
+                      htmlFor="pdf-brochure-upload"
+                      style={{
+                        background: 'var(--primary)',
+                        color: 'white',
+                        padding: '8px 16px',
+                        borderRadius: 8,
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        boxShadow: '0 2px 4px rgba(59,130,246,0.2)'
+                      }}
+                    >
+                      Select PDF File
+                    </label>
+                    {selectedPdf && (
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-main)', fontWeight: 600 }}>
+                        {selectedPdf.name}
+                      </span>
+                    )}
+                    {selectedPdf && (
+                      <button
+                        type="button"
+                        onClick={importFromPdf}
+                        disabled={importingPdf}
+                        className="btn btn-secondary"
+                        style={{ padding: '8px 16px', fontSize: '0.8rem', fontWeight: 800 }}
+                      >
+                        {importingPdf ? 'Processing with AI...' : '⚡ Parse & Import'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Multiple Packages Selector */}
+                {parsedPackages.length > 1 && (
+                  <div style={{
+                    marginBottom: 20,
+                    padding: 20,
+                    background: '#f8fafc',
+                    borderRadius: 16,
+                    border: '1px solid #cbd5e1',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
+                  }}>
+                    <h4 style={{
+                      margin: '0 0 12px 0',
+                      fontSize: '0.92rem',
+                      fontWeight: 800,
+                      color: 'var(--dark)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8
+                    }}>
+                      📦 Select a Package to Import ({parsedPackages.length} found)
+                    </h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
+                      {parsedPackages.map((pkg, idx) => (
+                        <div key={idx} style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '14px 18px',
+                          background: 'white',
+                          borderRadius: 12,
+                          border: '1px solid #e2e8f0'
+                        }}>
+                          <div style={{ flex: 1, marginRight: 16 }}>
+                            <div style={{ fontSize: '0.86rem', fontWeight: 800, color: 'var(--dark)', marginBottom: 4 }}>
+                              {pkg.title}
+                            </div>
+                            <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                              <span>📍 <strong>{pkg.destination}</strong></span>
+                              <span>⏳ <strong>{pkg.durationDays} Days / {pkg.durationNights} Nights</strong></span>
+                              <span>🏷️ <strong>{pkg.tourType}</strong></span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => loadParsedPackage(pkg)}
+                            className="btn btn-primary"
+                            style={{
+                              padding: '6px 14px',
+                              fontSize: '0.74rem',
+                              fontWeight: 800,
+                              borderRadius: 8,
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            Load Into Form
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ height: '1.5px', background: '#e2e8f0', margin: '18px 0', borderStyle: 'dashed', borderWidth: '1px 0 0 0' }} />
 
                 {builderStep === 1 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1377,6 +1580,138 @@ const AdminPage = () => {
                         {enq.remarks && (
                           <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8, fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: 14 }}>
                             <strong>Remarks:</strong> {enq.remarks}
+                          </div>
+                        )}
+
+                        {enq.detailedPreferences && (
+                          <div style={{ marginTop: 10, marginBottom: 14 }}>
+                            <button
+                              type="button"
+                              onClick={() => setExpandedPrefs(prev => ({ ...prev, [enq._id]: !prev[enq._id] }))}
+                              style={{
+                                background: '#f1f5f9',
+                                color: '#475569',
+                                fontSize: '0.8rem',
+                                padding: '6px 12px',
+                                fontWeight: 700,
+                                border: '1.5px solid #cbd5e1',
+                                borderRadius: 8,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6
+                              }}
+                            >
+                              📋 {expandedPrefs[enq._id] ? 'Hide' : 'Show'} 10-Section AI Preferences
+                            </button>
+
+                            {expandedPrefs[enq._id] && (
+                              <div style={{
+                                marginTop: 10,
+                                padding: 18,
+                                background: '#f8fafc',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: 12,
+                                fontSize: '0.82rem',
+                                color: 'var(--text-main)',
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                                gap: 16
+                              }}>
+                                <div>
+                                  <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>👤 Customer Info</div>
+                                  <div><strong>Preferred Contact:</strong> {enq.detailedPreferences.contact_method}</div>
+                                  <div><strong>Location:</strong> {enq.detailedPreferences.location || 'N/A'}</div>
+                                  {enq.detailedPreferences.whatsapp_number && <div><strong>WhatsApp:</strong> {enq.detailedPreferences.whatsapp_number}</div>}
+                                </div>
+
+                                <div>
+                                  <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>🗺️ Trip & Vibe</div>
+                                  <div><strong>Category:</strong> {enq.detailedPreferences.travel_category}</div>
+                                  <div><strong>Type:</strong> {enq.detailedPreferences.tour_type}</div>
+                                  <div><strong>Dates:</strong> {enq.detailedPreferences.travel_start_date || 'N/A'} to {enq.detailedPreferences.return_date || 'N/A'}</div>
+                                  <div><strong>Duration:</strong> {enq.detailedPreferences.num_days}D / {enq.detailedPreferences.num_nights}N</div>
+                                  <div><strong>Flexibility:</strong> {enq.detailedPreferences.date_flexibility}</div>
+                                </div>
+
+                                <div>
+                                  <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>👥 Passengers</div>
+                                  <div><strong>Total Pax:</strong> {enq.detailedPreferences.total_passengers}</div>
+                                  <div><strong>Gender:</strong> {enq.detailedPreferences.num_male}M / {enq.detailedPreferences.num_female}F</div>
+                                  {enq.detailedPreferences.num_seniors > 0 && <div><strong>Seniors:</strong> {enq.detailedPreferences.num_seniors}</div>}
+                                  {enq.detailedPreferences.num_children > 0 && <div><strong>Children:</strong> {enq.detailedPreferences.num_children} ({enq.detailedPreferences.children_ages || 'N/A'})</div>}
+                                  {enq.detailedPreferences.num_infants > 0 && <div><strong>Infants:</strong> {enq.detailedPreferences.num_infants} ({enq.detailedPreferences.infant_ages || 'N/A'})</div>}
+                                  {enq.detailedPreferences.special_assistance && <div style={{ color: '#b45309' }}><strong>Assistance:</strong> {enq.detailedPreferences.special_assistance}</div>}
+                                </div>
+
+                                <div>
+                                  <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>🏨 Accommodation</div>
+                                  <div><strong>Required:</strong> {enq.detailedPreferences.hotel_required}</div>
+                                  {enq.detailedPreferences.hotel_required === 'Yes' && (
+                                    <>
+                                      <div><strong>Category:</strong> {enq.detailedPreferences.hotel_category}</div>
+                                      <div><strong>Rooms:</strong> {enq.detailedPreferences.num_rooms} ({enq.detailedPreferences.room_type})</div>
+                                      <div><strong>Extra Bed:</strong> {enq.detailedPreferences.extra_bed}</div>
+                                      <div><strong>Location Vibe:</strong> {enq.detailedPreferences.preferred_location || 'N/A'}</div>
+                                      <div><strong>Access:</strong> {[enq.detailedPreferences.lift_required && 'Lift', enq.detailedPreferences.wheelchair_friendly && 'Wheelchair'].filter(Boolean).join(', ') || 'Standard'}</div>
+                                    </>
+                                  )}
+                                </div>
+
+                                <div>
+                                  <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>🍽️ Meal Plan</div>
+                                  <div><strong>Meals:</strong> {enq.detailedPreferences.meal_required}</div>
+                                  {enq.detailedPreferences.meal_required === 'Yes' && (
+                                    <>
+                                      <div><strong>Plan:</strong> {enq.detailedPreferences.meal_plan}</div>
+                                      <div><strong>Diet:</strong> {enq.detailedPreferences.food_preference}</div>
+                                      {enq.detailedPreferences.special_meal && <div><strong>Special:</strong> {enq.detailedPreferences.special_meal}</div>}
+                                    </>
+                                  )}
+                                </div>
+
+                                <div>
+                                  <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>🚗 Transit & Car</div>
+                                  <div><strong>Tickets:</strong> {[enq.detailedPreferences.flight_ticket && 'Flight', enq.detailedPreferences.train_ticket && 'Train', enq.detailedPreferences.bus_ticket && 'Bus'].filter(Boolean).join(', ') || 'None'}</div>
+                                  <div><strong>Local Car:</strong> {enq.detailedPreferences.local_transport} ({enq.detailedPreferences.vehicle_category}, {enq.detailedPreferences.ac_preference})</div>
+                                  <div><strong>Transit Type:</strong> {enq.detailedPreferences.transport_type}</div>
+                                  <div><strong>Pickup/Drop:</strong> {enq.detailedPreferences.pickup_location || 'N/A'} / {enq.detailedPreferences.drop_location || 'N/A'}</div>
+                                  {enq.detailedPreferences.luggage_details && <div><strong>Luggage:</strong> {enq.detailedPreferences.luggage_details}</div>}
+                                  <div><strong>Language:</strong> {enq.detailedPreferences.driver_language}</div>
+                                </div>
+
+                                <div style={{ gridColumn: 'span 2' }}>
+                                  <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>🏛️ Sightseeing & Pace</div>
+                                  <div><strong>Pace:</strong> {enq.detailedPreferences.travel_pace} | <strong>Interest:</strong> {enq.detailedPreferences.interest_type}</div>
+                                  {enq.detailedPreferences.places_to_cover && <div><strong>Places to Cover:</strong> {enq.detailedPreferences.places_to_cover}</div>}
+                                  <div><strong>Guide:</strong> {enq.detailedPreferences.guide_required}</div>
+                                  <div><strong>Inclusions:</strong> {[enq.detailedPreferences.entry_tickets && 'Monument Tickets', enq.detailedPreferences.special_darshan && 'Temple Darshan', enq.detailedPreferences.ritual_pooja && 'Ritual Pooja'].filter(Boolean).join(', ') || 'None'}</div>
+                                </div>
+
+                                <div>
+                                  <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>🛂 Passport & Visa</div>
+                                  <div><strong>Passport:</strong> {enq.detailedPreferences.passport_available} (Expires: {enq.detailedPreferences.passport_validity || 'N/A'})</div>
+                                  <div><strong>Visa Service:</strong> {enq.detailedPreferences.visa_assistance}</div>
+                                  <div><strong>Insurance:</strong> {enq.detailedPreferences.travel_insurance} ({enq.detailedPreferences.insurance_type})</div>
+                                  <div><strong>Nationality:</strong> {enq.detailedPreferences.nationality}</div>
+                                </div>
+
+                                <div>
+                                  <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>💰 Budget & Pricing</div>
+                                  <div><strong>Level:</strong> {enq.detailedPreferences.budget_type}</div>
+                                  <div><strong>Approx:</strong> {enq.detailedPreferences.approx_budget ? `${enq.detailedPreferences.currency} ${enq.detailedPreferences.approx_budget}` : 'N/A'}</div>
+                                  <div><strong>Costing:</strong> {enq.detailedPreferences.price_preference}</div>
+                                  {enq.detailedPreferences.inclusions_preference && <div><strong>Preferred Incls:</strong> {enq.detailedPreferences.inclusions_preference}</div>}
+                                </div>
+
+                                <div style={{ gridColumn: 'span 2' }}>
+                                  <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>✨ Specials & Extras</div>
+                                  {enq.detailedPreferences.emergency_contact && <div><strong>Emergency contact:</strong> {enq.detailedPreferences.emergency_contact}</div>}
+                                  {enq.detailedPreferences.special_arrangement && <div><strong>Arrangements:</strong> {enq.detailedPreferences.special_arrangement}</div>}
+                                  {enq.detailedPreferences.other_request && <div><strong>Other:</strong> {enq.detailedPreferences.other_request}</div>}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
 

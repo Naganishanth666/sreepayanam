@@ -56,6 +56,8 @@ const enquirySchema = new mongoose.Schema({
   // Optional reference to a specific package
   packageId: { type: mongoose.Schema.Types.ObjectId, ref: 'Package' },
   
+  detailedPreferences: { type: mongoose.Schema.Types.Mixed },
+  
   createdAt: { type: Date, default: Date.now }
 });
 
