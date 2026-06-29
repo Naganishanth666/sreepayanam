@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const { auth } = require('../middleware/auth');
+const { auth, checkAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -113,6 +113,11 @@ router.get('/me', auth, async (req, res) => {
     console.error(err.message);
     res.status(500).send('Server error');
   }
+});
+
+// POST Verify Admin password (Legacy/Dashboard Flow)
+router.post('/verify-admin', checkAdmin, (req, res) => {
+  res.json({ success: true, message: 'Admin authenticated successfully' });
 });
 
 module.exports = router;

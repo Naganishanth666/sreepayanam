@@ -491,10 +491,32 @@ const AdminPage = () => {
     }
   };
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    if (password) { setIsAuthenticated(true); setError(''); }
-    else setError('Please enter the admin password');
+    if (!password) {
+      setError('Please enter the admin password');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/auth/verify-admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-password': password
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Incorrect admin password.');
+      }
+      setIsAuthenticated(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleChange = (e) => {
@@ -656,7 +678,9 @@ const AdminPage = () => {
           {error && <div style={sty.errBox}>{error}</div>}
           <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <input type="password" className="input-field" placeholder="Admin Password" value={password} onChange={e => setPassword(e.target.value)} />
-            <button type="submit" className="btn btn-primary">Login</button>
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              {loading ? 'Verifying...' : 'Login'}
+            </button>
           </form>
         </motion.div>
       </div>
