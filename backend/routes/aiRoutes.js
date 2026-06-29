@@ -382,7 +382,11 @@ router.post('/parse-brochure', upload.single('brochure'), async (req, res) => {
 
     // Parse the PDF buffer to extract text with standard fonts support to prevent missing text warnings/errors
     const path = require('path');
-    const fontsPath = path.join(__dirname, '../node_modules/pdfjs-dist/standard_fonts/');
+    let fontsPath = path.join(__dirname, '../node_modules/pdfjs-dist/standard_fonts/');
+    fontsPath = fontsPath.replace(/\\/g, '/');
+    if (!fontsPath.endsWith('/')) {
+      fontsPath += '/';
+    }
     const parser = new PDFParse({
       data: new Uint8Array(req.file.buffer),
       standardFontDataUrl: fontsPath
