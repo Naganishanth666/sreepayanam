@@ -243,8 +243,9 @@ router.post('/plan', async (req, res) => {
       2. If one or more packages are a good match, showcase them enthusiastically with pricing (₹), duration, and highlight features. Let them know they can click on "Packages" in the navigation bar to see full details.
       3. If no package is a perfect match, perform thorough, realistic travel research and suggest a beautiful custom day-by-day itinerary matching their desires. For each day, you MUST explicitly detail:
          - 🏨 **Suggested Hotel:** Recommend a specific realistic local hotel or resort (along with its star rating/luxury tier).
-         - 🍽️ **Meal & Cuisine:** Suggest authentic dining options, restaurants, or local cuisines to try (e.g. Traditional Sadya, Mandi, local seafood).
+         - 🍽️ **Meal & Cuisine:** Suggest authentic dining options, restaurants, or local cuisines to try in detail (e.g. Traditional Sadya, Mandi, local seafood, specific signature dishes, or street foods to sample).
          - ✈️🚗 **Suggested Travel & Transit:** Provide concrete travel suggestions (e.g., flight routing/airlines, train options, or car transfers with driving distances and driving durations).
+         - 🏛️ **Places of Visit & Activities:** Provide a very descriptive, highly detailed description of the daily activities and sightseeing spots (at least 4-5 sentences per day). Describe the unique beauty, natural scenery, historical context, or cultural background of each visited place. Do not write short or generic summaries.
          Tell the user they can instantly book these options by submitting the Enquiry Form or pinging us on WhatsApp (+91 94432 17654).
       4. Keep your tone extremely friendly, inspiring, and professional. Use Markdown format (bullet points, bold text, emojis) for readability. Do not expose raw JSON.
     `;
@@ -316,7 +317,10 @@ router.post('/plan-structured', async (req, res) => {
          - Local Car/Cab: If local_transport (e.g. 'Sedan', 'SUV') is specified and requested, detail road travel/excursions using that vehicle category.
       4. Suggest a realistic price range for the overall trip in Indian Rupees (₹), e.g., "₹25,000 - ₹35,000 per person" conforming to the budget constraints.
       5. Include specific sightseeing spots, pace (e.g. slow, moderate, active) and entry tickets matching their sightseeing choices.
-      6. For each day in the itinerary, make the day-wise content creative, descriptive, and highly engaging. Do not write dry, generic sentences. Detail the specific beauty, activity highlights, local tastes, and sights.
+      6. Make the daily itinerary descriptions extremely descriptive, informative, and engaging:
+         - The "activities" field must be a detailed, rich paragraph (at least 4-5 sentences) describing the scenic beauty, historical significance, local culture, and specific sightseeing places visited, explaining why they are special.
+         - The "meal" field must be highly descriptive, recommending specific local dishes, culinary highlights, street foods, or well-known restaurants.
+         - The "transit" field must describe local transfer instructions, routes, vehicle types, approximate travel time, and driving distances in detail.
       7. The output MUST be a valid JSON object ONLY. Do not write any markdown wrappers (like \`\`\`json), explanations, or trailing characters.
 
       The JSON object MUST strictly conform to the following schema:
@@ -387,90 +391,198 @@ router.post('/parse-brochure', upload.single('brochure'), async (req, res) => {
     if (!fontsPath.endsWith('/')) {
       fontsPath += '/';
     }
+    // Copy buffer to a brand new, unpooled Uint8Array to avoid DataCloneError and InvalidPDFException in Node worker threads
+    const cleanBuffer = new Uint8Array(req.file.buffer.length);
+    cleanBuffer.set(req.file.buffer);
+
     const parser = new PDFParse({
-      data: new Uint8Array(req.file.buffer),
+      data: cleanBuffer,
       standardFontDataUrl: fontsPath
     });
     
     let pdfText = '';
+    let pdfScreenshots = null;
     try {
-      const pdfData = await parser.getText();
-      pdfText = pdfData.text;
+      try {
+        const pdfData = await parser.getText();
+        pdfText = pdfData.text || '';
+      } catch (textErr) {
+        console.warn('[PDF Parser] Standard text extraction failed, trying screenshot approach...', textErr);
+      }
+
+      if (!pdfText || pdfText.trim().length < 200) {
+        console.log('[PDF Parser] PDF has little or no text. Attempting visual page extraction (OCR) via screenshots...');
+        try {
+          // Limit to first 10 pages to avoid token/memory overload
+          const screenshotResult = await parser.getScreenshot({
+            first: 10,
+            scale: 1.5,
+            imageDataUrl: true,
+            imageBuffer: false
+          });
+          if (screenshotResult && screenshotResult.pages && screenshotResult.pages.length > 0) {
+            pdfScreenshots = screenshotResult.pages;
+            console.log(`[PDF Parser] Successfully rendered ${pdfScreenshots.length} pages as screenshots.`);
+          }
+        } catch (screenshotErr) {
+          console.error('[PDF Parser] Failed to render screenshots:', screenshotErr);
+        }
+      }
     } finally {
       await parser.destroy(); // Free memory and prevent leaks
     }
 
-    if (!pdfText || !pdfText.trim()) {
-      return res.status(400).json({ message: 'Could not extract readable text from the uploaded PDF.' });
+    if ((!pdfText || !pdfText.trim()) && (!pdfScreenshots || pdfScreenshots.length === 0)) {
+      return res.status(400).json({ message: 'Could not extract readable text or visual pages from the uploaded PDF.' });
     }
 
-    console.log(`[PDF Parser] Successfully extracted ${pdfText.length} characters of text. Sending to OpenAI...`);
-
-    const generatorPrompt = `
-      You are an expert travel coordinator at "SreePayanam Tours & Travels".
-      Your task is to analyze the text content of a travel brochure PDF and extract all the distinct tour packages/itineraries found within it. A brochure may contain one or multiple different tour packages (e.g. South India Pilgrimage, Munnar Family Tour, etc.). Extract each distinct package separately.
+    let completion;
+    if (pdfScreenshots && pdfScreenshots.length > 0) {
+      console.log(`[PDF Parser] Using Vision API with ${pdfScreenshots.length} screenshots...`);
       
-      CRITICAL INSTRUCTION: Scan the entire text very carefully. Do NOT skip, omit, or merge any package. Every different itinerary (whether different duration, different destinations, or different pricing) must be returned as a separate entry in the "packages" array.
+      const content = [
+        {
+          type: 'text',
+          text: `You are an expert travel coordinator at "SreePayanam Tours & Travels".
+Your task is to analyze the provided images of a travel brochure PDF and extract all the distinct tour packages/itineraries found within them. A brochure may contain one or multiple different tour packages. Extract each distinct package separately.
 
-      Here is the text extracted from the PDF:
-      ---
-      ${pdfText}
-      ---
+CRITICAL INSTRUCTION: Scan the images very carefully. Do NOT skip, omit, or merge any package. Every different itinerary (whether different duration, different destinations, or different pricing) must be returned as a separate entry in the "packages" array.
 
-      Please analyze the text above and output a JSON object containing a "packages" array. Each item in the array must conform to the schema below. Do not include markdown codeblocks or any additional commentary. Output ONLY valid JSON.
-      If information for a key is missing from the brochure text, generate highly professional, realistic values based on the destinations, or leave empty/default as indicated.
+Please analyze these page images and output a JSON object containing a "packages" array. Each item in the array must conform to the schema below. Do not include markdown codeblocks or any additional commentary. Output ONLY valid JSON.
+If information for a key is missing from the brochure, generate highly professional, realistic values based on the destinations, or leave empty/default as indicated.
 
-      For each day in the itinerary, make the day-wise content creative, descriptive, and highly engaging. Do not use generic 1-sentence summaries. Write about:
-      - Sights to see and their specific highlights.
-      - Local food/cuisines recommendations or dishes to try.
-      - Transportation/transfers instructions.
+For each day in the itinerary, make the day-wise content extremely descriptive, informative, and engaging:
+- The "activities" field must be a detailed, rich paragraph (at least 4-5 sentences) describing the scenic beauty, historical significance, local culture, and specific sightseeing places visited, explaining why they are special.
+- The "mealPlan" field should mention specific local dishes, culinary recommendations, street foods, or well-known restaurants.
+- The "transport" field must describe local transfer instructions, routes, vehicle types, approximate travel time, and driving distances in detail.
 
-      JSON Schema to conform to:
-      {
-        "packages": [
-          {
-            "title": "Title of the tour package. If not explicitly found, create a premium catchphrase title.",
-            "destination": "The primary destination/region (e.g. Kerala, Munnar, Dubai, Singapore, Europe)",
-            "packageCategory": "Either 'National' or 'International'. Determine this based on whether the destination is in India (National) or outside India (International).",
-            "tourType": "One of the following exact strings: 'Family Tours', 'Pilgrimage Tours', 'Honeymoon Tours', 'Hill Station Tours', 'Resort Packages', 'Weekend Tours', 'Group Tours', 'School / College Tours', 'Corporate Tours', 'Festival Tours', 'Cultural Tours', 'Medical Tours', 'Event / Sports Tours', 'Cruise Packages', 'Luxury Tours', 'Budget Tours', 'MICE Tours', 'Adventure Tours'. Choose the best match.",
-            "durationDays": number,
-            "durationNights": number,
-            "startingCity": "Starting city if mentioned, otherwise leave empty.",
-            "endingCity": "Ending city if mentioned, otherwise leave empty.",
-            "overview": "A thorough, engaging overview summarizing the highlights of this tour.",
-            "itinerary": [
-              {
-                "day": number,
-                "title": "Short title of the day's program",
-                "activities": "Creative, detailed description of activities, specific places visited, and experiences for the day",
-                "hotel": "Hotel stay recommendation details or tier matching the package style",
-                "mealPlan": "Meal plan details (e.g. Breakfast, Lunch, Dinner or MAPAI/CP/EP) and local dining recommendations",
-                "transport": "Local transfer details (e.g. AC Sedan private transfer, flight arrival route)"
-              }
-            ],
-            "inclusions": ["List of included items, e.g. '3-star hotel stay', 'Daily breakfast', 'Airport transfers'"],
-            "exclusions": ["List of excluded items, e.g. 'Flight tickets', 'Personal expenses', 'Entry tickets'"],
-            "optionalAddons": ["Optional addons, e.g. 'Houseboat upgrade', 'Candlelight dinner'"],
-            "termsAndConditions": "Terms and conditions text if found, otherwise general terms",
-            "cancellationPolicy": "Cancellation policy text if found, otherwise general policy",
-            "originalPrice": number (If price is found in the brochure, put it here. If not, default to 19999),
-            "offerPrice": number (If a discounted price is found, put it here, otherwise leave null or default to 15999),
-            "isSpecialOffer": boolean,
-            "seoTitle": "catchy SEO title",
-            "seoMetaDescription": "engaging meta description"
-          }
-        ]
-      }
-    `;
-
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: 'You are an API that only returns pure, valid, parsed JSON conforming to the requested schema. Never output markdown format.' },
-        { role: 'user', content: generatorPrompt }
+JSON Schema to conform to:
+{
+  "packages": [
+    {
+      "title": "Title of the tour package. If not explicitly found, create a premium catchphrase title.",
+      "destination": "The primary destination/region (e.g. Kerala, Munnar, Dubai, Singapore, Europe)",
+      "packageCategory": "Either 'National' or 'International'. Determine this based on whether the destination is in India (National) or outside India (International).",
+      "tourType": "One of the following exact strings: 'Family Tours', 'Pilgrimage Tours', 'Honeymoon Tours', 'Hill Station Tours', 'Resort Packages', 'Weekend Tours', 'Group Tours', 'School / College Tours', 'Corporate Tours', 'Festival Tours', 'Cultural Tours', 'Medical Tours', 'Event / Sports Tours', 'Cruise Packages', 'Luxury Tours', 'Budget Tours', 'MICE Tours', 'Adventure Tours'. Choose the best match.",
+      "durationDays": number,
+      "durationNights": number,
+      "startingCity": "Starting city if mentioned, otherwise leave empty.",
+      "endingCity": "Ending city if mentioned, otherwise leave empty.",
+      "overview": "A thorough, engaging overview summarizing the highlights of this tour.",
+      "itinerary": [
+        {
+          "day": number,
+          "title": "Short title of the day's program",
+          "activities": "Detailed, highly descriptive paragraph (at least 4-5 sentences) showcasing the sights, their cultural/natural/historical highlights, specific spots visited, and key experiences",
+          "hotel": "Hotel stay recommendation details or tier matching the package style",
+          "mealPlan": "Meal plan details (e.g. Breakfast, Lunch, Dinner or MAPAI/CP/EP) and local dining recommendations",
+          "transport": "Local transfer details, vehicle types, routes, distance, and duration"
+        }
       ],
-      temperature: 0.3,
-    });
+      "inclusions": ["List of included items, e.g. '3-star hotel stay', 'Daily breakfast', 'Airport transfers'"],
+      "exclusions": ["List of excluded items, e.g. 'Flight tickets', 'Personal expenses', 'Entry tickets'"],
+      "optionalAddons": ["Optional addons, e.g. 'Houseboat upgrade', 'Candlelight dinner'"],
+      "termsAndConditions": "Terms and conditions text if found, otherwise general terms",
+      "cancellationPolicy": "Cancellation policy text if found, otherwise general policy",
+      "originalPrice": number (If price is found in the brochure, put it here. If not, default to 19999),
+      "offerPrice": number (If a discounted price is found, put it here, otherwise leave null or default to 15999),
+      "isSpecialOffer": boolean,
+      "seoTitle": "catchy SEO title",
+      "seoMetaDescription": "engaging meta description"
+    }
+  ]
+}`
+        }
+      ];
+
+      pdfScreenshots.forEach(page => {
+        if (page.dataUrl) {
+          content.push({
+            type: 'image_url',
+            image_url: {
+              url: page.dataUrl
+            }
+          });
+        }
+      });
+
+      completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'You are a vision-capable AI travel expert that outputs pure, valid, parsed JSON conforming to the requested schema. Never output markdown format.' },
+          { role: 'user', content }
+        ],
+        temperature: 0.3,
+      });
+    } else {
+      console.log(`[PDF Parser] Using text completion API with ${pdfText.length} characters of text...`);
+      
+      const generatorPrompt = `
+        You are an expert travel coordinator at "SreePayanam Tours & Travels".
+        Your task is to analyze the text content of a travel brochure PDF and extract all the distinct tour packages/itineraries found within it. A brochure may contain one or multiple different tour packages (e.g. South India Pilgrimage, Munnar Family Tour, etc.). Extract each distinct package separately.
+        
+        CRITICAL INSTRUCTION: Scan the entire text very carefully. Do NOT skip, omit, or merge any package. Every different itinerary (whether different duration, different destinations, or different pricing) must be returned as a separate entry in the "packages" array.
+
+        Here is the text extracted from the PDF:
+        ---
+        ${pdfText}
+        ---
+
+        Please analyze the text above and output a JSON object containing a "packages" array. Each item in the array must conform to the schema below. Do not include markdown codeblocks or any additional commentary. Output ONLY valid JSON.
+        If information for a key is missing from the brochure text, generate highly professional, realistic values based on the destinations, or leave empty/default as indicated.
+
+        For each day in the itinerary, make the day-wise content extremely descriptive, informative, and engaging:
+        - The "activities" field must be a detailed, rich paragraph (at least 4-5 sentences) describing the scenic beauty, historical significance, local culture, and specific sightseeing places visited, explaining why they are special.
+        - The "mealPlan" field should mention specific local dishes, culinary recommendations, street foods, or well-known restaurants.
+        - The "transport" field must describe local transfer instructions, routes, vehicle types, approximate travel time, and driving distances in detail.
+
+        JSON Schema to conform to:
+        {
+          "packages": [
+            {
+              "title": "Title of the tour package. If not explicitly found, create a premium catchphrase title.",
+              "destination": "The primary destination/region (e.g. Kerala, Munnar, Dubai, Singapore, Europe)",
+              "packageCategory": "Either 'National' or 'International'. Determine this based on whether the destination is in India (National) or outside India (International).",
+              "tourType": "One of the following exact strings: 'Family Tours', 'Pilgrimage Tours', 'Honeymoon Tours', 'Hill Station Tours', 'Resort Packages', 'Weekend Tours', 'Group Tours', 'School / College Tours', 'Corporate Tours', 'Festival Tours', 'Cultural Tours', 'Medical Tours', 'Event / Sports Tours', 'Cruise Packages', 'Luxury Tours', 'Budget Tours', 'MICE Tours', 'Adventure Tours'. Choose the best match.",
+              "durationDays": number,
+              "durationNights": number,
+              "startingCity": "Starting city if mentioned, otherwise leave empty.",
+              "endingCity": "Ending city if mentioned, otherwise leave empty.",
+              "overview": "A thorough, engaging overview summarizing the highlights of this tour.",
+              "itinerary": [
+                {
+                  "day": number,
+                  "title": "Short title of the day's program",
+                  "activities": "Detailed, highly descriptive paragraph (at least 4-5 sentences) showcasing the sights, their cultural/natural/historical highlights, specific spots visited, and key experiences",
+                  "hotel": "Hotel stay recommendation details or tier matching the package style",
+                  "mealPlan": "Meal plan details (e.g. Breakfast, Lunch, Dinner or MAPAI/CP/EP) and local dining recommendations",
+                  "transport": "Local transfer details, vehicle types, routes, distance, and duration"
+                }
+              ],
+              "inclusions": ["List of included items, e.g. '3-star hotel stay', 'Daily breakfast', 'Airport transfers'"],
+              "exclusions": ["List of excluded items, e.g. 'Flight tickets', 'Personal expenses', 'Entry tickets'"],
+              "optionalAddons": ["Optional addons, e.g. 'Houseboat upgrade', 'Candlelight dinner'"],
+              "termsAndConditions": "Terms and conditions text if found, otherwise general terms",
+              "cancellationPolicy": "Cancellation policy text if found, otherwise general policy",
+              "originalPrice": number (If price is found in the brochure, put it here. If not, default to 19999),
+              "offerPrice": number (If a discounted price is found, put it here, otherwise leave null or default to 15999),
+              "isSpecialOffer": boolean,
+              "seoTitle": "catchy SEO title",
+              "seoMetaDescription": "engaging meta description"
+            }
+          ]
+        }
+      `;
+
+      completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'You are an API that only returns pure, valid, parsed JSON conforming to the requested schema. Never output markdown format.' },
+          { role: 'user', content: generatorPrompt }
+        ],
+        temperature: 0.3,
+      });
+    }
 
     const cleanJsonText = completion.choices[0].message.content.trim().replace(/^```json/, '').replace(/```$/, '').trim();
     const parsedData = JSON.parse(cleanJsonText);
@@ -507,10 +619,10 @@ router.post('/generate-package', async (req, res) => {
       Your response MUST be a valid JSON object ONLY. Do not write any markdown wrappers (like \`\`\`json), explanations, or trailing characters.
 
       - Daily Activity Detail:
-        For each day in the itinerary, make the day-wise content creative, descriptive, and highly engaging. Do not use generic 1-sentence summaries. Write about:
-        * Specific sights to see, their history, culture, or scenic beauty.
-        * Recommended local foods, culinary highlights, or specific restaurants.
-        * Realistic travel routes, vehicle transfers, and driving distances.
+        For each day in the itinerary, the content MUST be extremely descriptive, informative, and engaging:
+        * The "activities" field must be a rich, descriptive paragraph (at least 4-5 sentences) detailing the visited places, their history, natural beauty, cultural features, and highlight spots.
+        * The "mealPlan" field must suggest specific local dishes, cuisines, culinary recommendations, or well-known restaurants in detail.
+        * The "transport" field must describe concrete transit routes, vehicles, transfer times, and driving distances in detail.
       
       The JSON object MUST strictly conform to the following schema:
       {
@@ -848,7 +960,10 @@ router.post('/compile-draft', async (req, res) => {
         3. Car/Cab: Check 'includeCar' flag (value: ${!!includeCar}) and 'selectedCar'. If 'includeCar' is false (or selectedCar is null/None), you MUST NOT suggest or mention car rental, private driver, or vehicle transfer in the itinerary, overview, inclusions, or exclusions. If true, explicitly detail the vehicle ("${selectedCar?.type || 'AC Sedan'} operated by ${selectedCar?.operator || 'private driver'}") in the itinerary transfers.
 
       - Evocative and Detailed Content Rule:
-        For each day in the itinerary, make the day-wise activities, sights, and descriptions highly creative, detailed, and write about specific places to visit, local culinary items/restaurants to try, and clear transport instructions. Do not write generic 1-sentence summaries.
+        For each day in the itinerary, the content MUST be extremely descriptive, informative, and engaging:
+        * The "activities" field must be a rich, detailed paragraph (at least 4-5 sentences) detailing the visited sights, historical or natural features, and highlight spots.
+        * The "mealPlan" field must specify local culinary recommendations, dishes, and restaurant/hotel dining details.
+        * The "transport" field must describe local transfer instructions, routes, vehicles, approximate travel time, and driving distances.
       
       Your response MUST be a valid JSON object ONLY. Do not write any markdown wrappers (like \`\`\`json), explanations, or trailing characters.
       

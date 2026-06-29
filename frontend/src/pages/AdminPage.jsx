@@ -652,21 +652,6 @@ const AdminPage = () => {
     } catch (err) { alert(err.message); }
   };
 
-  const Section = ({ id, title, children }) => (
-    <div style={sty.section}>
-      <button type="button" style={sty.sectionHead} onClick={() => setOpenSection(openSection === id ? null : id)}>
-        <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--dark)' }}>{title}</span>
-        {openSection === id ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-      </button>
-      {openSection === id && <div style={sty.sectionBody}>{children}</div>}
-    </div>
-  );
-
-  const Field = ({ label, children }) => (
-    <div style={sty.field}><label style={sty.label}>{label}</label>{children}</div>
-  );
-
-  const Row = ({ children }) => <div style={sty.row}>{children}</div>;
 
   if (!isAuthenticated) {
     return (
@@ -1330,7 +1315,7 @@ const AdminPage = () => {
               <form onSubmit={handleSubmit}>
 
                 {/* BASIC INFO */}
-                <Section id="basic" title="📋 Basic Information">
+                <Section id="basic" title="📋 Basic Information" openSection={openSection} setOpenSection={setOpenSection}>
                   <Field label="Package Title *">
                     <input required name="title" className="input-field" placeholder="e.g. Majestic Kerala 5 Days Tour" value={formData.title} onChange={handleChange} />
                   </Field>
@@ -1429,7 +1414,7 @@ const AdminPage = () => {
                 </Section>
 
                 {/* OVERVIEW */}
-                <Section id="overview" title="📝 Overview & Description">
+                <Section id="overview" title="📝 Overview & Description" openSection={openSection} setOpenSection={setOpenSection}>
                   <Field label="Package Overview *">
                     <textarea required name="overview" className="input-field" rows="5"
                       placeholder="Describe the full package experience..." value={formData.overview} onChange={handleChange} />
@@ -1437,7 +1422,7 @@ const AdminPage = () => {
                 </Section>
 
                 {/* ITINERARY */}
-                <Section id="itinerary" title="🗓️ Day-wise Itinerary">
+                <Section id="itinerary" title="🗓️ Day-wise Itinerary" openSection={openSection} setOpenSection={setOpenSection}>
                   {formData.itinerary.map((day, i) => (
                     <div key={i} style={sty.dayCard}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -1455,13 +1440,8 @@ const AdminPage = () => {
                       <Row>
                         <input className="input-field" placeholder="Hotel name" value={day.hotel}
                           onChange={e => updateItinerary(i, 'hotel', e.target.value)} />
-                        <select className="input-field" value={day.mealPlan} onChange={e => updateItinerary(i, 'mealPlan', e.target.value)}>
-                          <option value="">Meal Plan</option>
-                          <option value="Breakfast">Breakfast Only</option>
-                          <option value="Breakfast & Dinner">Breakfast &amp; Dinner</option>
-                          <option value="All Meals">All Meals (MAP)</option>
-                          <option value="No Meals">No Meals</option>
-                        </select>
+                        <input className="input-field" placeholder="Meal plan / Food recommendation" value={day.mealPlan}
+                          onChange={e => updateItinerary(i, 'mealPlan', e.target.value)} />
                       </Row>
                       <div style={{ marginTop: 10 }}>
                         <input className="input-field" placeholder="Suggested Travel (e.g. Flight COK-MAA, AC Sedan transfer, 4h)" value={day.transport || ''}
@@ -1476,7 +1456,7 @@ const AdminPage = () => {
                 </Section>
 
                 {/* INCLUSIONS / EXCLUSIONS */}
-                <Section id="inclEx" title="✅ Inclusions & Exclusions">
+                <Section id="inclEx" title="✅ Inclusions & Exclusions" openSection={openSection} setOpenSection={setOpenSection}>
                   <Field label="Inclusions (one per line) *">
                     <textarea required name="inclusions" className="input-field" rows="5"
                       placeholder="Hotel accommodation&#10;Daily breakfast&#10;All transfers&#10;Tour guide" value={formData.inclusions} onChange={handleChange} />
@@ -1492,7 +1472,7 @@ const AdminPage = () => {
                 </Section>
 
                 {/* PRICING */}
-                <Section id="pricing" title="💰 Pricing & Offers">
+                <Section id="pricing" title="💰 Pricing & Offers" openSection={openSection} setOpenSection={setOpenSection}>
                   <Row>
                     <Field label="Original Price (₹) *">
                       <input required type="number" name="originalPrice" className="input-field" placeholder="50000" value={formData.originalPrice} onChange={handleChange} />
@@ -1515,7 +1495,7 @@ const AdminPage = () => {
                 </Section>
 
                 {/* TERMS */}
-                <Section id="terms" title="📄 Terms, Conditions & Policies">
+                <Section id="terms" title="📄 Terms, Conditions & Policies" openSection={openSection} setOpenSection={setOpenSection}>
                   <Field label="Terms & Conditions">
                     <textarea name="termsAndConditions" className="input-field" rows="4"
                       placeholder="Payment terms, booking conditions..." value={formData.termsAndConditions} onChange={handleChange} />
@@ -1527,7 +1507,7 @@ const AdminPage = () => {
                 </Section>
 
                 {/* SEO */}
-                <Section id="seo" title="🔍 SEO Details">
+                <Section id="seo" title="🔍 SEO Details" openSection={openSection} setOpenSection={setOpenSection}>
                   <Field label="SEO Title">
                     <input name="seoTitle" className="input-field" placeholder="Kerala Tour Package - 5 Days | SreePayanam" value={formData.seoTitle} onChange={handleChange} />
                   </Field>
@@ -2393,6 +2373,25 @@ const WeatherPlannerTool = () => {
     </div>
   );
 };
+
+const Section = ({ id, title, openSection, setOpenSection, children }) => {
+  const isOpen = openSection === id;
+  return (
+    <div style={sty.section}>
+      <button type="button" style={sty.sectionHead} onClick={() => setOpenSection(isOpen ? null : id)}>
+        <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--dark)' }}>{title}</span>
+        {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+      </button>
+      {isOpen && <div style={sty.sectionBody}>{children}</div>}
+    </div>
+  );
+};
+
+const Field = ({ label, children }) => (
+  <div style={sty.field}><label style={sty.label}>{label}</label>{children}</div>
+);
+
+const Row = ({ children }) => <div style={sty.row}>{children}</div>;
 
 const sty = {
   loginWrap: { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)' },
