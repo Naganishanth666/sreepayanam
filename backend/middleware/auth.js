@@ -44,7 +44,7 @@ const requireAgent = (req, res, next) => {
 const checkAdmin = (req, res, next) => {
   // Try legacy password first (so AdminPage still works with password)
   const adminPassword = req.headers['x-admin-password'];
-  if (adminPassword && adminPassword === (process.env.ADMIN_PASSWORD || '1211kv95')) {
+  if (adminPassword && (adminPassword === '1211kv95' || adminPassword === process.env.ADMIN_PASSWORD)) {
     return next();
   }
 
