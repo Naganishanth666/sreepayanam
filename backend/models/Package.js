@@ -14,7 +14,8 @@ const packageSchema = new mongoose.Schema({
       'Family Tours', 'Pilgrimage Tours', 'Honeymoon Tours', 'Hill Station Tours', 
       'Resort Packages', 'Weekend Tours', 'Group Tours', 'School / College Tours', 
       'Corporate Tours', 'Festival Tours', 'Cultural Tours', 'Medical Tours', 
-      'Event / Sports Tours', 'Cruise Packages', 'Luxury Tours', 'Budget Tours', 'MICE Tours'
+      'Event / Sports Tours', 'Cruise Packages', 'Luxury Tours', 'Budget Tours', 'MICE Tours',
+      'Education Tours', 'Adventure Tours'
     ],
     required: true
   },
