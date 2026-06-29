@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trash2, Plus, LogIn, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { Trash2, Plus, LogIn, ChevronDown, ChevronUp, X, Edit } from 'lucide-react';
 import { IMAGE_PRESETS } from '../utils/imagePresets';
 
 const TOUR_TYPES = [
@@ -34,6 +34,7 @@ const AdminPage = () => {
   const [formData, setFormData] = useState(emptyForm);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiGenerating, setAiGenerating] = useState(false);
+  const [editingId, setEditingId] = useState(null);
 
   // STEP-BY-STEP AI BUILDER STATES
   const [builderStep, setBuilderStep] = useState(1); // 1: Input preferences, 2: Compare & Select top 5
@@ -49,7 +50,10 @@ const AdminPage = () => {
     trainClass: 'AC 3 Tier (3A)',
     carType: 'SUV (Innova/Ertiga)',
     driverOption: 'Chauffeur-driven',
-    customPrompt: ''
+    customPrompt: '',
+    includeFlight: true,
+    includeTrain: true,
+    includeCar: true
   });
   const [suggestedChoices, setSuggestedChoices] = useState(null);
   const [searchingChoices, setSearchingChoices] = useState(false);
@@ -65,8 +69,8 @@ const AdminPage = () => {
   const [expandedPrefs, setExpandedPrefs] = useState({});
 
   const handleParamChange = (e) => {
-    const { name, value } = e.target;
-    setBuilderParams(prev => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setBuilderParams(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
   const handlePdfUpload = (e) => {
@@ -176,19 +180,30 @@ const AdminPage = () => {
           trainClass: builderParams.trainClass,
           carType: builderParams.carType,
           driverOption: builderParams.driverOption,
-          customPrompt: builderParams.customPrompt
+          customPrompt: builderParams.customPrompt,
+          includeFlight: builderParams.includeFlight,
+          includeTrain: builderParams.includeTrain,
+          includeCar: builderParams.includeCar
         })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to suggest choices');
       
       setSuggestedChoices(data);
-      // Auto pre-select the 1st option of each category for convenience
+      // Auto pre-select the 1st option of each category for convenience if enabled
       if (data.hotels && data.hotels.length > 0) setSelectedHotel(data.hotels[0]);
-      if (data.flights && data.flights.length > 0) setSelectedFlight(data.flights[0]);
-      if (data.trains && data.trains.length > 0) setSelectedTrain(data.trains[0]);
-      if (data.cars && data.cars.length > 0) setSelectedCar(data.cars[0]);
+      else setSelectedHotel(null);
 
+      if (builderParams.includeFlight && data.flights && data.flights.length > 0) setSelectedFlight(data.flights[0]);
+      else setSelectedFlight(null);
+
+      if (builderParams.includeTrain && data.trains && data.trains.length > 0) setSelectedTrain(data.trains[0]);
+      else setSelectedTrain(null);
+
+      if (builderParams.includeCar && data.cars && data.cars.length > 0) setSelectedCar(data.cars[0]);
+      else setSelectedCar(null);
+
+      setActiveChoiceTab('hotel');
       setBuilderStep(2);
     } catch (err) {
       setError(`AI Search Error: ${err.message}`);
@@ -214,10 +229,13 @@ const AdminPage = () => {
           packageCategory: builderParams.destination.toLowerCase().includes('india') || builderParams.destination.toLowerCase().includes('kerala') || builderParams.destination.toLowerCase().includes('munnar') ? 'National' : 'International',
           tourType: 'Family Tours',
           selectedHotel,
-          selectedFlight,
-          selectedTrain,
-          selectedCar,
-          customPrompt: builderParams.customPrompt
+          selectedFlight: builderParams.includeFlight ? selectedFlight : null,
+          selectedTrain: builderParams.includeTrain ? selectedTrain : null,
+          selectedCar: builderParams.includeCar ? selectedCar : null,
+          customPrompt: builderParams.customPrompt,
+          includeFlight: builderParams.includeFlight,
+          includeTrain: builderParams.includeTrain,
+          includeCar: builderParams.includeCar
         })
       });
       const data = await res.json();
@@ -519,6 +537,54 @@ const AdminPage = () => {
     }));
   };
 
+  const handleEditClick = (pkg) => {
+    setEditingId(pkg._id);
+    setFormData({
+      title: pkg.title || '',
+      destination: pkg.destination || '',
+      packageCategory: pkg.packageCategory || 'National',
+      tourType: pkg.tourType || 'Family Tours',
+      startingCity: pkg.startingCity || '',
+      endingCity: pkg.endingCity || '',
+      durationDays: pkg.durationDays || '',
+      durationNights: pkg.durationNights || '',
+      overview: pkg.overview || '',
+      imageUrl: pkg.imageUrl || '',
+      itinerary: Array.isArray(pkg.itinerary) && pkg.itinerary.length > 0 
+        ? pkg.itinerary.map(day => ({
+            day: day.day || 1,
+            title: day.title || '',
+            activities: day.activities || '',
+            hotel: day.hotel || '',
+            mealPlan: day.mealPlan || '',
+            transport: day.transport || ''
+          })) 
+        : [{ day: 1, title: '', activities: '', hotel: '', mealPlan: '', transport: '' }],
+      inclusions: Array.isArray(pkg.inclusions) ? pkg.inclusions.join('\n') : (pkg.inclusions || ''),
+      exclusions: Array.isArray(pkg.exclusions) ? pkg.exclusions.join('\n') : (pkg.exclusions || ''),
+      optionalAddons: Array.isArray(pkg.optionalAddons) ? pkg.optionalAddons.join('\n') : (pkg.optionalAddons || ''),
+      originalPrice: pkg.originalPrice || '',
+      offerPrice: pkg.offerPrice || '',
+      isSpecialOffer: !!pkg.isSpecialOffer,
+      offerValidity: pkg.offerValidity ? new Date(pkg.offerValidity).toISOString().split('T')[0] : '',
+      termsAndConditions: pkg.termsAndConditions || '',
+      cancellationPolicy: pkg.cancellationPolicy || '',
+      seoTitle: pkg.seoTitle || '',
+      seoMetaDescription: pkg.seoMetaDescription || '',
+      isActive: pkg.isActive !== undefined ? pkg.isActive : true,
+    });
+    setOpenSection('basic');
+    setSuccess(`✍️ Editing package "${pkg.title}". Make changes and click 'Update Package'.`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setFormData(emptyForm);
+    setSuccess('');
+    setError('');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true); setError(''); setSuccess('');
@@ -533,17 +599,20 @@ const AdminPage = () => {
         exclusions: formData.exclusions.split('\n').map(s => s.trim()).filter(Boolean),
         optionalAddons: formData.optionalAddons.split('\n').map(s => s.trim()).filter(Boolean),
       };
-      const res = await fetch('/api/packages', {
-        method: 'POST',
+      const url = editingId ? `/api/packages/${editingId}` : '/api/packages';
+      const method = editingId ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method: method,
         headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.message || 'Failed to create package.');
+        throw new Error(err.message || 'Failed to submit package.');
       }
-      setSuccess('✅ Package created successfully!');
+      setSuccess(editingId ? '✅ Package updated successfully!' : '✅ Package created successfully!');
       setFormData(emptyForm);
+      setEditingId(null);
       setOpenSection('basic');
       fetchPackages();
     } catch (err) { setError(err.message); }
@@ -663,7 +732,15 @@ const AdminPage = () => {
             {/* Form */}
             <div className="glass-card" style={{ padding: 32 }}>
               <h2 style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24, color: 'var(--dark)' }}>
-                <Plus size={22} color="var(--primary)" /> Add New Tour Package
+                {editingId ? (
+                  <>
+                    <Edit size={22} color="var(--primary)" /> Edit Tour Package: {formData.title || 'Draft'}
+                  </>
+                ) : (
+                  <>
+                    <Plus size={22} color="var(--primary)" /> Add New Tour Package
+                  </>
+                )}
               </h2>
 
               {error && <div style={sty.errBox}>{error}</div>}
@@ -840,6 +917,24 @@ const AdminPage = () => {
                       </div>
                     </div>
 
+                    <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', padding: '10px 12px', background: '#eff6ff', borderRadius: '10px', border: '1px solid #bfdbfe' }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--primary)', display: 'flex', alignItems: 'center' }}>
+                        🛠️ Include in Suggestions:
+                      </span>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', fontWeight: 700, color: '#475569', cursor: 'pointer' }}>
+                        <input type="checkbox" name="includeFlight" checked={builderParams.includeFlight} onChange={handleParamChange} style={{ width: 16, height: 16 }} />
+                        ✈️ Flights
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', fontWeight: 700, color: '#475569', cursor: 'pointer' }}>
+                        <input type="checkbox" name="includeTrain" checked={builderParams.includeTrain} onChange={handleParamChange} style={{ width: 16, height: 16 }} />
+                        🚆 Trains
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', fontWeight: 700, color: '#475569', cursor: 'pointer' }}>
+                        <input type="checkbox" name="includeCar" checked={builderParams.includeCar} onChange={handleParamChange} style={{ width: 16, height: 16 }} />
+                        🚗 Cars/Transfers
+                      </label>
+                    </div>
+
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
                       <div style={fld}>
                         <label style={lbl}>📅 Duration (Days / Nights)</label>
@@ -871,8 +966,8 @@ const AdminPage = () => {
                         </select>
                       </div>
                       <div style={fld}>
-                        <label style={lbl}>✈️ Flight Cabin Preference</label>
-                        <select name="flightClass" className="input-field" value={builderParams.flightClass} onChange={handleParamChange}>
+                        <label style={lbl} className={!builderParams.includeFlight ? 'text-muted' : ''}>✈️ Flight Cabin Preference</label>
+                        <select name="flightClass" className="input-field" disabled={!builderParams.includeFlight} value={builderParams.flightClass} onChange={handleParamChange} style={{ opacity: builderParams.includeFlight ? 1 : 0.5 }}>
                           {['Economy', 'Premium Economy', 'Business Class', 'First Class'].map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
@@ -880,14 +975,14 @@ const AdminPage = () => {
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
                       <div style={fld}>
-                        <label style={lbl}>🚆 Train Preferred standard</label>
-                        <select name="trainClass" className="input-field" value={builderParams.trainClass} onChange={handleParamChange}>
+                        <label style={lbl} className={!builderParams.includeTrain ? 'text-muted' : ''}>🚆 Train Preferred standard</label>
+                        <select name="trainClass" className="input-field" disabled={!builderParams.includeTrain} value={builderParams.trainClass} onChange={handleParamChange} style={{ opacity: builderParams.includeTrain ? 1 : 0.5 }}>
                           {['Sleeper (SL)', 'AC 3 Tier (3A)', 'AC 2 Tier (2A)', 'AC 1st Class (1A)'].map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
                       <div style={fld}>
-                        <label style={lbl}>🚗 Rental Car preference</label>
-                        <select name="carType" className="input-field" value={builderParams.carType} onChange={handleParamChange}>
+                        <label style={lbl} className={!builderParams.includeCar ? 'text-muted' : ''}>🚗 Rental Car preference</label>
+                        <select name="carType" className="input-field" disabled={!builderParams.includeCar} value={builderParams.carType} onChange={handleParamChange} style={{ opacity: builderParams.includeCar ? 1 : 0.5 }}>
                           {['Hatchback', 'Premium Sedan', 'SUV (Innova/Ertiga)', 'Luxury (Audi/BMW)', 'Traveller / Minibus'].map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
@@ -995,11 +1090,11 @@ const AdminPage = () => {
                     {/* Compare Tabs */}
                     <div style={{ display: 'flex', background: '#f1f5f9', padding: 4, borderRadius: 10, gap: 4 }}>
                       {[
-                        { id: 'hotel', label: '🏨 Hotels', color: '#db2777' },
-                        { id: 'flight', label: '✈️ Flights', color: '#2563eb' },
-                        { id: 'train', label: '🚆 Trains', color: '#059669' },
-                        { id: 'car', label: '🚗 Cars/Transfers', color: '#7c3aed' }
-                      ].map(t => (
+                        { id: 'hotel', label: '🏨 Hotels', color: '#db2777', show: true },
+                        { id: 'flight', label: '✈️ Flights', color: '#2563eb', show: builderParams.includeFlight },
+                        { id: 'train', label: '🚆 Trains', color: '#059669', show: builderParams.includeTrain },
+                        { id: 'car', label: '🚗 Cars/Transfers', color: '#7c3aed', show: builderParams.includeCar }
+                      ].filter(t => t.show).map(t => (
                         <button
                           key={t.id}
                           type="button"
@@ -1170,9 +1265,9 @@ const AdminPage = () => {
                       <h4 style={{ margin: '0 0 8px', fontWeight: 800 }}>📋 Compile Summary Check:</h4>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <div>🏨 Hotel Selected: <strong style={{ color: '#db2777' }}>{selectedHotel?.name || 'None selected'}</strong></div>
-                        <div>✈️ Flight Selected: <strong style={{ color: '#2563eb' }}>{selectedFlight?.airline || 'None selected'}</strong></div>
-                        <div>🚆 Train Selected: <strong style={{ color: '#059669' }}>{selectedTrain?.name || 'None selected (Optional)'}</strong></div>
-                        <div>🚗 Car Selected: <strong style={{ color: '#7c3aed' }}>{selectedCar?.type || 'None selected'}</strong></div>
+                        {builderParams.includeFlight && <div>✈️ Flight Selected: <strong style={{ color: '#2563eb' }}>{selectedFlight?.airline || 'None selected'}</strong></div>}
+                        {builderParams.includeTrain && <div>🚆 Train Selected: <strong style={{ color: '#059669' }}>{selectedTrain?.name || 'None selected (Optional)'}</strong></div>}
+                        {builderParams.includeCar && <div>🚗 Car Selected: <strong style={{ color: '#7c3aed' }}>{selectedCar?.type || 'None selected'}</strong></div>}
                       </div>
                     </div>
 
@@ -1418,10 +1513,22 @@ const AdminPage = () => {
                   </Field>
                 </Section>
 
-                <button type="submit" className="btn btn-primary" disabled={loading}
-                  style={{ width: '100%', marginTop: 24, padding: '14px', fontSize: '1.1rem' }}>
-                  {loading ? 'Creating Package...' : '🚀 Create Package'}
-                </button>
+                <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+                  {editingId && (
+                    <button
+                      type="button"
+                      className="btn"
+                      style={{ flex: 1, border: '1.5px solid #cbd5e1', background: 'white', padding: '14px', fontSize: '1.1rem', fontWeight: 700 }}
+                      onClick={handleCancelEdit}
+                    >
+                      ❌ Cancel
+                    </button>
+                  )}
+                  <button type="submit" className="btn btn-primary" disabled={loading}
+                    style={{ flex: 2, padding: '14px', fontSize: '1.1rem' }}>
+                    {loading ? (editingId ? 'Saving Changes...' : 'Creating Package...') : (editingId ? '💾 Update Package' : '🚀 Create Package')}
+                  </button>
+                </div>
               </form>
             </div>
 
@@ -1450,9 +1557,24 @@ const AdminPage = () => {
                             {' '}<span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>• {pkg.durationDays}D/{pkg.durationNights}N</span>
                           </div>
                         </div>
-                        <button onClick={() => handleDelete(pkg._id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 6 }}>
-                          <Trash2 size={18} />
-                        </button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <button
+                            type="button"
+                            onClick={() => handleEditClick(pkg)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', padding: 6 }}
+                            title="Edit package details"
+                          >
+                            <Edit size={18} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(pkg._id)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 6 }}
+                            title="Delete package"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>

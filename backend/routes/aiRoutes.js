@@ -277,7 +277,11 @@ router.post('/plan-structured', async (req, res) => {
       transportType,
       hotelCategory,
       travelType,
-      customPrompt
+      customPrompt,
+      flight_ticket,
+      train_ticket,
+      bus_ticket,
+      local_transport
     } = preferences;
 
     const openai = getOpenAIClient(res);
@@ -304,11 +308,16 @@ router.post('/plan-structured', async (req, res) => {
 
       Instructions:
       1. Perform realistic travel research. Suggest genuine local hotels/resorts matching the requested accommodation level (${hotelCategory || 'Premium'}).
-      2. Suggest authentic local dining options, meal plans, and cuisines to try based on the client's meal requirements and preferences.
-      3. Recommend concrete daily transfers matching the selected transport mode (${transportType || 'Flight/Train/Car'}). If Flight or Train, specify realistic schedules or routes. If Car, mention realistic driving durations/distances.
+      2. Suggest authentic local dining options, meal plans, and cuisines to try based on the client's meal requirements and preferences. Be highly creative and recommend specific popular local dishes, street food, or well-known restaurants.
+      3. Strict Transport Constraint Enforcement:
+         - Flight/Airplane: Check if Flight Ticket ('flight_ticket') is true. If 'flight_ticket' is true, suggest flight transfers/airplane travel between cities where applicable. If 'flight_ticket' is false (or not provided), you MUST NOT suggest or mention flight travel, airplane tickets, or airport transfers.
+         - Train: Check if Train Ticket ('train_ticket') is true. If 'train_ticket' is true, suggest train travel/train numbers. If 'train_ticket' is false (or not provided), you MUST NOT suggest or mention train travel.
+         - Bus: Check if Bus Ticket ('bus_ticket') is true. If 'bus_ticket' is true, suggest bus travel. If 'bus_ticket' is false (or not provided), you MUST NOT suggest or mention bus travel.
+         - Local Car/Cab: If local_transport (e.g. 'Sedan', 'SUV') is specified and requested, detail road travel/excursions using that vehicle category.
       4. Suggest a realistic price range for the overall trip in Indian Rupees (₹), e.g., "₹25,000 - ₹35,000 per person" conforming to the budget constraints.
       5. Include specific sightseeing spots, pace (e.g. slow, moderate, active) and entry tickets matching their sightseeing choices.
-      6. The output MUST be a valid JSON object ONLY. Do not write any markdown wrappers (like \`\`\`json), explanations, or trailing characters.
+      6. For each day in the itinerary, make the day-wise content creative, descriptive, and highly engaging. Do not write dry, generic sentences. Detail the specific beauty, activity highlights, local tastes, and sights.
+      7. The output MUST be a valid JSON object ONLY. Do not write any markdown wrappers (like \`\`\`json), explanations, or trailing characters.
 
       The JSON object MUST strictly conform to the following schema:
       {
@@ -371,10 +380,21 @@ router.post('/parse-brochure', upload.single('brochure'), async (req, res) => {
     const openai = getOpenAIClient(res);
     if (!openai) return;
 
-    // Parse the PDF buffer to extract text
-    const parser = new PDFParse(new Uint8Array(req.file.buffer));
-    const pdfData = await parser.getText();
-    const pdfText = pdfData.text;
+    // Parse the PDF buffer to extract text with standard fonts support to prevent missing text warnings/errors
+    const path = require('path');
+    const fontsPath = path.join(__dirname, '../node_modules/pdfjs-dist/standard_fonts/');
+    const parser = new PDFParse({
+      data: new Uint8Array(req.file.buffer),
+      standardFontDataUrl: fontsPath
+    });
+    
+    let pdfText = '';
+    try {
+      const pdfData = await parser.getText();
+      pdfText = pdfData.text;
+    } finally {
+      await parser.destroy(); // Free memory and prevent leaks
+    }
 
     if (!pdfText || !pdfText.trim()) {
       return res.status(400).json({ message: 'Could not extract readable text from the uploaded PDF.' });
@@ -385,6 +405,8 @@ router.post('/parse-brochure', upload.single('brochure'), async (req, res) => {
     const generatorPrompt = `
       You are an expert travel coordinator at "SreePayanam Tours & Travels".
       Your task is to analyze the text content of a travel brochure PDF and extract all the distinct tour packages/itineraries found within it. A brochure may contain one or multiple different tour packages (e.g. South India Pilgrimage, Munnar Family Tour, etc.). Extract each distinct package separately.
+      
+      CRITICAL INSTRUCTION: Scan the entire text very carefully. Do NOT skip, omit, or merge any package. Every different itinerary (whether different duration, different destinations, or different pricing) must be returned as a separate entry in the "packages" array.
 
       Here is the text extracted from the PDF:
       ---
@@ -394,6 +416,11 @@ router.post('/parse-brochure', upload.single('brochure'), async (req, res) => {
       Please analyze the text above and output a JSON object containing a "packages" array. Each item in the array must conform to the schema below. Do not include markdown codeblocks or any additional commentary. Output ONLY valid JSON.
       If information for a key is missing from the brochure text, generate highly professional, realistic values based on the destinations, or leave empty/default as indicated.
 
+      For each day in the itinerary, make the day-wise content creative, descriptive, and highly engaging. Do not use generic 1-sentence summaries. Write about:
+      - Sights to see and their specific highlights.
+      - Local food/cuisines recommendations or dishes to try.
+      - Transportation/transfers instructions.
+
       JSON Schema to conform to:
       {
         "packages": [
@@ -401,7 +428,7 @@ router.post('/parse-brochure', upload.single('brochure'), async (req, res) => {
             "title": "Title of the tour package. If not explicitly found, create a premium catchphrase title.",
             "destination": "The primary destination/region (e.g. Kerala, Munnar, Dubai, Singapore, Europe)",
             "packageCategory": "Either 'National' or 'International'. Determine this based on whether the destination is in India (National) or outside India (International).",
-            "tourType": "One of the following exact strings: 'Family Tours', 'Pilgrimage Tours', 'Honeymoon Tours', 'Hill Station Tours', 'Resort Packages', 'Weekend Tours', 'Group Tours', 'School / College Tours', 'Corporate Tours', 'Festival Tours', 'Cultural Tours', 'Medical Tours', 'Event / Sports Tours', 'Cruise Packages', 'Luxury Tours', 'Budget Tours', 'MICE Tours'. Choose the best match.",
+            "tourType": "One of the following exact strings: 'Family Tours', 'Pilgrimage Tours', 'Honeymoon Tours', 'Hill Station Tours', 'Resort Packages', 'Weekend Tours', 'Group Tours', 'School / College Tours', 'Corporate Tours', 'Festival Tours', 'Cultural Tours', 'Medical Tours', 'Event / Sports Tours', 'Cruise Packages', 'Luxury Tours', 'Budget Tours', 'MICE Tours', 'Adventure Tours'. Choose the best match.",
             "durationDays": number,
             "durationNights": number,
             "startingCity": "Starting city if mentioned, otherwise leave empty.",
@@ -411,10 +438,10 @@ router.post('/parse-brochure', upload.single('brochure'), async (req, res) => {
               {
                 "day": number,
                 "title": "Short title of the day's program",
-                "activities": "Detailed description of activities and sightseeing for the day",
-                "hotel": "Hotel stay recommendation details or tier",
-                "mealPlan": "Meal plan details (e.g. Breakfast, Lunch, Dinner or MAPAI/CP/EP) if mentioned",
-                "transport": "Local transfer details"
+                "activities": "Creative, detailed description of activities, specific places visited, and experiences for the day",
+                "hotel": "Hotel stay recommendation details or tier matching the package style",
+                "mealPlan": "Meal plan details (e.g. Breakfast, Lunch, Dinner or MAPAI/CP/EP) and local dining recommendations",
+                "transport": "Local transfer details (e.g. AC Sedan private transfer, flight arrival route)"
               }
             ],
             "inclusions": ["List of included items, e.g. '3-star hotel stay', 'Daily breakfast', 'Airport transfers'"],
@@ -474,6 +501,12 @@ router.post('/generate-package', async (req, res) => {
       You MUST perform thorough, realistic travel research to provide real suggested travel, flight transfers, train numbers or schedules, driving durations/distances, and genuine hotel and meal recommendations.
       
       Your response MUST be a valid JSON object ONLY. Do not write any markdown wrappers (like \`\`\`json), explanations, or trailing characters.
+
+      - Daily Activity Detail:
+        For each day in the itinerary, make the day-wise content creative, descriptive, and highly engaging. Do not use generic 1-sentence summaries. Write about:
+        * Specific sights to see, their history, culture, or scenic beauty.
+        * Recommended local foods, culinary highlights, or specific restaurants.
+        * Realistic travel routes, vehicle transfers, and driving distances.
       
       The JSON object MUST strictly conform to the following schema:
       {
@@ -491,7 +524,7 @@ router.post('/generate-package', async (req, res) => {
           {
             "day": 1,
             "title": "Arrival & Backwaters Cruise",
-            "activities": "Detailed description of activities for this day.",
+            "activities": "Detailed, creative description of activities and specific spots visited for this day.",
             "hotel": "Name of a specific realistic premium hotel or resort matching the location",
             "mealPlan": "Breakfast (Include specific local dishes, cuisines, or restaurants suggested)",
             "transport": "Specific flight details (airlines, routes), train options, or car travel/road transfers, with transit times and distance"
@@ -653,7 +686,10 @@ router.post('/suggest-options', async (req, res) => {
       trainClass,
       carType,
       driverOption,
-      customPrompt
+      customPrompt,
+      includeFlight,
+      includeTrain,
+      includeCar
     } = req.body;
 
     const openai = getOpenAIClient(res);
@@ -679,10 +715,13 @@ router.post('/suggest-options', async (req, res) => {
 
       Instructions:
       1. Perform thorough, realistic travel research to provide real suggested local hotels, existing flight paths/schedules (e.g. Indigo, Air India, Emirates), genuine train connections (e.g. specific train numbers/names in India), and car rental styles.
-      2. You MUST suggest exactly 5 options for each category (hotels, flights, trains, cars) that match the requested parameters.
-      3. For any category that is NOT requested or applicable, you should STILL generate 5 realistic options to give a complete travel choice, but prioritize categories matches.
-      4. Ensure prices are in Indian Rupees (₹) and ratings/times are concrete and highly accurate.
-      5. The output MUST be a valid JSON object ONLY. Do not write any markdown wrappers (like \`\`\`json), explanations, or trailing characters.
+      2. Hotels: You MUST suggest exactly 5 options matching the parameters.
+      3. Flights: If Flight Option is not selected/included (includeFlight: ${!!includeFlight}), you MUST return an empty array "flights": [] in the output JSON. Do not recommend any flights.
+      4. Trains: If Train Option is not selected/included (includeTrain: ${!!includeTrain}), you MUST return an empty array "trains": [] in the output JSON. Do not recommend any trains.
+      5. Cars/Transfers: If Car Option is not selected/included (includeCar: ${!!includeCar}), you MUST return an empty array "cars": [] in the output JSON. Do not recommend any cars.
+      6. For any category that is NOT requested or applicable but IS included, you should STILL generate 5 realistic options to give a complete travel choice.
+      7. Ensure prices are in Indian Rupees (₹) and ratings/times are concrete and highly accurate.
+      8. The output MUST be a valid JSON object ONLY. Do not write any markdown wrappers (like \`\`\`json), explanations, or trailing characters.
 
       The JSON object MUST strictly conform to the following schema:
       {
@@ -767,7 +806,10 @@ router.post('/compile-draft', async (req, res) => {
       selectedFlight,
       selectedTrain,
       selectedCar,
-      customPrompt
+      customPrompt,
+      includeFlight,
+      includeTrain,
+      includeCar
     } = req.body;
 
     const openai = getOpenAIClient(res);
@@ -794,9 +836,15 @@ router.post('/compile-draft', async (req, res) => {
       - Additional Prompt Details: ${customPrompt || 'None'}
 
       Instructions for Itinerary Compilation:
-      - Make sure the day-wise itinerary explicitly mentions the selected hotel (e.g. staying at "${selectedHotel?.name || 'Grand Hyatt'}") for overnight stays.
-      - Day 1 (Arrival) should explicitly detail the flight ("${selectedFlight?.airline || 'IndiGo flight'}") or train ("${selectedTrain?.name || 'Trivandrum Mail'}") details.
-      - Transfers and excursions should explicitly mention using the selected vehicle ("${selectedCar?.type || 'AC Sedan'} operated by ${selectedCar?.operator || 'private driver'}").
+      - Stays: Make sure the day-wise itinerary explicitly mentions the selected hotel (e.g. staying at "${selectedHotel?.name || 'Grand Hyatt'}") for overnight stays.
+      
+      - Transport inclusion constraints:
+        1. Flight: Check 'includeFlight' flag (value: ${!!includeFlight}) and 'selectedFlight'. If 'includeFlight' is false (or selectedFlight is null/None), you MUST NOT suggest or mention flight travel, airplane tickets, or airport transfers in the itinerary, overview, inclusions, or exclusions. If true, explicitly detail the flight ("${selectedFlight?.airline || 'IndiGo flight'}") arrival and route on Day 1.
+        2. Train: Check 'includeTrain' flag (value: ${!!includeTrain}) and 'selectedTrain'. If 'includeTrain' is false (or selectedTrain is null/None), you MUST NOT suggest or mention train travel, train numbers, or railway station transfers in the itinerary, overview, inclusions, or exclusions. If true, explicitly detail the train ("${selectedTrain?.name || 'Trivandrum Mail'}") on Day 1.
+        3. Car/Cab: Check 'includeCar' flag (value: ${!!includeCar}) and 'selectedCar'. If 'includeCar' is false (or selectedCar is null/None), you MUST NOT suggest or mention car rental, private driver, or vehicle transfer in the itinerary, overview, inclusions, or exclusions. If true, explicitly detail the vehicle ("${selectedCar?.type || 'AC Sedan'} operated by ${selectedCar?.operator || 'private driver'}") in the itinerary transfers.
+
+      - Evocative and Detailed Content Rule:
+        For each day in the itinerary, make the day-wise activities, sights, and descriptions highly creative, detailed, and write about specific places to visit, local culinary items/restaurants to try, and clear transport instructions. Do not write generic 1-sentence summaries.
       
       Your response MUST be a valid JSON object ONLY. Do not write any markdown wrappers (like \`\`\`json), explanations, or trailing characters.
       
@@ -816,9 +864,9 @@ router.post('/compile-draft', async (req, res) => {
           {
             "day": 1,
             "title": "Arrival & Welcome",
-            "activities": "Detailed description of activities for this day.",
+            "activities": "Detailed, creative description of activities and specific spots visited for this day.",
             "hotel": "${selectedHotel?.name || 'Selected Premium Stay'}",
-            "mealPlan": "Breakfast (Mention local items or hotel dining)",
+            "mealPlan": "Breakfast (Mention specific local dishes, cuisines or hotel dining recommendations)",
             "transport": "Transit detail using selected flights/trains and selected vehicle"
           }
         ],
