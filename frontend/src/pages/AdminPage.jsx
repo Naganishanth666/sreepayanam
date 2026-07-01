@@ -1702,14 +1702,13 @@ const AdminPage = () => {
                             </div>
                           </div>
                         )}
-
                         {enq.remarks && (
                           <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8, fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: 14 }}>
                             <strong>Remarks:</strong> {enq.remarks}
                           </div>
                         )}
 
-                        {enq.detailedPreferences && (
+                        {(enq.detailedPreferences || enq.companyName || enq.patientName || enq.cruiseLinePreference || enq.institutionName || enq.coupleNames || enq.deityTempleName) && (
                           <div style={{ marginTop: 10, marginBottom: 14 }}>
                             <button
                               type="button"
@@ -1728,7 +1727,7 @@ const AdminPage = () => {
                                 gap: 6
                               }}
                             >
-                              📋 {expandedPrefs[enq._id] ? 'Hide' : 'Show'} 10-Section AI Preferences
+                              📋 {expandedPrefs[enq._id] ? 'Hide' : 'Show'} Customer Preferences &amp; Details
                             </button>
 
                             {expandedPrefs[enq._id] && (
@@ -1744,98 +1743,221 @@ const AdminPage = () => {
                                 gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
                                 gap: 16
                               }}>
-                                <div>
-                                  <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>👤 Customer Info</div>
-                                  <div><strong>Preferred Contact:</strong> {enq.detailedPreferences.contact_method}</div>
-                                  <div><strong>Location:</strong> {enq.detailedPreferences.location || 'N/A'}</div>
-                                  {enq.detailedPreferences.whatsapp_number && <div><strong>WhatsApp:</strong> {enq.detailedPreferences.whatsapp_number}</div>}
-                                </div>
+                                {/* Niche Specialized Tour Details */}
+                                {(() => {
+                                  const tourType = enq.detailedPreferences?.tour_type || enq.detailedPreferences?.tourType || enq.tourType || '';
+                                  const isMice = enq.companyName || enq.detailedPreferences?.companyName || tourType?.includes('MICE') || tourType?.includes('Corporate');
+                                  const isMedical = enq.patientName || enq.detailedPreferences?.patientName || tourType?.includes('Medical');
+                                  const isCruise = enq.cruiseLinePreference || enq.detailedPreferences?.cruiseLinePreference || tourType?.includes('Cruise');
+                                  const isEdu = enq.institutionName || enq.detailedPreferences?.institutionName || tourType?.includes('School') || tourType?.includes('Education');
+                                  const isHoneymoon = enq.coupleNames || enq.detailedPreferences?.coupleNames || tourType?.includes('Honeymoon');
+                                  const isPilgrimage = enq.deityTempleName || enq.detailedPreferences?.deityTempleName || tourType?.includes('Pilgrimage');
 
-                                <div>
-                                  <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>🗺️ Trip & Vibe</div>
-                                  <div><strong>Category:</strong> {enq.detailedPreferences.travel_category}</div>
-                                  <div><strong>Type:</strong> {enq.detailedPreferences.tour_type}</div>
-                                  <div><strong>Dates:</strong> {enq.detailedPreferences.travel_start_date || 'N/A'} to {enq.detailedPreferences.return_date || 'N/A'}</div>
-                                  <div><strong>Duration:</strong> {enq.detailedPreferences.num_days}D / {enq.detailedPreferences.num_nights}N</div>
-                                  <div><strong>Flexibility:</strong> {enq.detailedPreferences.date_flexibility}</div>
-                                </div>
+                                  if (isMice || isMedical || isCruise || isEdu || isHoneymoon || isPilgrimage) {
+                                    return (
+                                      <div style={{ gridColumn: 'span 2', background: '#eff6ff', border: '1.5px solid var(--primary)', borderRadius: 10, padding: 14 }}>
+                                        <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid var(--primary)', paddingBottom: 4, marginBottom: 8, fontSize: '0.88rem' }}>
+                                          ✨ Specialized Travel Requirements ({tourType || 'Niche Request'})
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                                          {isMice && (
+                                            <>
+                                              <div><strong>Company Name:</strong> {enq.companyName || enq.detailedPreferences?.companyName || 'N/A'}</div>
+                                              <div><strong>Event Type:</strong> {enq.eventType || enq.detailedPreferences?.eventType || 'N/A'}</div>
+                                              <div><strong>Duration (Days):</strong> {enq.eventDurationDays || enq.detailedPreferences?.eventDurationDays || 'N/A'}</div>
+                                              <div><strong>Venue:</strong> {enq.venuePreference || enq.detailedPreferences?.venuePreference || 'N/A'}</div>
+                                              <div><strong>Occupancy:</strong> {enq.roomOccupancy || enq.detailedPreferences?.roomOccupancy || 'N/A'}</div>
+                                              <div><strong>Meeting Room:</strong> {enq.meetingRoomRequired || enq.detailedPreferences?.meetingRoomRequired || 'No'}</div>
+                                              <div><strong>Audio Visual:</strong> {enq.audioVisualRequired || enq.detailedPreferences?.audioVisualRequired || 'No'}</div>
+                                              <div><strong>Team Building:</strong> {enq.teamBuildingActivities || enq.detailedPreferences?.teamBuildingActivities || 'No'}</div>
+                                              <div><strong>Gala Dinner:</strong> {enq.galaDinnerRequired || enq.detailedPreferences?.galaDinnerRequired || 'No'}</div>
+                                              <div><strong>Approximate Pax:</strong> {enq.approximatePax || enq.detailedPreferences?.approximatePax || 'N/A'}</div>
+                                            </>
+                                          )}
+                                          {isMedical && (
+                                            <>
+                                              <div><strong>Patient Name:</strong> {enq.patientName || enq.detailedPreferences?.patientName || 'N/A'}</div>
+                                              <div><strong>Age / Gender:</strong> {enq.patientAge || enq.detailedPreferences?.patientAge || 'N/A'} / {enq.patientGender || enq.detailedPreferences?.patientGender || 'Male'}</div>
+                                              <div><strong>Medical Condition:</strong> {enq.medicalCondition || enq.detailedPreferences?.medicalCondition || 'N/A'}</div>
+                                              <div><strong>Treatment Category:</strong> {enq.treatmentCategory || enq.detailedPreferences?.treatmentCategory || 'N/A'}</div>
+                                              <div><strong>Preferred Country:</strong> {enq.preferredTreatmentCountry || enq.detailedPreferences?.preferredTreatmentCountry || 'N/A'}</div>
+                                              <div><strong>Hospital Pref:</strong> {enq.hospitalPreference || enq.detailedPreferences?.hospitalPreference || 'N/A'}</div>
+                                              <div style={{ gridColumn: 'span 2' }}><strong>Medical History:</strong> {enq.medicalHistoryDetails || enq.detailedPreferences?.medicalHistoryDetails || 'N/A'}</div>
+                                              <div><strong>Visa Required:</strong> {enq.visaAssistanceRequired || enq.detailedPreferences?.visaAssistanceRequired || 'No'}</div>
+                                              <div><strong>Translator Required:</strong> {enq.translatorRequired || enq.detailedPreferences?.translatorRequired || 'No'}</div>
+                                              <div><strong>Attendant Accomm:</strong> {enq.accommodationForAttendants || enq.detailedPreferences?.accommodationForAttendants || 'No'}</div>
+                                              <div><strong>Wheelchair/Stretcher:</strong> {enq.wheelchairAssistance || enq.detailedPreferences?.wheelchairAssistance || 'No'}</div>
+                                            </>
+                                          )}
+                                          {isCruise && (
+                                            <>
+                                              <div><strong>Cruise Line:</strong> {enq.cruiseLinePreference || enq.detailedPreferences?.cruiseLinePreference || 'N/A'}</div>
+                                              <div><strong>Cabin Category:</strong> {enq.cabinCategory || enq.detailedPreferences?.cabinCategory || 'N/A'}</div>
+                                              <div><strong>Destination:</strong> {enq.destinationCruise || enq.detailedPreferences?.destinationCruise || 'N/A'}</div>
+                                              <div><strong>Nights Duration:</strong> {enq.durationNights || enq.detailedPreferences?.durationNights || 'N/A'}</div>
+                                              <div><strong>Shore Excursions:</strong> {enq.shoreExcursions || enq.detailedPreferences?.shoreExcursions || 'No'}</div>
+                                              <div><strong>Dining Preference:</strong> {enq.diningPreference || enq.detailedPreferences?.diningPreference || 'N/A'}</div>
+                                              <div><strong>Gratuities Prepaid:</strong> {enq.onboardGratuitiesPrepaid || enq.detailedPreferences?.onboardGratuitiesPrepaid || 'No'}</div>
+                                            </>
+                                          )}
+                                          {isEdu && (
+                                            <>
+                                              <div><strong>Institution:</strong> {enq.institutionName || enq.detailedPreferences?.institutionName || 'N/A'}</div>
+                                              <div><strong>Dept / Grade:</strong> {enq.departmentGrade || enq.detailedPreferences?.departmentGrade || 'N/A'}</div>
+                                              <div><strong>Contact Designation:</strong> {enq.contactPersonDesignation || enq.detailedPreferences?.contactPersonDesignation || 'N/A'}</div>
+                                              <div><strong>Students Count:</strong> {enq.numberOfStudents || enq.detailedPreferences?.numberOfStudents || 'N/A'}</div>
+                                              <div><strong>Teachers Count:</strong> {enq.numberOfTeachers || enq.detailedPreferences?.numberOfTeachers || 'N/A'}</div>
+                                              <div><strong>Study Focus:</strong> {enq.studySubjectFocus || enq.detailedPreferences?.studySubjectFocus || 'N/A'}</div>
+                                              <div><strong>Industrial Visit:</strong> {enq.industrialVisitRequired || enq.detailedPreferences?.industrialVisitRequired || 'No'}</div>
+                                              <div><strong>Guide / Lecture:</strong> {enq.guideLectureRequired || enq.detailedPreferences?.guideLectureRequired || 'No'}</div>
+                                              <div><strong>Participation Cert:</strong> {enq.certificateOfParticipation || enq.detailedPreferences?.certificateOfParticipation || 'No'}</div>
+                                              <div><strong>Supervisor Sharing:</strong> {enq.supervisorAccommodationSharing || enq.detailedPreferences?.supervisorAccommodationSharing || 'Twin Sharing'}</div>
+                                            </>
+                                          )}
+                                          {isHoneymoon && (
+                                            <>
+                                              <div><strong>Couple Names:</strong> {enq.coupleNames || enq.detailedPreferences?.coupleNames || 'N/A'}</div>
+                                              <div><strong>Marriage Date:</strong> {enq.marriageDate || enq.detailedPreferences?.marriageDate ? new Date(enq.marriageDate || enq.detailedPreferences?.marriageDate).toLocaleDateString('en-IN') : 'N/A'}</div>
+                                              <div><strong>Theme:</strong> {enq.honeymoonTheme || enq.detailedPreferences?.honeymoonTheme || 'N/A'}</div>
+                                              <div><strong>Room View Pref:</strong> {enq.roomViewPreference || enq.detailedPreferences?.roomViewPreference || 'N/A'}</div>
+                                              <div><strong>Private Pool Villa:</strong> {enq.privatePoolVilla || enq.detailedPreferences?.privatePoolVilla || 'No'}</div>
+                                              <div><strong>Photography:</strong> {enq.photographyService || enq.detailedPreferences?.photographyService || 'No'}</div>
+                                              <div style={{ gridColumn: 'span 2' }}>
+                                                <strong>Complimentary Benefits:</strong> {Array.isArray(enq.complimentaryBenefits || enq.detailedPreferences?.complimentaryBenefits) ? (enq.complimentaryBenefits || enq.detailedPreferences?.complimentaryBenefits).join(', ') : 'None'}
+                                              </div>
+                                            </>
+                                          )}
+                                          {isPilgrimage && (
+                                            <>
+                                              <div><strong>Deity / Temple Name:</strong> {enq.deityTempleName || enq.detailedPreferences?.deityTempleName || 'N/A'}</div>
+                                              <div><strong>Destination:</strong> {enq.primaryDestination || enq.detailedPreferences?.primaryDestination || 'N/A'}</div>
+                                              <div><strong>Special Darshan:</strong> {enq.specialDarshanPasses || enq.detailedPreferences?.specialDarshanPasses || 'No'}</div>
+                                              <div><strong>Pooja Arrangements:</strong> {enq.ritualPoojaArrangements || enq.detailedPreferences?.ritualPoojaArrangements || 'No'}</div>
+                                              <div><strong>Senior Assistance:</strong> {enq.seniorCitizenAssistance || enq.detailedPreferences?.seniorCitizenAssistance || 'No'}</div>
+                                              <div><strong>Food Preference:</strong> {enq.vegetarianJainFood || enq.detailedPreferences?.vegetarianJainFood || 'Standard'}</div>
+                                              <div><strong>Disability Assistance:</strong> {enq.physicalDisabilityAssistance || enq.detailedPreferences?.physicalDisabilityAssistance || 'None'}</div>
+                                              <div><strong>Dress Code Accepted:</strong> {enq.dressCodeGuidelinesAccepted || enq.detailedPreferences?.dressCodeGuidelinesAccepted || 'No'}</div>
+                                            </>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                })()}
 
-                                <div>
-                                  <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>👥 Passengers</div>
-                                  <div><strong>Total Pax:</strong> {enq.detailedPreferences.total_passengers}</div>
-                                  <div><strong>Gender:</strong> {enq.detailedPreferences.num_male}M / {enq.detailedPreferences.num_female}F</div>
-                                  {enq.detailedPreferences.num_seniors > 0 && <div><strong>Seniors:</strong> {enq.detailedPreferences.num_seniors}</div>}
-                                  {enq.detailedPreferences.num_children > 0 && <div><strong>Children:</strong> {enq.detailedPreferences.num_children} ({enq.detailedPreferences.children_ages || 'N/A'})</div>}
-                                  {enq.detailedPreferences.num_infants > 0 && <div><strong>Infants:</strong> {enq.detailedPreferences.num_infants} ({enq.detailedPreferences.infant_ages || 'N/A'})</div>}
-                                  {enq.detailedPreferences.special_assistance && <div style={{ color: '#b45309' }}><strong>Assistance:</strong> {enq.detailedPreferences.special_assistance}</div>}
-                                </div>
+                                {enq.detailedPreferences?.contact_method && (
+                                  <div>
+                                    <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>👤 Customer Info</div>
+                                    <div><strong>Preferred Contact:</strong> {enq.detailedPreferences.contact_method}</div>
+                                    <div><strong>Location:</strong> {enq.detailedPreferences.location || 'N/A'}</div>
+                                    {enq.detailedPreferences.whatsapp_number && <div><strong>WhatsApp:</strong> {enq.detailedPreferences.whatsapp_number}</div>}
+                                  </div>
+                                )}
 
-                                <div>
-                                  <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>🏨 Accommodation</div>
-                                  <div><strong>Required:</strong> {enq.detailedPreferences.hotel_required}</div>
-                                  {enq.detailedPreferences.hotel_required === 'Yes' && (
-                                    <>
-                                      <div><strong>Category:</strong> {enq.detailedPreferences.hotel_category}</div>
-                                      <div><strong>Rooms:</strong> {enq.detailedPreferences.num_rooms} ({enq.detailedPreferences.room_type})</div>
-                                      <div><strong>Extra Bed:</strong> {enq.detailedPreferences.extra_bed}</div>
-                                      <div><strong>Location Vibe:</strong> {enq.detailedPreferences.preferred_location || 'N/A'}</div>
-                                      <div><strong>Access:</strong> {[enq.detailedPreferences.lift_required && 'Lift', enq.detailedPreferences.wheelchair_friendly && 'Wheelchair'].filter(Boolean).join(', ') || 'Standard'}</div>
-                                    </>
-                                  )}
-                                </div>
+                                {enq.detailedPreferences?.travel_category && (
+                                  <div>
+                                    <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>🗺️ Trip &amp; Vibe</div>
+                                    <div><strong>Category:</strong> {enq.detailedPreferences.travel_category}</div>
+                                    <div><strong>Type:</strong> {enq.detailedPreferences.tour_type}</div>
+                                    <div><strong>Dates:</strong> {enq.detailedPreferences.travel_start_date || 'N/A'} to {enq.detailedPreferences.return_date || 'N/A'}</div>
+                                    <div><strong>Duration:</strong> {enq.detailedPreferences.num_days}D / {enq.detailedPreferences.num_nights}N</div>
+                                    <div><strong>Flexibility:</strong> {enq.detailedPreferences.date_flexibility}</div>
+                                  </div>
+                                )}
 
-                                <div>
-                                  <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>🍽️ Meal Plan</div>
-                                  <div><strong>Meals:</strong> {enq.detailedPreferences.meal_required}</div>
-                                  {enq.detailedPreferences.meal_required === 'Yes' && (
-                                    <>
-                                      <div><strong>Plan:</strong> {enq.detailedPreferences.meal_plan}</div>
-                                      <div><strong>Diet:</strong> {enq.detailedPreferences.food_preference}</div>
-                                      {enq.detailedPreferences.special_meal && <div><strong>Special:</strong> {enq.detailedPreferences.special_meal}</div>}
-                                    </>
-                                  )}
-                                </div>
+                                {enq.detailedPreferences?.total_passengers && (
+                                  <div>
+                                    <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>👥 Passengers</div>
+                                    <div><strong>Total Pax:</strong> {enq.detailedPreferences.total_passengers}</div>
+                                    <div><strong>Gender:</strong> {enq.detailedPreferences.num_male}M / {enq.detailedPreferences.num_female}F</div>
+                                    {enq.detailedPreferences.num_seniors > 0 && <div><strong>Seniors:</strong> {enq.detailedPreferences.num_seniors}</div>}
+                                    {enq.detailedPreferences.num_children > 0 && <div><strong>Children:</strong> {enq.detailedPreferences.num_children} ({enq.detailedPreferences.children_ages || 'N/A'})</div>}
+                                    {enq.detailedPreferences.num_infants > 0 && <div><strong>Infants:</strong> {enq.detailedPreferences.num_infants} ({enq.detailedPreferences.infant_ages || 'N/A'})</div>}
+                                    {enq.detailedPreferences.special_assistance && <div style={{ color: '#b45309' }}><strong>Assistance:</strong> {enq.detailedPreferences.special_assistance}</div>}
+                                  </div>
+                                )}
 
-                                <div>
-                                  <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>🚗 Transit & Car</div>
-                                  <div><strong>Tickets:</strong> {[enq.detailedPreferences.flight_ticket && 'Flight', enq.detailedPreferences.train_ticket && 'Train', enq.detailedPreferences.bus_ticket && 'Bus'].filter(Boolean).join(', ') || 'None'}</div>
-                                  <div><strong>Local Car:</strong> {enq.detailedPreferences.local_transport} ({enq.detailedPreferences.vehicle_category}, {enq.detailedPreferences.ac_preference})</div>
-                                  <div><strong>Transit Type:</strong> {enq.detailedPreferences.transport_type}</div>
-                                  <div><strong>Pickup/Drop:</strong> {enq.detailedPreferences.pickup_location || 'N/A'} / {enq.detailedPreferences.drop_location || 'N/A'}</div>
-                                  {enq.detailedPreferences.luggage_details && <div><strong>Luggage:</strong> {enq.detailedPreferences.luggage_details}</div>}
-                                  <div><strong>Language:</strong> {enq.detailedPreferences.driver_language}</div>
-                                </div>
+                                {enq.detailedPreferences?.hotel_required && (
+                                  <div>
+                                    <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>🏨 Accommodation</div>
+                                    <div><strong>Required:</strong> {enq.detailedPreferences.hotel_required}</div>
+                                    {enq.detailedPreferences.hotel_required === 'Yes' && (
+                                      <>
+                                        <div><strong>Category:</strong> {enq.detailedPreferences.hotel_category}</div>
+                                        <div><strong>Rooms:</strong> {enq.detailedPreferences.num_rooms} ({enq.detailedPreferences.room_type})</div>
+                                        <div><strong>Extra Bed:</strong> {enq.detailedPreferences.extra_bed}</div>
+                                        <div><strong>Location Vibe:</strong> {enq.detailedPreferences.preferred_location || 'N/A'}</div>
+                                        <div><strong>Access:</strong> {[enq.detailedPreferences.lift_required && 'Lift', enq.detailedPreferences.wheelchair_friendly && 'Wheelchair'].filter(Boolean).join(', ') || 'Standard'}</div>
+                                      </>
+                                    )}
+                                  </div>
+                                )}
 
-                                <div style={{ gridColumn: 'span 2' }}>
-                                  <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>🏛️ Sightseeing & Pace</div>
-                                  <div><strong>Pace:</strong> {enq.detailedPreferences.travel_pace} | <strong>Interest:</strong> {enq.detailedPreferences.interest_type}</div>
-                                  {enq.detailedPreferences.places_to_cover && <div><strong>Places to Cover:</strong> {enq.detailedPreferences.places_to_cover}</div>}
-                                  <div><strong>Guide:</strong> {enq.detailedPreferences.guide_required}</div>
-                                  <div><strong>Inclusions:</strong> {[enq.detailedPreferences.entry_tickets && 'Monument Tickets', enq.detailedPreferences.special_darshan && 'Temple Darshan', enq.detailedPreferences.ritual_pooja && 'Ritual Pooja'].filter(Boolean).join(', ') || 'None'}</div>
-                                </div>
+                                {enq.detailedPreferences?.meal_required && (
+                                  <div>
+                                    <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>🍽️ Meal Plan</div>
+                                    <div><strong>Meals:</strong> {enq.detailedPreferences.meal_required}</div>
+                                    {enq.detailedPreferences.meal_required === 'Yes' && (
+                                      <>
+                                        <div><strong>Plan:</strong> {enq.detailedPreferences.meal_plan}</div>
+                                        <div><strong>Diet:</strong> {enq.detailedPreferences.food_preference}</div>
+                                        {enq.detailedPreferences.special_meal && <div><strong>Special:</strong> {enq.detailedPreferences.special_meal}</div>}
+                                      </>
+                                    )}
+                                  </div>
+                                )}
 
-                                <div>
-                                  <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>🛂 Passport & Visa</div>
-                                  <div><strong>Passport:</strong> {enq.detailedPreferences.passport_available} (Expires: {enq.detailedPreferences.passport_validity || 'N/A'})</div>
-                                  <div><strong>Visa Service:</strong> {enq.detailedPreferences.visa_assistance}</div>
-                                  <div><strong>Insurance:</strong> {enq.detailedPreferences.travel_insurance} ({enq.detailedPreferences.insurance_type})</div>
-                                  <div><strong>Nationality:</strong> {enq.detailedPreferences.nationality}</div>
-                                </div>
+                                {(enq.detailedPreferences?.flight_ticket || enq.detailedPreferences?.train_ticket || enq.detailedPreferences?.bus_ticket || enq.detailedPreferences?.local_transport) && (
+                                  <div>
+                                    <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>🚗 Transit &amp; Car</div>
+                                    <div><strong>Tickets:</strong> {[enq.detailedPreferences.flight_ticket && 'Flight', enq.detailedPreferences.train_ticket && 'Train', enq.detailedPreferences.bus_ticket && 'Bus'].filter(Boolean).join(', ') || 'None'}</div>
+                                    <div><strong>Local Car:</strong> {enq.detailedPreferences.local_transport} ({enq.detailedPreferences.vehicle_category}, {enq.detailedPreferences.ac_preference})</div>
+                                    <div><strong>Transit Type:</strong> {enq.detailedPreferences.transport_type}</div>
+                                    <div><strong>Pickup/Drop:</strong> {enq.detailedPreferences.pickup_location || 'N/A'} / {enq.detailedPreferences.drop_location || 'N/A'}</div>
+                                    {enq.detailedPreferences.luggage_details && <div><strong>Luggage:</strong> {enq.detailedPreferences.luggage_details}</div>}
+                                    <div><strong>Language:</strong> {enq.detailedPreferences.driver_language}</div>
+                                  </div>
+                                )}
 
-                                <div>
-                                  <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>💰 Budget & Pricing</div>
-                                  <div><strong>Level:</strong> {enq.detailedPreferences.budget_type}</div>
-                                  <div><strong>Approx:</strong> {enq.detailedPreferences.approx_budget ? `${enq.detailedPreferences.currency} ${enq.detailedPreferences.approx_budget}` : 'N/A'}</div>
-                                  <div><strong>Costing:</strong> {enq.detailedPreferences.price_preference}</div>
-                                  {enq.detailedPreferences.inclusions_preference && <div><strong>Preferred Incls:</strong> {enq.detailedPreferences.inclusions_preference}</div>}
-                                </div>
+                                {enq.detailedPreferences?.travel_pace && (
+                                  <div style={{ gridColumn: 'span 2' }}>
+                                    <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>🏛️ Sightseeing &amp; Pace</div>
+                                    <div><strong>Pace:</strong> {enq.detailedPreferences.travel_pace} | <strong>Interest:</strong> {enq.detailedPreferences.interest_type}</div>
+                                    {enq.detailedPreferences.places_to_cover && <div><strong>Places to Cover:</strong> {enq.detailedPreferences.places_to_cover}</div>}
+                                    <div><strong>Guide:</strong> {enq.detailedPreferences.guide_required}</div>
+                                    <div><strong>Inclusions:</strong> {[enq.detailedPreferences.entry_tickets && 'Monument Tickets', enq.detailedPreferences.special_darshan && 'Temple Darshan', enq.detailedPreferences.ritual_pooja && 'Ritual Pooja'].filter(Boolean).join(', ') || 'None'}</div>
+                                  </div>
+                                )}
 
-                                <div style={{ gridColumn: 'span 2' }}>
-                                  <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>✨ Specials & Extras</div>
-                                  {enq.detailedPreferences.emergency_contact && <div><strong>Emergency contact:</strong> {enq.detailedPreferences.emergency_contact}</div>}
-                                  {enq.detailedPreferences.special_arrangement && <div><strong>Arrangements:</strong> {enq.detailedPreferences.special_arrangement}</div>}
-                                  {enq.detailedPreferences.other_request && <div><strong>Other:</strong> {enq.detailedPreferences.other_request}</div>}
-                                </div>
+                                {enq.detailedPreferences?.passport_available && (
+                                  <div>
+                                    <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>🛂 Passport &amp; Visa</div>
+                                    <div><strong>Passport:</strong> {enq.detailedPreferences.passport_available} (Expires: {enq.detailedPreferences.passport_validity || 'N/A'})</div>
+                                    <div><strong>Visa Service:</strong> {enq.detailedPreferences.visa_assistance}</div>
+                                    <div><strong>Insurance:</strong> {enq.detailedPreferences.travel_insurance} ({enq.detailedPreferences.insurance_type})</div>
+                                    <div><strong>Nationality:</strong> {enq.detailedPreferences.nationality}</div>
+                                  </div>
+                                )}
+
+                                {enq.detailedPreferences?.budget_type && (
+                                  <div>
+                                    <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>💰 Budget &amp; Pricing</div>
+                                    <div><strong>Level:</strong> {enq.detailedPreferences.budget_type}</div>
+                                    <div><strong>Approx:</strong> {enq.detailedPreferences.approx_budget ? `${enq.detailedPreferences.currency} ${enq.detailedPreferences.approx_budget}` : 'N/A'}</div>
+                                    <div><strong>Costing:</strong> {enq.detailedPreferences.price_preference}</div>
+                                    {enq.detailedPreferences.inclusions_preference && <div><strong>Preferred Incls:</strong> {enq.detailedPreferences.inclusions_preference}</div>}
+                                  </div>
+                                )}
+
+                                {enq.detailedPreferences?.emergency_contact && (
+                                  <div style={{ gridColumn: 'span 2' }}>
+                                    <div style={{ fontWeight: 800, color: 'var(--primary)', borderBottom: '1px solid #cbd5e1', paddingBottom: 4, marginBottom: 6 }}>✨ Specials &amp; Extras</div>
+                                    {enq.detailedPreferences.emergency_contact && <div><strong>Emergency contact:</strong> {enq.detailedPreferences.emergency_contact}</div>}
+                                    {enq.detailedPreferences.special_arrangement && <div><strong>Arrangements:</strong> {enq.detailedPreferences.special_arrangement}</div>}
+                                    {enq.detailedPreferences.other_request && <div><strong>Other:</strong> {enq.detailedPreferences.other_request}</div>}
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>

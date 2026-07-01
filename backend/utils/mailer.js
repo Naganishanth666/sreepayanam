@@ -97,6 +97,73 @@ const sendEnquiryEmail = async (enquiryData) => {
   addRow('Train Class', enquiryData.trainClass);
   addRow('Car Type', enquiryData.carType);
   addRow('Car Driver Option', enquiryData.carDriverOption);
+  
+  // MICE / Corporate Tours
+  addRow('Company Name', enquiryData.companyName);
+  addRow('Event Type', enquiryData.eventType);
+  addRow('Event Duration (Days)', enquiryData.eventDurationDays);
+  addRow('Venue Preference', enquiryData.venuePreference);
+  addRow('Room Occupancy', enquiryData.roomOccupancy);
+  addRow('Meeting Room Required', enquiryData.meetingRoomRequired);
+  addRow('Audio Visual Required', enquiryData.audioVisualRequired);
+  addRow('Team Building Activities', enquiryData.teamBuildingActivities);
+  addRow('Gala Dinner Required', enquiryData.galaDinnerRequired);
+  addRow('Approximate Pax', enquiryData.approximatePax);
+
+  // Medical Tours
+  addRow('Patient Name', enquiryData.patientName);
+  addRow('Patient Age', enquiryData.patientAge);
+  addRow('Patient Gender', enquiryData.patientGender);
+  addRow('Medical Condition', enquiryData.medicalCondition);
+  addRow('Preferred Treatment Country', enquiryData.preferredTreatmentCountry);
+  addRow('Treatment Category', enquiryData.treatmentCategory);
+  addRow('Hospital Preference', enquiryData.hospitalPreference);
+  addRow('Medical History Details', enquiryData.medicalHistoryDetails);
+  addRow('Visa Assistance Required', enquiryData.visaAssistanceRequired);
+  addRow('Translator Required', enquiryData.translatorRequired);
+  addRow('Accommodation for Attendants', enquiryData.accommodationForAttendants);
+  addRow('Wheelchair/Stretcher Assistance', enquiryData.wheelchairAssistance);
+
+  // Cruise Packages
+  addRow('Cruise Line Preference', enquiryData.cruiseLinePreference);
+  addRow('Cabin Category', enquiryData.cabinCategory);
+  addRow('Destination Cruise', enquiryData.destinationCruise);
+  addRow('Duration Nights', enquiryData.durationNights);
+  addRow('Shore Excursions Required', enquiryData.shoreExcursions);
+  addRow('Dining Preference', enquiryData.diningPreference);
+  addRow('Onboard Gratuities Prepaid', enquiryData.onboardGratuitiesPrepaid);
+
+  // Educational Tours
+  addRow('Institution Name', enquiryData.institutionName);
+  addRow('Department/Grade/Standard', enquiryData.departmentGrade);
+  addRow('Contact Person Designation', enquiryData.contactPersonDesignation);
+  addRow('Number of Students', enquiryData.numberOfStudents);
+  addRow('Number of Teachers/Escorts', enquiryData.numberOfTeachers);
+  addRow('Study Subject/Focus Area', enquiryData.studySubjectFocus);
+  addRow('Industrial Visit Required', enquiryData.industrialVisitRequired);
+  addRow('Guide/Lecture Required', enquiryData.guideLectureRequired);
+  addRow('Certificate of Participation Required', enquiryData.certificateOfParticipation);
+  addRow('Supervisor Accommodation Sharing', enquiryData.supervisorAccommodationSharing);
+
+  // Honeymoon Tours
+  addRow('Couple Names', enquiryData.coupleNames);
+  addRow('Marriage Date', enquiryData.marriageDate);
+  addRow('Honeymoon Theme', enquiryData.honeymoonTheme);
+  addRow('Complimentary Benefits', enquiryData.complimentaryBenefits && Array.isArray(enquiryData.complimentaryBenefits) ? enquiryData.complimentaryBenefits.join(', ') : enquiryData.complimentaryBenefits);
+  addRow('Room View Preference', enquiryData.roomViewPreference);
+  addRow('Private Pool Villa', enquiryData.privatePoolVilla);
+  addRow('Photography Service', enquiryData.photographyService);
+
+  // Pilgrimage Tours
+  addRow('Deity/Temple Name', enquiryData.deityTempleName);
+  addRow('Primary Destination', enquiryData.primaryDestination);
+  addRow('Special Darshan Passes', enquiryData.specialDarshanPasses);
+  addRow('Ritual Pooja Arrangements', enquiryData.ritualPoojaArrangements);
+  addRow('Senior Citizen Assistance', enquiryData.seniorCitizenAssistance);
+  addRow('Vegetarian/Jain Food', enquiryData.vegetarianJainFood);
+  addRow('Physical Disability Assistance', enquiryData.physicalDisabilityAssistance);
+  addRow('Dress Code Guidelines Accepted', enquiryData.dressCodeGuidelinesAccepted);
+
   addRow('Remarks / Remarks Description', enquiryData.remarks);
 
   // If detailedPreferences exists, render it
