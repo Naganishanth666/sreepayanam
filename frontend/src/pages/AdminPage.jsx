@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trash2, Plus, LogIn, ChevronDown, ChevronUp, X, Edit } from 'lucide-react';
 import { IMAGE_PRESETS } from '../utils/imagePresets';
+import NicheTravelFields from '../components/NicheTravelFields';
 
 const TOUR_TYPES = [
   'Family Tours','Pilgrimage Tours','Honeymoon Tours','Hill Station Tours',
@@ -21,6 +22,100 @@ const emptyForm = {
   termsAndConditions: '', cancellationPolicy: '',
   seoTitle: '', seoMetaDescription: '',
   isActive: true,
+};
+
+const emptyLeadForm = {
+  enquiryType: 'General Enquiry',
+  customerName: '',
+  mobileNumber: '',
+  emailId: '',
+  travelDate: '',
+  fromLocation: '',
+  toLocation: '',
+  numberOfPassengers: 1,
+  adultCount: 1,
+  childCount: 0,
+  budget: '',
+  remarks: '',
+  status: 'New',
+  
+  // Specialized Booking Fields
+  returnDate: '',
+  hotelCheckIn: '',
+  hotelCheckOut: '',
+  hotelRooms: 1,
+  hotelCategory: '3 Star',
+  flightClass: 'Economy',
+  flightType: 'One-Way',
+  trainClass: 'Sleeper (SL)',
+  carType: 'SUV (Innova/Ertiga)',
+  carDriverOption: 'With Driver',
+
+  // Niche MICE
+  companyName: '',
+  eventType: '',
+  eventDurationDays: 1,
+  venuePreference: '',
+  roomOccupancy: '',
+  meetingRoomRequired: 'No',
+  audioVisualRequired: 'No',
+  teamBuildingActivities: 'No',
+  galaDinnerRequired: 'No',
+  approximatePax: 1,
+
+  // Niche Medical
+  patientName: '',
+  patientAge: '',
+  patientGender: 'Male',
+  medicalCondition: '',
+  preferredTreatmentCountry: '',
+  treatmentCategory: '',
+  hospitalPreference: '',
+  medicalHistoryDetails: '',
+  visaAssistanceRequired: 'No',
+  translatorRequired: 'No',
+  accommodationForAttendants: 'No',
+  wheelchairAssistance: 'No',
+
+  // Niche Cruise
+  cruiseLinePreference: '',
+  cabinCategory: '',
+  destinationCruise: '',
+  durationNights: 1,
+  shoreExcursions: 'No',
+  diningPreference: '',
+  onboardGratuitiesPrepaid: 'No',
+
+  // Niche Educational
+  institutionName: '',
+  departmentGrade: '',
+  contactPersonDesignation: '',
+  numberOfStudents: 1,
+  numberOfTeachers: 1,
+  studySubjectFocus: '',
+  industrialVisitRequired: 'No',
+  guideLectureRequired: 'No',
+  certificateOfParticipation: 'No',
+  supervisorAccommodationSharing: 'Twin Sharing',
+
+  // Niche Honeymoon
+  coupleNames: '',
+  marriageDate: '',
+  honeymoonTheme: '',
+  roomViewPreference: '',
+  privatePoolVilla: 'No',
+  photographyService: 'No',
+  complimentaryBenefits: [],
+
+  // Niche Pilgrimage
+  deityTempleName: '',
+  primaryDestination: '',
+  specialDarshanPasses: 'No',
+  ritualPoojaArrangements: 'No',
+  seniorCitizenAssistance: 'No',
+  vegetarianJainFood: 'Standard',
+  physicalDisabilityAssistance: 'None',
+  dressCodeGuidelinesAccepted: 'No',
 };
 
 const AdminPage = () => {
@@ -53,7 +148,146 @@ const AdminPage = () => {
     customPrompt: '',
     includeFlight: true,
     includeTrain: true,
-    includeCar: true
+    includeCar: true,
+    
+    // Additional AI customer-side fields
+    travelCategory: 'National',
+    tourType: 'Family Tours',
+    dateFlexibility: 'Exact Dates',
+    
+    // Passenger details
+    totalPassengers: 2,
+    numMale: 1,
+    numFemale: 1,
+    numChildren: 0,
+    childrenAges: '',
+    numInfants: 0,
+    infantAges: '',
+    numSeniors: 0,
+    specialAssistance: '',
+    
+    // Hotel details
+    hotelRequired: 'Yes',
+    roomType: 'Double',
+    numRooms: 1,
+    extraBed: 'No',
+    childWithBed: 0,
+    childWithoutBed: 0,
+    preferredLocation: '',
+    liftRequired: false,
+    wheelchairFriendly: false,
+    
+    // Meal details
+    mealRequired: 'Yes',
+    mealPlan: 'MAP (Breakfast + Dinner)',
+    foodPreference: 'Veg',
+    specialMeal: '',
+    
+    // Transit details
+    busTicket: false,
+    airportPickupDrop: true,
+    vehicleCategory: 'Budget',
+    acPreference: 'AC',
+    transportType: 'Private',
+    pickupLocation: '',
+    dropLocation: '',
+    luggageDetails: '',
+    driverLanguage: 'English',
+    
+    // Sightseeing details
+    placesToCover: '',
+    travelPace: 'Moderate',
+    interestType: 'Nature',
+    guideRequired: 'No',
+    entryTickets: true,
+    specialDarshan: false,
+    ritualPooja: false,
+    
+    // Budget & Visa details
+    passportAvailable: 'No',
+    passportValidity: '',
+    visaAssistance: 'No',
+    travelInsurance: 'No',
+    insuranceType: 'Standard',
+    nationality: 'Indian',
+    residenceCountry: 'India',
+    budgetType: 'Standard',
+    approxBudget: '',
+    currency: 'INR',
+    pricePreference: 'Per Person',
+    inclusionsPreference: '',
+    
+    // Special request details
+    specialArrangement: '',
+    languagePreference: 'English',
+    emergencyContact: '',
+    otherRequest: '',
+    
+    // Niche MICE
+    companyName: '',
+    eventType: '',
+    eventDurationDays: '',
+    venuePreference: '',
+    roomOccupancy: '',
+    meetingRoomRequired: 'No',
+    audioVisualRequired: 'No',
+    teamBuildingActivities: 'No',
+    galaDinnerRequired: 'No',
+    approximatePax: '',
+    
+    // Niche Medical
+    patientName: '',
+    patientAge: '',
+    patientGender: 'Male',
+    medicalCondition: '',
+    preferredTreatmentCountry: '',
+    treatmentCategory: '',
+    hospitalPreference: '',
+    medicalHistoryDetails: '',
+    visaAssistanceRequired: 'No',
+    translatorRequired: 'No',
+    accommodationForAttendants: 'No',
+    wheelchairAssistance: 'No',
+    
+    // Niche Cruise
+    cruiseLinePreference: '',
+    cabinCategory: '',
+    destinationCruise: '',
+    durationNights: '',
+    shoreExcursions: 'No',
+    diningPreference: '',
+    onboardGratuitiesPrepaid: 'No',
+    
+    // Niche Educational
+    institutionName: '',
+    departmentGrade: '',
+    contactPersonDesignation: '',
+    numberOfStudents: '',
+    numberOfTeachers: '',
+    studySubjectFocus: '',
+    industrialVisitRequired: 'No',
+    guideLectureRequired: 'No',
+    certificateOfParticipation: 'No',
+    supervisorAccommodationSharing: 'Twin Sharing',
+    
+    // Niche Honeymoon
+    coupleNames: '',
+    marriageDate: '',
+    honeymoonTheme: '',
+    complimentaryBenefits: [],
+    roomViewPreference: '',
+    privatePoolVilla: 'No',
+    photographyService: 'No',
+    
+    // Niche Pilgrimage
+    deityTempleName: '',
+    primaryDestination: '',
+    specialDarshanPasses: 'No',
+    ritualPoojaArrangements: 'No',
+    seniorCitizenAssistance: 'No',
+    vegetarianJainFood: 'Standard',
+    physicalDisabilityAssistance: 'None',
+    dressCodeGuidelinesAccepted: 'No',
   });
   const [suggestedChoices, setSuggestedChoices] = useState(null);
   const [searchingChoices, setSearchingChoices] = useState(false);
@@ -67,6 +301,153 @@ const AdminPage = () => {
   const [importingPdf, setImportingPdf] = useState(false);
   const [parsedPackages, setParsedPackages] = useState([]);
   const [expandedPrefs, setExpandedPrefs] = useState({});
+  const [showBuilderAdvanced, setShowBuilderAdvanced] = useState(false);
+
+  const [leadModalOpen, setLeadModalOpen] = useState(false);
+  const [editingLead, setEditingLead] = useState(null);
+  const [leadFormData, setLeadFormData] = useState(emptyLeadForm);
+
+  const openLeadModal = (lead = null) => {
+    if (lead) {
+      setEditingLead(lead);
+      const mappedForm = { ...emptyLeadForm };
+      
+      Object.keys(emptyLeadForm).forEach(key => {
+        if (lead[key] !== undefined && lead[key] !== null) {
+          if (key.toLowerCase().includes('date') && lead[key]) {
+            mappedForm[key] = new Date(lead[key]).toISOString().split('T')[0];
+          } else {
+            mappedForm[key] = lead[key];
+          }
+        }
+      });
+
+      if (lead.detailedPreferences) {
+        Object.keys(lead.detailedPreferences).forEach(key => {
+          const snakeKey = key;
+          const camelKey = key.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+          
+          if (mappedForm[camelKey] !== undefined) {
+            mappedForm[camelKey] = lead.detailedPreferences[key];
+          } else if (mappedForm[snakeKey] !== undefined) {
+            mappedForm[snakeKey] = lead.detailedPreferences[key];
+          }
+        });
+      }
+
+      setLeadFormData(mappedForm);
+    } else {
+      setEditingLead(null);
+      setLeadFormData(emptyLeadForm);
+    }
+    setLeadModalOpen(true);
+  };
+
+  const handleLeadFormChange = (name, value) => {
+    setLeadFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleLeadSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    try {
+      const detailedPreferences = {};
+      const lowerType = leadFormData.enquiryType.toLowerCase();
+      
+      const isMice = lowerType.includes('mice') || lowerType.includes('corporate');
+      const isMedical = lowerType.includes('medical');
+      const isCruise = lowerType.includes('cruise');
+      const isEducational = lowerType.includes('school') || lowerType.includes('college') || lowerType.includes('education');
+      const isHoneymoon = lowerType.includes('honeymoon');
+      const isPilgrimage = lowerType.includes('pilgrimage');
+
+      if (isMice) {
+        detailedPreferences.company_name = leadFormData.companyName;
+        detailedPreferences.event_type = leadFormData.eventType;
+        detailedPreferences.event_duration_days = Number(leadFormData.eventDurationDays);
+        detailedPreferences.venue_preference = leadFormData.venuePreference;
+        detailedPreferences.room_occupancy = leadFormData.roomOccupancy;
+        detailedPreferences.meeting_room_required = leadFormData.meetingRoomRequired;
+        detailedPreferences.audio_visual_required = leadFormData.audioVisualRequired;
+        detailedPreferences.team_building_activities = leadFormData.teamBuildingActivities;
+        detailedPreferences.gala_dinner_required = leadFormData.galaDinnerRequired;
+        detailedPreferences.approximate_pax = Number(leadFormData.approximatePax);
+      } else if (isMedical) {
+        detailedPreferences.patient_name = leadFormData.patientName;
+        detailedPreferences.age = Number(leadFormData.patientAge);
+        detailedPreferences.gender = leadFormData.patientGender;
+        detailedPreferences.medical_condition = leadFormData.medicalCondition;
+        detailedPreferences.preferred_treatment_country = leadFormData.preferredTreatmentCountry;
+        detailedPreferences.treatment_category = leadFormData.treatmentCategory;
+        detailedPreferences.hospital_preference = leadFormData.hospitalPreference;
+        detailedPreferences.medical_history_details = leadFormData.medicalHistoryDetails;
+        detailedPreferences.visa_assistance_required = leadFormData.visaAssistanceRequired;
+        detailedPreferences.translator_required = leadFormData.translatorRequired;
+        detailedPreferences.accommodation_for_attendants = leadFormData.accommodationForAttendants;
+        detailedPreferences.wheelchair_assistance = leadFormData.wheelchairAssistance;
+      } else if (isCruise) {
+        detailedPreferences.cruise_line_preference = leadFormData.cruiseLinePreference;
+        detailedPreferences.cabin_category = leadFormData.cabinCategory;
+        detailedPreferences.destination_cruise = leadFormData.destinationCruise;
+        detailedPreferences.duration_nights = Number(leadFormData.durationNights);
+        detailedPreferences.shore_excursions = leadFormData.shoreExcursions;
+        detailedPreferences.dining_preference = leadFormData.diningPreference;
+        detailedPreferences.onboard_gratuities_prepaid = leadFormData.onboardGratuitiesPrepaid;
+      } else if (isEducational) {
+        detailedPreferences.institution_name = leadFormData.institutionName;
+        detailedPreferences.department_grade = leadFormData.departmentGrade;
+        detailedPreferences.contact_person_designation = leadFormData.contactPersonDesignation;
+        detailedPreferences.number_of_students = Number(leadFormData.numberOfStudents);
+        detailedPreferences.number_of_teachers = Number(leadFormData.numberOfTeachers);
+        detailedPreferences.study_subject_focus = leadFormData.studySubjectFocus;
+        detailedPreferences.industrial_visit_required = leadFormData.industrialVisitRequired;
+        detailedPreferences.guide_lecture_required = leadFormData.guideLectureRequired;
+        detailedPreferences.certificate_of_participation = leadFormData.certificateOfParticipation;
+        detailedPreferences.supervisor_accommodation_sharing = leadFormData.supervisorAccommodationSharing;
+      } else if (isHoneymoon) {
+        detailedPreferences.couple_names = leadFormData.coupleNames;
+        detailedPreferences.marriage_date = leadFormData.marriageDate;
+        detailedPreferences.honeymoon_theme = leadFormData.honeymoonTheme;
+        detailedPreferences.room_view_preference = leadFormData.roomViewPreference;
+        detailedPreferences.private_pool_villa = leadFormData.privatePoolVilla;
+        detailedPreferences.photography_service = leadFormData.photographyService;
+        detailedPreferences.complimentary_benifits = leadFormData.complimentaryBenefits;
+      } else if (isPilgrimage) {
+        detailedPreferences.deity_temple_name = leadFormData.deityTempleName;
+        detailedPreferences.primary_destination = leadFormData.primaryDestination;
+        detailedPreferences.special_darshan_passes = leadFormData.specialDarshanPasses;
+        detailedPreferences.ritual_pooja_arrangements = leadFormData.ritualPoojaArrangements;
+        detailedPreferences.senior_citizen_assistance = leadFormData.seniorCitizenAssistance;
+        detailedPreferences.vegetarian_jain_food = leadFormData.vegetarianJainFood;
+        detailedPreferences.physical_disability_assistance = leadFormData.physicalDisabilityAssistance;
+        detailedPreferences.dress_code_guidelines_accepted = leadFormData.dressCodeGuidelinesAccepted;
+      }
+
+      const payload = {
+        ...leadFormData,
+        detailedPreferences
+      };
+
+      const url = editingLead ? `/api/enquiries/${editingLead._id}` : `/api/enquiries`;
+      const method = editingLead ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to save lead');
+
+      setSuccess(editingLead ? 'Lead updated successfully!' : 'Lead created successfully!');
+      setLeadModalOpen(false);
+      fetchEnquiries();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
 
   const handleParamChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -169,21 +550,9 @@ const AdminPage = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           category: 'all',
-          destination: builderParams.destination,
-          startingCity: builderParams.startingCity,
-          endingCity: builderParams.endingCity,
+          ...builderParams,
           durationDays: Number(builderParams.durationDays),
           durationNights: Number(builderParams.durationNights),
-          hotelCategory: builderParams.hotelCategory,
-          flightClass: builderParams.flightClass,
-          flightCarrier: builderParams.flightCarrier,
-          trainClass: builderParams.trainClass,
-          carType: builderParams.carType,
-          driverOption: builderParams.driverOption,
-          customPrompt: builderParams.customPrompt,
-          includeFlight: builderParams.includeFlight,
-          includeTrain: builderParams.includeTrain,
-          includeCar: builderParams.includeCar
         })
       });
       const data = await res.json();
@@ -221,21 +590,15 @@ const AdminPage = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          destination: builderParams.destination,
-          startingCity: builderParams.startingCity,
-          endingCity: builderParams.endingCity,
+          ...builderParams,
           durationDays: Number(builderParams.durationDays),
           durationNights: Number(builderParams.durationNights),
-          packageCategory: builderParams.destination.toLowerCase().includes('india') || builderParams.destination.toLowerCase().includes('kerala') || builderParams.destination.toLowerCase().includes('munnar') ? 'National' : 'International',
-          tourType: 'Family Tours',
+          packageCategory: builderParams.travelCategory || (builderParams.destination.toLowerCase().includes('india') || builderParams.destination.toLowerCase().includes('kerala') || builderParams.destination.toLowerCase().includes('munnar') ? 'National' : 'International'),
+          tourType: builderParams.tourType || 'Family Tours',
           selectedHotel,
           selectedFlight: builderParams.includeFlight ? selectedFlight : null,
           selectedTrain: builderParams.includeTrain ? selectedTrain : null,
           selectedCar: builderParams.includeCar ? selectedCar : null,
-          customPrompt: builderParams.customPrompt,
-          includeFlight: builderParams.includeFlight,
-          includeTrain: builderParams.includeTrain,
-          includeCar: builderParams.includeCar
         })
       });
       const data = await res.json();
@@ -1008,6 +1371,86 @@ const AdminPage = () => {
                       </div>
                     </div>
 
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                      <div style={fld}>
+                        <label style={lbl}>🏷️ Package Category</label>
+                        <select name="travelCategory" className="input-field" value={builderParams.travelCategory} onChange={handleParamChange}>
+                          <option value="National">National</option>
+                          <option value="International">International</option>
+                        </select>
+                      </div>
+                      <div style={fld}>
+                        <label style={lbl}>🏷️ Tour Type</label>
+                        <select name="tourType" className="input-field" value={builderParams.tourType} onChange={handleParamChange}>
+                          {TOUR_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => setShowBuilderAdvanced(!showBuilderAdvanced)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--primary)',
+                          fontWeight: 800,
+                          fontSize: '0.82rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          padding: '4px 0'
+                        }}
+                      >
+                        {showBuilderAdvanced ? '▼ Hide Advanced Preferences' : '► Show Advanced Preferences'}
+                      </button>
+                      
+                      {showBuilderAdvanced && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, padding: '12px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                            <div style={fld}>
+                              <label style={lbl}>Total Passengers</label>
+                              <input type="number" name="totalPassengers" className="input-field" min="1" value={builderParams.totalPassengers} onChange={handleParamChange} />
+                            </div>
+                            <div style={fld}>
+                              <label style={lbl}>Meal Required</label>
+                              <select name="mealRequired" className="input-field" value={builderParams.mealRequired} onChange={handleParamChange}>
+                                <option value="Yes">Yes</option>
+                                <option value="No">No</option>
+                              </select>
+                            </div>
+                            <div style={fld}>
+                              <label style={lbl}>Food Preference</label>
+                              <select name="foodPreference" className="input-field" value={builderParams.foodPreference} onChange={handleParamChange}>
+                                <option value="Veg">Veg</option>
+                                <option value="Non-Veg">Non-Veg</option>
+                                <option value="Jain">Jain</option>
+                                <option value="Both">Both</option>
+                              </select>
+                            </div>
+                            <div style={fld}>
+                              <label style={lbl}>Travel Pace</label>
+                              <select name="travelPace" className="input-field" value={builderParams.travelPace} onChange={handleParamChange}>
+                                <option value="Slow">Slow / Relaxed</option>
+                                <option value="Moderate">Moderate</option>
+                                <option value="Fast">Fast / Active</option>
+                              </select>
+                            </div>
+                          </div>
+                          
+                          <NicheTravelFields
+                            tourType={builderParams.tourType}
+                            values={builderParams}
+                            onChange={(name, value) => {
+                              setBuilderParams(prev => ({ ...prev, [name]: value }));
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+
                     <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
                       <button
                         type="button"
@@ -1039,7 +1482,10 @@ const AdminPage = () => {
                             const res = await fetch('/api/ai/generate-package', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ prompt: `Build a package for ${builderParams.durationDays} Days to ${builderParams.destination}. ${builderParams.customPrompt}` })
+                              body: JSON.stringify({
+                                prompt: `Build a package for ${builderParams.durationDays} Days to ${builderParams.destination}. ${builderParams.customPrompt}`,
+                                ...builderParams
+                              })
                             });
                             const data = await res.json();
                             if (!res.ok) throw new Error(data.message || 'AI generation failed');
@@ -1590,7 +2036,17 @@ const AdminPage = () => {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 30, alignItems: 'start' }}>
             {/* Enquiries List */}
             <div className="glass-card" style={{ padding: 32 }}>
-              <h2 style={{ marginBottom: 24, color: 'var(--dark)' }}>📞 CRM Leads &amp; Enquiries</h2>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                <h2 style={{ margin: 0, color: 'var(--dark)' }}>📞 CRM Leads &amp; Enquiries</h2>
+                <button
+                  type="button"
+                  onClick={() => openLeadModal(null)}
+                  className="btn btn-primary"
+                  style={{ padding: '8px 16px', fontSize: '0.88rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}
+                >
+                  <Plus size={16} /> Create Lead
+                </button>
+              </div>
               
               {enquiriesLoading ? (
                 <p style={{ textAlign: 'center', padding: '40px 0' }}>Loading enquiries...</p>
@@ -1620,7 +2076,7 @@ const AdminPage = () => {
                               Submitted {new Date(enq.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                             </span>
                           </div>
-                          <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <select 
                               className="input-field" 
                               style={{ padding: '4px 8px', fontSize: '0.85rem', width: 'auto', border: '1px solid var(--primary)', color: 'var(--primary)', fontWeight: 600, borderRadius: 6 }}
@@ -1631,6 +2087,26 @@ const AdminPage = () => {
                                 <option key={st} value={st}>{st}</option>
                               ))}
                             </select>
+                            <button
+                              type="button"
+                              onClick={() => openLeadModal(enq)}
+                              style={{
+                                background: '#eff6ff',
+                                border: '1.5px solid #3b82f6',
+                                color: '#1d4ed8',
+                                padding: '4px 8px',
+                                borderRadius: 6,
+                                fontSize: '0.82rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4
+                              }}
+                              title="Edit Lead Details"
+                            >
+                              <Edit size={14} /> Edit
+                            </button>
                           </div>
                         </div>
 
@@ -2398,6 +2874,365 @@ const AdminPage = () => {
                   </div>
 
                 </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* CRM Lead Creation/Editing Modal */}
+        <AnimatePresence>
+          {leadModalOpen && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(15, 23, 42, 0.6)',
+              backdropFilter: 'blur(8px)',
+              zIndex: 9999,
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              padding: 20
+            }}>
+              <motion.div 
+                className="glass-card" 
+                style={{
+                  background: 'white',
+                  width: '100%',
+                  maxWidth: 900,
+                  maxHeight: '90vh',
+                  overflowY: 'auto',
+                  borderRadius: 16,
+                  boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                  padding: 32,
+                  position: 'relative'
+                }}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+              >
+                {/* Close Button */}
+                <button
+                  type="button"
+                  onClick={() => setLeadModalOpen(false)}
+                  style={{
+                    position: 'absolute',
+                    top: 24,
+                    right: 24,
+                    background: '#f1f5f9',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: 36,
+                    height: 36,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: '#64748b'
+                  }}
+                >
+                  <X size={20} />
+                </button>
+
+                <h2 style={{ marginBottom: 8, color: 'var(--dark)', fontWeight: 800 }}>
+                  {editingLead ? '✏️ Edit Lead Details' : '➕ Create New Lead'}
+                </h2>
+                <p style={{ color: 'var(--text-muted)', marginBottom: 24, fontSize: '0.9rem' }}>
+                  {editingLead ? `Modifying Lead ID: ${editingLead._id}` : 'Fill in the customer information and specialized niche details below.'}
+                </p>
+
+                <form onSubmit={handleLeadSubmit}>
+                  {/* General Fields */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 20 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Enquiry Type *</label>
+                      <select
+                        required
+                        className="input-field"
+                        value={leadFormData.enquiryType}
+                        onChange={e => handleLeadFormChange('enquiryType', e.target.value)}
+                      >
+                        {[
+                          'General Enquiry', 'Tour Package Enquiry', 'Visa Services', 'Hotel Enquiry', 
+                          'Flight Enquiry', 'Train Enquiry', 'Bus Enquiry', 'Car Rental Enquiry', 
+                          'Corporate Travel Enquiry', 'Education Tour Enquiry', 'Medical Tour Enquiry', 
+                          'MICE Enquiry'
+                        ].map(type => (
+                          <option key={type} value={type}>{type}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Customer Name *</label>
+                      <input
+                        required
+                        type="text"
+                        placeholder="John Doe"
+                        className="input-field"
+                        value={leadFormData.customerName}
+                        onChange={e => handleLeadFormChange('customerName', e.target.value)}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Mobile Number *</label>
+                      <input
+                        required
+                        type="text"
+                        placeholder="+91 9876543210"
+                        className="input-field"
+                        value={leadFormData.mobileNumber}
+                        onChange={e => handleLeadFormChange('mobileNumber', e.target.value)}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Email ID</label>
+                      <input
+                        type="email"
+                        placeholder="john@example.com"
+                        className="input-field"
+                        value={leadFormData.emailId}
+                        onChange={e => handleLeadFormChange('emailId', e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 20 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Travel Date</label>
+                      <input
+                        type="date"
+                        className="input-field"
+                        value={leadFormData.travelDate}
+                        onChange={e => handleLeadFormChange('travelDate', e.target.value)}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>From Location</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Chennai"
+                        className="input-field"
+                        value={leadFormData.fromLocation}
+                        onChange={e => handleLeadFormChange('fromLocation', e.target.value)}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>To Location</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Kerala"
+                        className="input-field"
+                        value={leadFormData.toLocation}
+                        onChange={e => handleLeadFormChange('toLocation', e.target.value)}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Total Passengers</label>
+                      <input
+                        type="number"
+                        min="1"
+                        className="input-field"
+                        value={leadFormData.numberOfPassengers}
+                        onChange={e => handleLeadFormChange('numberOfPassengers', Number(e.target.value))}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 20 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Adults Count</label>
+                      <input
+                        type="number"
+                        min="1"
+                        className="input-field"
+                        value={leadFormData.adultCount}
+                        onChange={e => handleLeadFormChange('adultCount', Number(e.target.value))}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Children Count</label>
+                      <input
+                        type="number"
+                        min="0"
+                        className="input-field"
+                        value={leadFormData.childCount}
+                        onChange={e => handleLeadFormChange('childCount', Number(e.target.value))}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Budget (₹)</label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 50000"
+                        className="input-field"
+                        value={leadFormData.budget}
+                        onChange={e => handleLeadFormChange('budget', e.target.value ? Number(e.target.value) : '')}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Lead Status</label>
+                      <select
+                        className="input-field"
+                        value={leadFormData.status}
+                        onChange={e => handleLeadFormChange('status', e.target.value)}
+                      >
+                        {['New', 'Contacted', 'Quotation Sent', 'Follow-up Required', 'Payment Pending', 'Confirmed', 'Cancelled', 'Closed'].map(st => (
+                          <option key={st} value={st}>{st}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Specialized Booking Fields (Hotel, Flight, Train, Car) */}
+                  {(leadFormData.enquiryType.includes('Hotel') || 
+                    leadFormData.enquiryType.includes('Flight') || 
+                    leadFormData.enquiryType.includes('Train') || 
+                    leadFormData.enquiryType.includes('Car')) && (
+                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: 16, borderRadius: 12, marginBottom: 20 }}>
+                      <h4 style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--primary)', marginBottom: 12 }}>
+                        🛠️ Service Booking Metadata ({leadFormData.enquiryType})
+                      </h4>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+                        {leadFormData.enquiryType.includes('Hotel') && (
+                          <>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Check-in Date</label>
+                              <input type="date" className="input-field" value={leadFormData.hotelCheckIn} onChange={e => handleLeadFormChange('hotelCheckIn', e.target.value)} />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Check-out Date</label>
+                              <input type="date" className="input-field" value={leadFormData.hotelCheckOut} onChange={e => handleLeadFormChange('hotelCheckOut', e.target.value)} />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Rooms Required</label>
+                              <input type="number" min="1" className="input-field" value={leadFormData.hotelRooms} onChange={e => handleLeadFormChange('hotelRooms', Number(e.target.value))} />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Hotel Category</label>
+                              <select className="input-field" value={leadFormData.hotelCategory} onChange={e => handleLeadFormChange('hotelCategory', e.target.value)}>
+                                <option value="Budget">Budget</option>
+                                <option value="3 Star">3 Star</option>
+                                <option value="4 Star">4 Star</option>
+                                <option value="5 Star">5 Star / Luxury</option>
+                              </select>
+                            </div>
+                          </>
+                        )}
+                        {leadFormData.enquiryType.includes('Flight') && (
+                          <>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Trip Type</label>
+                              <select className="input-field" value={leadFormData.flightType} onChange={e => handleLeadFormChange('flightType', e.target.value)}>
+                                <option value="One-Way">One-Way</option>
+                                <option value="Round-Trip">Round-Trip</option>
+                                <option value="Multi-City">Multi-City</option>
+                              </select>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Cabin Class</label>
+                              <select className="input-field" value={leadFormData.flightClass} onChange={e => handleLeadFormChange('flightClass', e.target.value)}>
+                                <option value="Economy">Economy</option>
+                                <option value="Premium Economy">Premium Economy</option>
+                                <option value="Business">Business</option>
+                                <option value="First Class">First Class</option>
+                              </select>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Return Date</label>
+                              <input type="date" className="input-field" value={leadFormData.returnDate} onChange={e => handleLeadFormChange('returnDate', e.target.value)} />
+                            </div>
+                          </>
+                        )}
+                        {leadFormData.enquiryType.includes('Train') && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Class Preference</label>
+                            <select className="input-field" value={leadFormData.trainClass} onChange={e => handleLeadFormChange('trainClass', e.target.value)}>
+                              <option value="Sleeper (SL)">Sleeper (SL)</option>
+                              <option value="AC 3 Tier (3A)">AC 3 Tier (3A)</option>
+                              <option value="AC 2 Tier (2A)">AC 2 Tier (2A)</option>
+                              <option value="AC First Class (1A)">AC First Class (1A)</option>
+                              <option value="AC Chair Car (CC)">AC Chair Car (CC)</option>
+                            </select>
+                          </div>
+                        )}
+                        {leadFormData.enquiryType.includes('Car') && (
+                          <>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Vehicle Category</label>
+                              <select className="input-field" value={leadFormData.carType} onChange={e => handleLeadFormChange('carType', e.target.value)}>
+                                <option value="Hatchback (Swift/i10)">Hatchback (Swift/i10)</option>
+                                <option value="Sedan (Dzire/Etios)">Sedan (Dzire/Etios)</option>
+                                <option value="SUV (Innova/Ertiga)">SUV (Innova/Ertiga)</option>
+                                <option value="Tempo Traveller">Tempo Traveller</option>
+                                <option value="Luxury Coach">Luxury Coach</option>
+                              </select>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Driver Option</label>
+                              <select className="input-field" value={leadFormData.carDriverOption} onChange={e => handleLeadFormChange('carDriverOption', e.target.value)}>
+                                <option value="With Driver">With Driver</option>
+                                <option value="Self Drive">Self Drive</option>
+                              </select>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Return Date</label>
+                              <input type="date" className="input-field" value={leadFormData.returnDate} onChange={e => handleLeadFormChange('returnDate', e.target.value)} />
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Niche Dynamic Fields using NicheTravelFields component */}
+                  <NicheTravelFields
+                    tourType={leadFormData.enquiryType}
+                    values={leadFormData}
+                    onChange={handleLeadFormChange}
+                  />
+
+                  {/* Remarks Field */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 20, marginBottom: 24 }}>
+                    <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Remarks &amp; Special Requests</label>
+                    <textarea
+                      rows="3"
+                      placeholder="Enter details here..."
+                      className="input-field"
+                      value={leadFormData.remarks}
+                      onChange={e => handleLeadFormChange('remarks', e.target.value)}
+                    />
+                  </div>
+
+                  {/* Form Action Buttons */}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+                    <button
+                      type="button"
+                      className="btn"
+                      style={{ background: '#f1f5f9', color: '#475569', fontWeight: 700 }}
+                      onClick={() => setLeadModalOpen(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                      style={{ padding: '10px 24px', fontWeight: 800 }}
+                    >
+                      {editingLead ? 'Save Changes' : 'Create Lead'}
+                    </button>
+                  </div>
+                </form>
               </motion.div>
             </div>
           )}

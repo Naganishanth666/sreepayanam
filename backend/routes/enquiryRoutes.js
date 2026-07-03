@@ -59,4 +59,22 @@ router.put('/:id/status', async (req, res) => {
   }
 });
 
+// Update/Edit enquiry details (Admin only)
+router.put('/:id', async (req, res) => {
+  try {
+    const updatedEnquiry = await Enquiry.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    );
+    if (!updatedEnquiry) {
+      return res.status(404).json({ message: 'Enquiry not found' });
+    }
+    res.json(updatedEnquiry);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
 module.exports = router;

@@ -10,6 +10,31 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
 
+const formatDetailedPreferences = (body) => {
+  const excludeKeys = [
+    'destination', 'startingCity', 'endingCity', 'durationDays', 'durationNights',
+    'packageCategory', 'tourType', 'selectedHotel', 'selectedFlight', 'selectedTrain',
+    'selectedCar', 'customPrompt', 'includeFlight', 'includeTrain', 'includeCar', 'category', 'prompt'
+  ];
+  let formatted = '';
+  for (const [key, value] of Object.entries(body)) {
+    if (!excludeKeys.includes(key) && value !== undefined && value !== null && value !== '') {
+      if (Array.isArray(value) && value.length === 0) continue;
+      
+      const formattedKey = key
+        .replace(/([A-Z])/g, '_$1')
+        .split('_')
+        .filter(word => word.length > 0)
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(' ');
+      
+      const formattedVal = Array.isArray(value) ? value.join(', ') : value;
+      formatted += `- ${formattedKey}: ${formattedVal}\n`;
+    }
+  }
+  return formatted;
+};
+
 const IMAGE_PRESETS = {
   'Family Tours': [
     'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=800&q=80',
@@ -611,8 +636,12 @@ router.post('/generate-package', async (req, res) => {
     const openai = getOpenAIClient(res);
     if (!openai) return;
 
+    const formattedPreferences = formatDetailedPreferences(req.body);
+
     const generatorPrompt = `
-      Create a fully written, highly professional travel package matching the following prompt: "${prompt}".
+      Create a fully written, highly professional travel package matching the following prompt: "${prompt || `Generate a tour package to ${req.body.destination || 'a beautiful place'}`}".
+      
+      ${formattedPreferences ? `Detailed Travel Preferences:\n${formattedPreferences}` : ''}
       
       You MUST perform thorough, realistic travel research to provide real suggested travel, flight transfers, train numbers or schedules, driving durations/distances, and genuine hotel and meal recommendations.
       
@@ -811,6 +840,8 @@ router.post('/suggest-options', async (req, res) => {
     const openai = getOpenAIClient(res);
     if (!openai) return;
 
+    const formattedPreferences = formatDetailedPreferences(req.body);
+
     const systemPrompt = `
       You are an expert AI Travel Pricing & Recommendations Engine for "SreePayanam Tours & Travels".
       Your goal is to suggest the absolute best, highly realistic travel options across 4 categories: Hotels, Flights, Trains, and Rental Cars.
@@ -828,6 +859,7 @@ router.post('/suggest-options', async (req, res) => {
       - Car Type Preference: ${carType || 'Not specified'}
       - Driver Option: ${driverOption || 'Not specified'}
       - Extra instructions: ${customPrompt || 'None'}
+      ${formattedPreferences ? `\nDetailed Travel Preferences:\n${formattedPreferences}` : ''}
 
       Instructions:
       1. Perform thorough, realistic travel research to provide real suggested local hotels, existing flight paths/schedules (e.g. Indigo, Air India, Emirates), genuine train connections (e.g. specific train numbers/names in India), and car rental styles.
@@ -931,6 +963,8 @@ router.post('/compile-draft', async (req, res) => {
     const openai = getOpenAIClient(res);
     if (!openai) return;
 
+    const formattedPreferences = formatDetailedPreferences(req.body);
+
     const compilePrompt = `
       Create a fully written, highly professional travel package matching the following details.
       
@@ -950,6 +984,7 @@ router.post('/compile-draft', async (req, res) => {
       - Package Category: ${packageCategory || 'National'}
       - Tour Type: ${tourType || 'Family Tours'}
       - Additional Prompt Details: ${customPrompt || 'None'}
+      ${formattedPreferences ? `\nDetailed Travel Preferences:\n${formattedPreferences}` : ''}
 
       Instructions for Itinerary Compilation:
       - Stays: Make sure the day-wise itinerary explicitly mentions the selected hotel (e.g. staying at "${selectedHotel?.name || 'Grand Hyatt'}") for overnight stays.
