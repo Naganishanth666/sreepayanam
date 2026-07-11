@@ -35,9 +35,12 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/sreepayan
     if (missingPackages.length > 0) {
       console.log(`[Migration] Found ${missingPackages.length} packages missing packageId. Populating...`);
       for (const pkg of missingPackages) {
-        // Saving triggers pre('validate') to auto-generate packageId
-        await pkg.save();
-        console.log(`[Migration] Populated packageId for "${pkg.title}" -> ${pkg.packageId}`);
+        const dateStr = new Date().toISOString().slice(0, 7).replace('-', '');
+        const randomChars = Math.random().toString(36).substring(2, 6).toUpperCase();
+        const generatedId = `SP-PKG-${dateStr}-${randomChars}`;
+        
+        await Package.updateOne({ _id: pkg._id }, { $set: { packageId: generatedId } });
+        console.log(`[Migration] Populated packageId for "${pkg.title}" -> ${generatedId}`);
       }
       console.log('[Migration] Package ID migration completed successfully.');
     } else {
@@ -52,6 +55,38 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/sreepayan
 // Basic route
 app.get('/', (req, res) => {
   res.send('Sreepayanam Tours API is running');
+});
+
+// On-demand migration route
+app.get('/api/migrate-packages', async (req, res) => {
+  try {
+    const Package = require('./models/Package');
+    const missingPackages = await Package.find({
+      $or: [
+        { packageId: { $exists: false } },
+        { packageId: null },
+        { packageId: '' }
+      ]
+    });
+    
+    const results = [];
+    for (const pkg of missingPackages) {
+      const dateStr = new Date().toISOString().slice(0, 7).replace('-', '');
+      const randomChars = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const generatedId = `SP-PKG-${dateStr}-${randomChars}`;
+      
+      await Package.updateOne({ _id: pkg._id }, { $set: { packageId: generatedId } });
+      results.push({ id: pkg._id, title: pkg.title, packageId: generatedId });
+    }
+    
+    res.json({
+      success: true,
+      message: `Migrated ${results.length} packages`,
+      migrated: results
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // Routes
