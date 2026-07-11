@@ -18,7 +18,35 @@ app.use(express.json());
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/sreepayanam', {
 })
-.then(() => console.log('Connected to MongoDB'))
+.then(async () => {
+  console.log('Connected to MongoDB');
+  
+  // Run migration to populate packageId for legacy packages if missing
+  try {
+    const Package = require('./models/Package');
+    const missingPackages = await Package.find({
+      $or: [
+        { packageId: { $exists: false } },
+        { packageId: null },
+        { packageId: '' }
+      ]
+    });
+    
+    if (missingPackages.length > 0) {
+      console.log(`[Migration] Found ${missingPackages.length} packages missing packageId. Populating...`);
+      for (const pkg of missingPackages) {
+        // Saving triggers pre('validate') to auto-generate packageId
+        await pkg.save();
+        console.log(`[Migration] Populated packageId for "${pkg.title}" -> ${pkg.packageId}`);
+      }
+      console.log('[Migration] Package ID migration completed successfully.');
+    } else {
+      console.log('[Migration] All packages have valid packageIds. No migration required.');
+    }
+  } catch (migErr) {
+    console.error('[Migration] Failed to run packageId migration:', migErr);
+  }
+})
 .catch((err) => console.error('MongoDB connection error:', err));
 
 // Basic route
