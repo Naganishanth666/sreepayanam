@@ -24,13 +24,8 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/sreepayan
   // Run migration to populate packageId for legacy packages if missing
   try {
     const Package = require('./models/Package');
-    const missingPackages = await Package.find({
-      $or: [
-        { packageId: { $exists: false } },
-        { packageId: null },
-        { packageId: '' }
-      ]
-    });
+    const allPackages = await Package.find({});
+    const missingPackages = allPackages.filter(pkg => !pkg.packageId);
     
     if (missingPackages.length > 0) {
       console.log(`[Migration] Found ${missingPackages.length} packages missing packageId. Populating...`);
@@ -61,13 +56,8 @@ app.get('/', (req, res) => {
 app.get('/api/migrate-packages', async (req, res) => {
   try {
     const Package = require('./models/Package');
-    const missingPackages = await Package.find({
-      $or: [
-        { packageId: { $exists: false } },
-        { packageId: null },
-        { packageId: '' }
-      ]
-    });
+    const allPackages = await Package.find({});
+    const missingPackages = allPackages.filter(pkg => !pkg.packageId);
     
     const results = [];
     for (const pkg of missingPackages) {
@@ -81,7 +71,7 @@ app.get('/api/migrate-packages', async (req, res) => {
     
     res.json({
       success: true,
-      message: `Migrated ${results.length} packages`,
+      message: `Migrated ${results.length} packages out of ${allPackages.length} total`,
       migrated: results
     });
   } catch (err) {
