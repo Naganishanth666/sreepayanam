@@ -42,7 +42,7 @@ router.post('/', async (req, res) => {
     let packageName = 'Custom Booking';
 
     if (packageId) {
-      const pkg = await Package.findById(packageId);
+      const pkg = await Package.findOne({ packageId });
       if (!pkg) {
         return res.status(404).json({ message: 'Requested tour package not found.' });
       }

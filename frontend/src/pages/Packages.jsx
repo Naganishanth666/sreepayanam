@@ -462,7 +462,7 @@ const Packages = () => {
               >
                 <AnimatePresence>
                   {filteredPackages.map((pkg, i) => (
-                    <PackageCard key={pkg._id} pkg={pkg} index={i} />
+                    <PackageCard key={pkg.packageId} pkg={pkg} index={i} />
                   ))}
                 </AnimatePresence>
               </motion.div>
@@ -495,7 +495,7 @@ const PackageCard = ({ pkg, index }) => {
       exit={{ opacity: 0, scale: 0.9 }}
       transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.3) }}
       whileHover={{ y: -8, boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }}
-      onClick={() => navigate(`/package/${pkg._id}`)}
+      onClick={() => navigate(`/package/${pkg.packageId}`)}
     >
       {/* Image Block */}
       <div style={{ position: 'relative', height: 210, overflow: 'hidden' }}>
@@ -553,10 +553,15 @@ const PackageCard = ({ pkg, index }) => {
 
       {/* Content Info */}
       <div style={{ padding: '20px 20px 22px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-          <span style={{ fontSize: '1rem' }}>{typeInfo.icon}</span>
-          <span style={{ fontSize: '0.78rem', color: typeInfo.color, fontWeight: 700 }}>
-            {pkg.tourType || 'Tour'}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: '1rem' }}>{typeInfo.icon}</span>
+            <span style={{ fontSize: '0.78rem', color: typeInfo.color, fontWeight: 700 }}>
+              {pkg.tourType || 'Tour'}
+            </span>
+          </div>
+          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>
+            {pkg.packageId}
           </span>
         </div>
         
@@ -594,7 +599,7 @@ const PackageCard = ({ pkg, index }) => {
           <button 
             className="btn btn-primary" 
             style={{ padding: '8px 16px', fontSize: '0.85rem', borderRadius: 8 }} 
-            onClick={e => { e.stopPropagation(); navigate(`/package/${pkg._id}`); }}
+            onClick={e => { e.stopPropagation(); navigate(`/package/${pkg.packageId}`); }}
           >
             View Details
           </button>

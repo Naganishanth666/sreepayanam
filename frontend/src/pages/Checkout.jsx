@@ -940,6 +940,7 @@ const Checkout = () => {
                     <div>
                       <strong style={{ fontSize: '0.88rem', color: 'var(--dark)', display: 'block', lineHeight: 1.3 }}>{pkg.title}</strong>
                       <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{pkg.durationDays}D / {pkg.durationNights}N • {pkg.packageCategory}</span>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginTop: 2 }}>ID: {pkg.packageId}</span>
                     </div>
                   </div>
                 ) : (

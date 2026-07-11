@@ -35,8 +35,7 @@ const bookingSchema = new mongoose.Schema({
     unique: true 
   },
   packageId: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'Package',
+    type: String, 
     default: null
   },
   packageName: { type: String }, // Cached package title

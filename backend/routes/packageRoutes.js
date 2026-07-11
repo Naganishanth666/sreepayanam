@@ -16,7 +16,7 @@ router.get('/', async (req, res) => {
 // GET single package (Public)
 router.get('/:id', async (req, res) => {
   try {
-    const pkg = await Package.findById(req.params.id);
+    const pkg = await Package.findOne({ packageId: req.params.id });
     if (!pkg) return res.status(404).json({ message: 'Package not found' });
     res.json(pkg);
   } catch (error) {
@@ -48,8 +48,8 @@ router.post('/', checkAdmin, async (req, res) => {
 // PUT update a package (Admin only)
 router.put('/:id', checkAdmin, async (req, res) => {
   try {
-    const pkg = await Package.findByIdAndUpdate(
-      req.params.id,
+    const pkg = await Package.findOneAndUpdate(
+      { packageId: req.params.id },
       { ...req.body, updatedAt: new Date() },
       { new: true }
     );
@@ -63,7 +63,7 @@ router.put('/:id', checkAdmin, async (req, res) => {
 // DELETE a package (Admin only)
 router.delete('/:id', checkAdmin, async (req, res) => {
   try {
-    const pkg = await Package.findById(req.params.id);
+    const pkg = await Package.findOne({ packageId: req.params.id });
     if (!pkg) return res.status(404).json({ message: 'Package not found' });
     await pkg.deleteOne();
     res.json({ message: 'Package deleted successfully' });

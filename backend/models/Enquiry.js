@@ -120,7 +120,7 @@ const enquirySchema = new mongoose.Schema({
   }],
   
   // Optional reference to a specific package
-  packageId: { type: mongoose.Schema.Types.ObjectId, ref: 'Package' },
+  packageId: { type: String, default: null },
   
   detailedPreferences: { type: mongoose.Schema.Types.Mixed },
   

@@ -923,7 +923,7 @@ const AdminPage = () => {
   };
 
   const handleEditClick = (pkg) => {
-    setEditingId(pkg._id);
+    setEditingId(pkg.packageId);
     setFormData({
       title: pkg.title || '',
       destination: pkg.destination || '',
@@ -1993,14 +1993,17 @@ const AdminPage = () => {
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: '70vh', overflowY: 'auto' }}>
                     {packages.map(pkg => (
-                      <div key={pkg._id} className="glass-card" style={{ padding: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
+                      <div key={pkg.packageId} className="glass-card" style={{ padding: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
                         <img src={pkg.imageUrl} alt={pkg.title}
-                          onError={e => { e.target.src = 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=80&q=60'; }}
-                          style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
+                          onError={e => { e.target.src = 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=100&q=80'; }}
+                          style={{ width: 50, height: 50, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--dark)', marginBottom: 4 }}>{pkg.title}</div>
                           <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                             {pkg.packageCategory} • {pkg.tourType}
+                          </div>
+                          <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--primary)', marginTop: 2 }}>
+                            ID: {pkg.packageId}
                           </div>
                           <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)', marginTop: 2 }}>
                             ₹{(pkg.offerPrice || pkg.originalPrice || pkg.price || 0).toLocaleString()}
@@ -2018,7 +2021,7 @@ const AdminPage = () => {
                           </button>
                           <button
                             type="button"
-                            onClick={() => handleDelete(pkg._id)}
+                            onClick={() => handleDelete(pkg.packageId)}
                             style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 6 }}
                             title="Delete package"
                           >

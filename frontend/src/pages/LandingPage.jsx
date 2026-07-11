@@ -332,7 +332,7 @@ const LandingPage = () => {
           ) : (
             <div style={styles.packagesGrid}>
               {packages.slice(0, 3).map((pkg, i) => (
-                <PackageCard key={pkg._id} pkg={pkg} index={i} />
+                <PackageCard key={pkg.packageId} pkg={pkg} index={i} />
               ))}
             </div>
           )}
@@ -841,7 +841,7 @@ const PackageCard = ({ pkg, index }) => {
       transition={{ duration: 0.5, delay: Math.min(index * 0.08, 0.4) }}
       viewport={{ once: true }}
       whileHover={{ y: -8, boxShadow: '0 20px 40px rgba(15,23,42,0.12)' }}
-      onClick={() => navigate(`/package/${pkg._id}`)}
+      onClick={() => navigate(`/package/${pkg.packageId}`)}
     >
       <div style={styles.pkgImgContainer}>
         <img
@@ -862,9 +862,14 @@ const PackageCard = ({ pkg, index }) => {
       </div>
 
       <div style={styles.pkgBody}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-          <Tag size={12} color="var(--primary)" />
-          <span style={styles.pkgTourType}>{pkg.tourType || 'Tour'}</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Tag size={12} color="var(--primary)" />
+            <span style={styles.pkgTourType}>{pkg.tourType || 'Tour'}</span>
+          </div>
+          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>
+            {pkg.packageId}
+          </span>
         </div>
         <h3 style={styles.pkgTitleText}>{pkg.title}</h3>
         <div style={styles.pkgLocationFlex}>
@@ -885,7 +890,7 @@ const PackageCard = ({ pkg, index }) => {
           <button 
             className="btn btn-primary" 
             style={styles.pkgBtn} 
-            onClick={e => { e.stopPropagation(); navigate(`/package/${pkg._id}`); }}
+            onClick={e => { e.stopPropagation(); navigate(`/package/${pkg.packageId}`); }}
           >
             View Details
           </button>

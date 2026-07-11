@@ -235,6 +235,7 @@ const PackageDetails = () => {
         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '0 40px 32px' }}>
           <div style={{ maxWidth: 1100, margin: '0 auto' }}>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+              <span style={badge('#64748b')}>ID: {pkg.packageId}</span>
               <span style={badge('#3b82f6')}>{pkg.packageCategory}</span>
               <span style={badge('#10b981')}>{pkg.tourType}</span>
               {pkg.isSpecialOffer && <span style={badge('#f59e0b')}>🔥 Special Offer</span>}
@@ -495,7 +496,7 @@ const PackageDetails = () => {
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: 20 }}>Secure your spot instantly or ask for callback details.</p>
 
                 <Link 
-                  to={`/checkout?packageId=${pkg._id}`} 
+                  to={`/checkout?packageId=${pkg.packageId}`} 
                   className="btn btn-secondary" 
                   style={{ width: '100%', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontWeight: 800, fontSize: '1.02rem', textShadow: '0 1px 2px rgba(0,0,0,0.1)', marginBottom: 16 }}
                 >

@@ -56,19 +56,22 @@ const packageSchema = new mongoose.Schema({
   seoTitle: { type: String },
   seoMetaDescription: { type: String },
   
-  packageId: { type: String, unique: true, sparse: true },
+  packageId: { type: String, unique: true, required: true },
   isActive: { type: Boolean, default: true },
   
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
 
-packageSchema.pre('save', function() {
+packageSchema.pre('validate', function() {
   if (!this.packageId) {
     const dateStr = new Date().toISOString().slice(0, 7).replace('-', '');
     const randomChars = Math.random().toString(36).substring(2, 6).toUpperCase();
     this.packageId = `SP-PKG-${dateStr}-${randomChars}`;
   }
+});
+
+packageSchema.pre('save', function() {
   // Enforce a strict 10% profit margin standard on all tours
   this.profitMarginPercent = 10;
   if (this.baseCost) {
