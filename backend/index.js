@@ -49,7 +49,7 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/sreepayan
 
 // Basic route
 app.get('/', (req, res) => {
-  res.send('Sreepayanam Tours API is running');
+  res.send('Sreepayanam Tours API is running v2');
 });
 
 // On-demand migration route
