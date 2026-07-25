@@ -8,6 +8,7 @@ import {
   Plane, Car, Lock
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { renderRichText } from '../utils/textFormatter';
 
 const WHATSAPP_NUMBER = '919443217654'; // Real contact number
 
@@ -300,7 +301,9 @@ const PackageDetails = () => {
             <motion.div key="ov" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
               <div className="glass-card" style={{ padding: 28, marginBottom: 20 }}>
                 <h2 style={{ marginBottom: 16, color: 'var(--dark)', fontSize: '1.3rem', fontWeight: 700 }}>Package Overview</h2>
-                <p style={{ lineHeight: 1.9, color: 'var(--text-main)', fontSize: '1rem' }}>{pkg.overview || pkg.description}</p>
+                <div style={{ lineHeight: 1.9, color: 'var(--text-main)', fontSize: '1rem' }}>
+                  {renderRichText(pkg.overview || pkg.description)}
+                </div>
               </div>
 
               {/* Quick Facts */}
@@ -314,6 +317,8 @@ const PackageDetails = () => {
                     { icon: <Home size={20} color="var(--primary)" />, label: 'Category', val: pkg.packageCategory },
                     ...(pkg.startingCity ? [{ icon: <ArrowLeft size={20} color="var(--primary)" />, label: 'From', val: pkg.startingCity }] : []),
                     ...(pkg.endingCity ? [{ icon: <ArrowLeft size={20} color="var(--primary)" style={{ transform: 'rotate(180deg)' }} />, label: 'To', val: pkg.endingCity }] : []),
+                    ...(pkg.mealPlan ? [{ icon: <Utensils size={20} color="var(--primary)" />, label: 'Meal Plan', val: pkg.mealPlan }] : []),
+                    ...(pkg.templesList && pkg.templesList.length > 0 ? [{ icon: <MapPin size={20} color="var(--primary)" />, label: 'Temples Included', val: pkg.templesList.join(', ') }] : []),
                   ].map((f, i) => (
                     <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 16px', background: '#f8fafc', borderRadius: 10 }}>
                       <div style={{ marginTop: 2 }}>{f.icon}</div>
@@ -379,7 +384,9 @@ const PackageDetails = () => {
                   </button>
                   {openDay === i && (
                     <div style={{ padding: '20px 24px', borderTop: '1px solid #e2e8f0' }}>
-                      <p style={{ color: 'var(--text-main)', lineHeight: 1.8, marginBottom: day.hotel || day.transport ? 16 : 0 }}>{day.activities}</p>
+                      <div style={{ color: 'var(--text-main)', lineHeight: 1.8, marginBottom: day.hotel || day.transport ? 16 : 0 }}>
+                        {renderRichText(day.activities)}
+                      </div>
                       {(day.hotel || day.mealPlan || day.transport) && (
                         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 16, paddingTop: 16, borderTop: '1px dashed #e2e8f0' }}>
                           {day.hotel && <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.9rem', color: 'var(--text-muted)' }}><Home size={16} color="var(--primary)" /> <strong>Hotel:</strong> {day.hotel}</span>}

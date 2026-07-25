@@ -35,6 +35,26 @@ const formatDetailedPreferences = (body) => {
   return formatted;
 };
 
+// Helper to extract JSON from AI response safely
+const extractJson = (text) => {
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start !== -1 && end !== -1 && end > start) {
+    return text.substring(start, end + 1);
+  }
+  return text.trim();
+};
+
+const extractNumericPrice = (str) => {
+  if (!str) return 0;
+  if (typeof str === 'number') return str;
+  // Remove non-numeric characters except digits
+  const clean = str.replace(/[^\d]/g, '');
+  const num = parseInt(clean, 10);
+  return isNaN(num) ? 0 : num;
+};
+
+
 const IMAGE_PRESETS = {
   'Family Tours': [
     'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=800&q=80',
@@ -387,10 +407,11 @@ router.post('/plan-structured', async (req, res) => {
         { role: 'system', content: 'You are an API that only returns pure, valid, parsed JSON conforming to the requested schema. Never output markdown format.' },
         { role: 'user', content: systemPrompt }
       ],
+      response_format: { type: "json_object" },
       temperature: 0.7,
     });
 
-    const cleanJsonText = completion.choices[0].message.content.trim().replace(/^```json/, '').replace(/```$/, '').trim();
+    const cleanJsonText = extractJson(completion.choices[0].message.content);
     const itineraryData = JSON.parse(cleanJsonText);
     res.json(itineraryData);
   } catch (error) {
@@ -532,12 +553,14 @@ JSON Schema to conform to:
       });
 
       completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4o',
         messages: [
           { role: 'system', content: 'You are a vision-capable AI travel expert that outputs pure, valid, parsed JSON conforming to the requested schema. Never output markdown format.' },
           { role: 'user', content }
         ],
+        response_format: { type: "json_object" },
         temperature: 0.3,
+        max_tokens: 4000
       });
     } else {
       console.log(`[PDF Parser] Using text completion API with ${pdfText.length} characters of text...`);
@@ -600,16 +623,18 @@ JSON Schema to conform to:
       `;
 
       completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4o',
         messages: [
           { role: 'system', content: 'You are an API that only returns pure, valid, parsed JSON conforming to the requested schema. Never output markdown format.' },
           { role: 'user', content: generatorPrompt }
         ],
+        response_format: { type: "json_object" },
         temperature: 0.3,
+        max_tokens: 4000
       });
     }
 
-    const cleanJsonText = completion.choices[0].message.content.trim().replace(/^```json/, '').replace(/```$/, '').trim();
+    const cleanJsonText = extractJson(completion.choices[0].message.content);
     const parsedData = JSON.parse(cleanJsonText);
 
     // Normalize response: always ensure packages is an array of objects
@@ -632,55 +657,96 @@ JSON Schema to conform to:
 // 2. AI Package Content Generator (For Admin Dashboard)
 router.post('/generate-package', async (req, res) => {
   try {
-    const { prompt } = req.body;
+    const { prompt, destination, durationDays, durationNights, tourType, packageCategory, mealRequired, suggestTemples } = req.body;
     const openai = getOpenAIClient(res);
     if (!openai) return;
 
     const formattedPreferences = formatDetailedPreferences(req.body);
+    const days = Number(durationDays) || 2;
+    const nights = Number(durationNights) || 1;
+
+    // Set package-level meal plan description
+    let packageMealPlan = "No meals included";
+    if (mealRequired === "CP - Breakfast") packageMealPlan = "CP - Breakfast Only";
+    else if (mealRequired === "MAP - Breakfast + Dinner") packageMealPlan = "MAP - Breakfast & Dinner";
+    else if (mealRequired === "AP - Breakfast + Lunch + Dinner") packageMealPlan = "AP - Breakfast, Lunch & Dinner";
+    else if (mealRequired === "No") packageMealPlan = "No meals included";
+    else if (mealRequired === "Yes") packageMealPlan = "Breakfast & Dinner Included";
 
     const generatorPrompt = `
-      Create a fully written, highly professional travel package matching the following prompt: "${prompt || `Generate a tour package to ${req.body.destination || 'a beautiful place'}`}".
+      Create a fully written, highly professional travel package matching the following prompt: "${prompt || `Generate a tour package to ${destination || 'a beautiful place'}`}".
       
       ${formattedPreferences ? `Detailed Travel Preferences:\n${formattedPreferences}` : ''}
       
       You MUST perform thorough, realistic travel research to provide real suggested travel, flight transfers, train numbers or schedules, driving durations/distances, and genuine hotel and meal recommendations.
       
-      Your response MUST be a valid JSON object ONLY. Do not write any markdown wrappers (like \`\`\`json), explanations, or trailing characters.
+      Your response MUST be a valid JSON object ONLY.
+      
+      Pricing Instruction:
+      Calculate a realistic pricing structure in Indian Rupees (₹) for exactly 2 passengers (2 pax) total:
+      - For domestic/national destinations: base wholesale cost (baseCost) should be ₹3,000 to ₹5,500 per day total (e.g. ~₹14,500 for a 2-day trip for 2 pax). SreePayanam selling price (offerPrice) should include our profit margin of 25-30% (e.g. ~₹18,500 selling price).
+      - For international destinations: base wholesale cost (baseCost) should be ₹8,000 to ₹15,000 per day total. SreePayanam selling price (offerPrice) should include our profit margin of 25-30%.
+      Set originalPrice as the retail price (cost * 1.50) and offerPrice as the selling price.
+      Both originalPrice and offerPrice MUST be returned as integers, not formatted strings.
+      Generate a detailed text block in "priceBreakdown" explaining the wholesale cost breakdown (Hotel, Car transport, tolls/driver, meals).
 
-      - Daily Activity Detail:
-        For each day in the itinerary, the content MUST be extremely descriptive, informative, and engaging:
-        * The "activities" field must be a rich, descriptive paragraph (at least 4-5 sentences) detailing the visited places, their history, natural beauty, cultural features, and highlight spots.
-        * The "mealPlan" field must suggest specific local dishes, cuisines, culinary recommendations, or well-known restaurants in detail.
-        * The "transport" field must describe concrete transit routes, vehicles, transfer times, and driving distances in detail.
+      Itinerary Duration Constraint:
+      Your itinerary array MUST contain exactly ${days} items (i.e. one entry per day from Day 1 to Day ${days}).
+      For example, if durationDays is 2, your itinerary array MUST contain exactly 2 objects: one for Day 1 and one for Day 2. If it is 1, contain exactly 1 object. Never truncate or skip any day.
+
+      Temples suggest option:
+      - If tourType is "Pilgrimage Tours" or suggestTemples is true (value: ${!!suggestTemples}), suggest 3 to 5 nearby temples at destination, list their names in the "templesList" array, and prioritize visiting them in the day-wise itinerary, detailing specific morning/evening darshan timings.
+
+      Meal Plan day-by-day mapping:
+      - Structure each day's "mealPlan" field strictly according to:
+        * If mealRequired is "CP - Breakfast": Day 1: "No meals included (Arrival day)", Day 2: "Breakfast (CP Plan) at the hotel".
+        * If mealRequired is "MAP - Breakfast + Dinner": Day 1: "Dinner (MAP Plan) at the hotel", Day 2: "Breakfast & Dinner (MAP Plan) at the hotel".
+        * If mealRequired is "AP - Breakfast + Lunch + Dinner": Day 1: "Lunch & Dinner (AP Plan)", Day 2: "Breakfast, Lunch & Dinner (AP Plan)".
+        * If mealRequired is "No": All days: "No meals included".
+
+      Inclusions & Exclusions formatting:
+      - inclusions: Separate each inclusion item with a newline character. Use this template:
+        Airport / Railway Station Pick-up & Drop\\n${nights} Night Accommodation in a 3-Star Hotel\\n${mealRequired === 'CP - Breakfast' ? 'Daily Breakfast (Day 2 Only)' : mealRequired === 'MAP - Breakfast + Dinner' ? 'Daily Breakfast & Dinner' : mealRequired === 'AP - Breakfast + Lunch + Dinner' ? 'Daily Breakfast, Lunch & Dinner' : 'No Meals Included'}\\nPrivate AC Vehicle for Sightseeing\\nDriver Allowance\\nToll Charges\\nParking Charges\\nFuel Charges\\nAll Transfers as per Itinerary
+      - exclusions: Separate each exclusion item with a newline character. Use this template:
+        Airfare / Train Fare\\n${mealRequired === 'CP - Breakfast' ? 'Lunch & Dinner' : mealRequired === 'MAP - Breakfast + Dinner' ? 'Lunch Only' : mealRequired === 'No' ? 'All Meals' : 'Personal Expenses'}\\nBoat Ride Charges\\nVIP / Sugam Darshan Charges\\nTemple Pooja / Abhishekam Charges\\nPersonal Expenses\\nTips & Porter Charges\\nCamera Charges (if applicable)\\nGST (if applicable)
+
+      Daily Activity Detail:
+      For each day in the itinerary, the content MUST be extremely descriptive, informative, and engaging:
+      * Do NOT restrict the descriptions to short summaries. Let the content be highly detailed and write at least 6-12 sentences per day.
+      * Provide rich formatting like bulleted highlights, sightseeing lists, or timing details in the "activities" field. Feel free to use double newlines (paragraphs) and markdown bold text (e.g., **Sightseeing Spot**) to format the itinerary day-wise activities clearly.
       
       The JSON object MUST strictly conform to the following schema:
       {
         "title": "Inspiring and premium package title",
-        "destination": "Name of destination (e.g. Kerala, India or Paris, France)",
+        "destination": "Name of destination (e.g. Madurai, India)",
         "packageCategory": "National" | "International",
         "tourType": "Family Tours" | "Pilgrimage Tours" | "Honeymoon Tours" | "Hill Station Tours" | "Resort Packages" | "Weekend Tours" | "Group Tours" | "School / College Tours" | "Corporate Tours" | "Festival Tours" | "Cultural Tours" | "Medical Tours" | "Event / Sports Tours" | "Cruise Packages" | "MICE Tours" | "Education Tours" | "Luxury Tours" | "Budget Tours" | "Adventure Tours",
-        "startingCity": "E.g. Chennai",
-        "endingCity": "E.g. Kochi",
-        "durationDays": 5,
-        "durationNights": 4,
+        "startingCity": "E.g. Madurai",
+        "endingCity": "E.g. Madurai",
+        "durationDays": ${days},
+        "durationNights": ${nights},
+        "mealPlan": "${packageMealPlan}",
+        "templesList": ["Temple Name 1", "Temple Name 2"],
         "overview": "Thorough, engaging, premium paragraph describing the package experience.",
         "imageUrl": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=80",
         "itinerary": [
           {
             "day": 1,
             "title": "Arrival & Backwaters Cruise",
-            "activities": "Detailed, creative description of activities and specific spots visited for this day.",
+            "activities": "Detailed, creative description of activities and specific spots visited for this day (at least 6-12 sentences, with bullet points or paragraphs if appropriate using markdown).",
             "hotel": "Name of a specific realistic premium hotel or resort matching the location",
-            "mealPlan": "Breakfast (Include specific local dishes, cuisines, or restaurants suggested)",
+            "mealPlan": "Include specific local dishes, cuisines, or restaurants suggested",
             "transport": "Specific flight details (airlines, routes), train options, or car travel/road transfers, with transit times and distance"
           }
         ],
-        "inclusions": "Separate each inclusion item with a newline character. Example: Daily Buffet Breakfast\\nPremium Deluxe AC Room\\nSightseeing in AC Sedan\\nAll entry permits",
-        "exclusions": "Separate each exclusion item with a newline character. Example: Flight Tickets\\nPersonal Laundry & Beverages\\nTravel Insurance\\nAny optional upgrades",
+        "inclusions": "Separate each inclusion item with a newline character.",
+        "exclusions": "Separate each exclusion item with a newline character.",
         "optionalAddons": "Separate each addon with a newline. Example: Ayurvedic Spa Package\\nHouseboat Night stay upgrade",
-        "originalPrice": 45000,
-        "offerPrice": 39999,
+        "baseCost": 14500,
+        "originalPrice": 22000,
+        "offerPrice": 18500,
         "isSpecialOffer": true,
+        "priceBreakdown": "Hotel: ₹3500\\nTransport: ₹6000\\nTolls & Driver: ₹3000\\nMeals: ₹2000",
         "termsAndConditions": "Standard package booking terms, advance payments, and document needs.",
         "cancellationPolicy": "Cancellation timeline: 30 days prior: 100% refund, 15 days prior: 50% refund, less than 7 days: no refund.",
         "seoTitle": "Premium SEO optimized title (max 60 chars)",
@@ -689,20 +755,40 @@ router.post('/generate-package', async (req, res) => {
     `;
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4o',
       messages: [
         { role: 'system', content: 'You are an API that only returns pure, valid, parsed JSON conforming to the requested schema. Never output markdown format.' },
         { role: 'user', content: generatorPrompt }
       ],
+      response_format: { type: "json_object" },
       temperature: 0.7,
+      max_tokens: 4000
     });
 
-    const cleanJsonText = completion.choices[0].message.content.trim().replace(/^```json/, '').replace(/```$/, '').trim();
+    const cleanJsonText = extractJson(completion.choices[0].message.content);
     const packageData = JSON.parse(cleanJsonText);
+
+    // Validate and normalize pricing data in Node.js
+    packageData.baseCost = extractNumericPrice(packageData.baseCost);
+    packageData.originalPrice = extractNumericPrice(packageData.originalPrice);
+    packageData.offerPrice = extractNumericPrice(packageData.offerPrice);
+    
+    if (!packageData.baseCost || isNaN(packageData.baseCost)) {
+      const dailyRate = packageData.packageCategory === 'International' ? 10000 : 4000;
+      packageData.baseCost = Math.round((dailyRate * days));
+    }
+    if (!packageData.originalPrice || isNaN(packageData.originalPrice)) {
+      packageData.originalPrice = Math.round((packageData.baseCost * 1.50) / 100) * 100;
+    }
+    if (!packageData.offerPrice || isNaN(packageData.offerPrice)) {
+      packageData.offerPrice = Math.round((packageData.baseCost * 1.275) / 100) * 100;
+    }
+    packageData.isSpecialOffer = true;
+    packageData.mealPlan = packageMealPlan;
     
     // Assign a beautiful preset image if imageUrl is empty or a generic placeholder
     if (!packageData.imageUrl || packageData.imageUrl.includes('photo-1507525428034') || packageData.imageUrl.includes('photo-1469854523086')) {
-      packageData.imageUrl = getRandomPresetImage(packageData.tourType);
+      packageData.imageUrl = getRandomPresetImage(packageData.tourType || tourType);
     }
     
     res.json(packageData);
@@ -802,12 +888,13 @@ router.post('/score-lead', async (req, res) => {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
-        { role: 'system', content: 'You are an AI Sales Coach and CRM Optimizer that evaluates travel leads.' },
+        { role: 'system', content: 'You are an AI Sales Coach and CRM Optimizer that evaluates travel leads. Output ONLY a valid JSON response.' },
         { role: 'user', content: leadPrompt }
       ],
+      response_format: { type: "json_object" },
     });
 
-    const cleanJsonText = completion.choices[0].message.content.trim().replace(/^```json/, '').replace(/```$/, '').trim();
+    const cleanJsonText = extractJson(completion.choices[0].message.content);
     res.json(JSON.parse(cleanJsonText));
   } catch (error) {
     console.error('AI Lead Scoring Error:', error);
@@ -834,7 +921,8 @@ router.post('/suggest-options', async (req, res) => {
       customPrompt,
       includeFlight,
       includeTrain,
-      includeCar
+      includeCar,
+      suggestTemples
     } = req.body;
 
     const openai = getOpenAIClient(res);
@@ -844,7 +932,7 @@ router.post('/suggest-options', async (req, res) => {
 
     const systemPrompt = `
       You are an expert AI Travel Pricing & Recommendations Engine for "SreePayanam Tours & Travels".
-      Your goal is to suggest the absolute best, highly realistic travel options across 4 categories: Hotels, Flights, Trains, and Rental Cars.
+      Your goal is to suggest the absolute best, highly realistic travel options across 5 categories: Hotels, Flights, Trains, Rental Cars, and Temples.
       
       User Request details:
       - Requested Service Category: ${category || 'all'}
@@ -858,6 +946,7 @@ router.post('/suggest-options', async (req, res) => {
       - Train Class Preference: ${trainClass || 'Not specified'}
       - Car Type Preference: ${carType || 'Not specified'}
       - Driver Option: ${driverOption || 'Not specified'}
+      - Suggest Temples Checkbox Option: ${!!suggestTemples}
       - Extra instructions: ${customPrompt || 'None'}
       ${formattedPreferences ? `\nDetailed Travel Preferences:\n${formattedPreferences}` : ''}
 
@@ -867,9 +956,14 @@ router.post('/suggest-options', async (req, res) => {
       3. Flights: If Flight Option is not selected/included (includeFlight: ${!!includeFlight}), you MUST return an empty array "flights": [] in the output JSON. Do not recommend any flights.
       4. Trains: If Train Option is not selected/included (includeTrain: ${!!includeTrain}), you MUST return an empty array "trains": [] in the output JSON. Do not recommend any trains.
       5. Cars/Transfers: If Car Option is not selected/included (includeCar: ${!!includeCar}), you MUST return an empty array "cars": [] in the output JSON. Do not recommend any cars.
-      6. For any category that is NOT requested or applicable but IS included, you should STILL generate 5 realistic options to give a complete travel choice.
-      7. Ensure prices are in Indian Rupees (₹) and ratings/times are concrete and highly accurate.
-      8. The output MUST be a valid JSON object ONLY. Do not write any markdown wrappers (like \`\`\`json), explanations, or trailing characters.
+      6. Temples: If suggestTemples is true (value: ${!!suggestTemples}), you MUST perform detailed local research on historical/religious temples in the destination/starting city (which is the same), prioritize them, and return a list of exactly 5 suggested temples including name, distance, darshan timings (incorporate specific hours), specialty, and recommended visit time in the "temples" array. If suggestTemples is false, return an empty array "temples": [].
+      7. For any category that is NOT requested or applicable but IS included, you should STILL generate 5 realistic options to give a complete travel choice.
+      8. Ensure prices are in Indian Rupees (₹) and ratings/times are concrete and highly accurate. Prices must be verified using the following standard sanity ranges based on the user's tier and preferences:
+         * Hotels: Budget (₹1,500 - ₹3,000/night); 3-Star (₹3,000 - ₹6,000/night); 4-Star (₹6,000 - ₹12,000/night); 5-Star/Luxury (₹12,000 - ₹30,000+/night).
+         * Flights: Domestic routes (₹3,000 - ₹8,000 per person); International routes (₹15,000 - ₹80,000 per person).
+         * Trains: AC 3 Tier/AC Chair Car (₹1,000 - ₹2,500 per passenger); Sleeper (₹400 - ₹800 per passenger).
+         * Rental Cars: Hatchback/Budget (₹1,500 - ₹2,500/day); Sedan/SUV (₹3,000 - ₹5,000/day); Traveller/Minibus (₹5,000 - ₹8,000/day).
+      9. The output MUST be a valid JSON object ONLY. Do not write any markdown wrappers (like \`\`\`json), explanations, or trailing characters.
 
       The JSON object MUST strictly conform to the following schema:
       {
@@ -918,20 +1012,32 @@ router.post('/suggest-options', async (req, res) => {
             "driverOption": "Chauffeur-Driven",
             "matchReason": "Why this car type is ideal for this route."
           }
+        ],
+        "temples": [
+          {
+            "name": "E.g. Meenakshi Amman Temple",
+            "distance": "E.g. 1.2 km from city center",
+            "darshanTimings": "E.g. 5:00 AM - 12:30 PM, 4:00 PM - 10:00 PM",
+            "specialty": "E.g. Historic temple dedicated to Meenakshi, a form of Parvati.",
+            "recommendedTime": "E.g. 2 hours"
+          }
         ]
       }
     `;
 
+    const modelToUse = suggestTemples ? 'gpt-4o' : 'gpt-4o-mini';
+
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: modelToUse,
       messages: [
         { role: 'system', content: 'You are an API that only returns pure, valid, parsed JSON conforming to the requested schema. Never output markdown format.' },
         { role: 'user', content: systemPrompt }
       ],
+      response_format: { type: "json_object" },
       temperature: 0.7,
     });
 
-    const cleanJsonText = completion.choices[0].message.content.trim().replace(/^```json/, '').replace(/```$/, '').trim();
+    const cleanJsonText = extractJson(completion.choices[0].message.content);
     res.json(JSON.parse(cleanJsonText));
   } catch (error) {
     console.error('AI Suggest Options Error:', error);
@@ -957,11 +1063,54 @@ router.post('/compile-draft', async (req, res) => {
       customPrompt,
       includeFlight,
       includeTrain,
-      includeCar
+      includeCar,
+      totalPassengers,
+      selectedTemples,
+      mealRequired
     } = req.body;
+
+    const passengers = Number(totalPassengers) || 2;
+    const days = Number(durationDays) || 2;
+    const nights = Number(durationNights) || 1;
+    const templesToInclude = Array.isArray(selectedTemples) ? selectedTemples : [];
+    
+    // Set package-level meal plan description
+    let packageMealPlan = "No meals included";
+    if (mealRequired === "CP - Breakfast") packageMealPlan = "CP - Breakfast Only";
+    else if (mealRequired === "MAP - Breakfast + Dinner") packageMealPlan = "MAP - Breakfast & Dinner";
+    else if (mealRequired === "AP - Breakfast + Lunch + Dinner") packageMealPlan = "AP - Breakfast, Lunch & Dinner";
+    else if (mealRequired === "No") packageMealPlan = "No meals included";
+    else if (mealRequired === "Yes") packageMealPlan = "Breakfast & Dinner Included";
 
     const openai = getOpenAIClient(res);
     if (!openai) return;
+
+    // Calculate exact pricing in Node.js to prevent AI math errors
+    const hotelRate = selectedHotel ? extractNumericPrice(selectedHotel.price || selectedHotel.rate) : 3500;
+    const hotelCost = hotelRate * nights;
+
+    const flightPrice = (includeFlight && selectedFlight) ? extractNumericPrice(selectedFlight.price || selectedFlight.rate) : 0;
+    const flightCost = flightPrice * passengers;
+
+    const trainPrice = (includeTrain && selectedTrain) ? extractNumericPrice(selectedTrain.price || selectedTrain.rate) : 0;
+    const trainCost = trainPrice * passengers;
+
+    const carRate = (includeCar && selectedCar) ? extractNumericPrice(selectedCar.price || selectedCar.rate) : 3000;
+    const carCost = carRate * days;
+
+    // Estimate meals & driver/tolls/permits extra costs dynamically to total around ₹14,500 cost for 2 pax
+    let extraCosts = 2000; // Tolls/Parking/Driver allowance default
+    if (mealRequired && mealRequired !== "No") {
+      extraCosts += (mealRequired.includes("AP") ? 2500 : 1500);
+    }
+    
+    const totalBaseCost = hotelCost + flightCost + trainCost + carCost + extraCosts;
+    // Selling price: markup by 25-30% to fit SreePayanam margins (e.g. cost ₹14,500 -> selling ₹18,500)
+    const computedOfferPrice = Math.round((totalBaseCost * 1.275) / 100) * 100;
+    const computedOriginalPrice = Math.round((totalBaseCost * 1.50) / 100) * 100;
+
+    // Build the breakdown text
+    const breakdownText = `Hotel Stay (${nights} Night${nights > 1 ? 's' : ''}): ₹${hotelCost.toLocaleString()}\nPrivate AC Transport (${days} Days): ₹${carCost.toLocaleString()}\nMeal Plan (${mealRequired || 'No'}): Included\nTolls, Parking, Permits & Driver Allowance: ₹${extraCosts.toLocaleString()}\nTotal Wholesale Cost: ₹${totalBaseCost.toLocaleString()}\nSreePayanam Selling Price: ₹${computedOfferPrice.toLocaleString()}`;
 
     const formattedPreferences = formatDetailedPreferences(req.body);
 
@@ -975,32 +1124,62 @@ router.post('/compile-draft', async (req, res) => {
       - Selected Flight Choice: ${selectedFlight ? JSON.stringify(selectedFlight) : 'None'}
       - Selected Train Choice: ${selectedTrain ? JSON.stringify(selectedTrain) : 'None'}
       - Selected Car/Transfer Choice: ${selectedCar ? JSON.stringify(selectedCar) : 'None'}
+      - Selected Nearby Temples to prioritize: ${templesToInclude.join(', ') || 'None'}
+      - Meal Plan Plan Style: ${mealRequired || 'No'} (Use this to structure the daily mealPlan and inclusions/exclusions)
+      - Total Passengers: ${passengers}
       
       Package Parameters:
       - Destination: ${destination}
       - Starting City: ${startingCity || 'Not specified'}
       - Ending City: ${endingCity || 'Not specified'}
-      - Duration: ${durationDays} Days / ${durationNights} Nights
+      - Duration: ${days} Days / ${nights} Nights
       - Package Category: ${packageCategory || 'National'}
       - Tour Type: ${tourType || 'Family Tours'}
       - Additional Prompt Details: ${customPrompt || 'None'}
       ${formattedPreferences ? `\nDetailed Travel Preferences:\n${formattedPreferences}` : ''}
 
+      Pricing Verification & Calculation Instruction:
+      We have calculated the total price mathematically. You MUST return these exact values:
+      - baseCost: ${totalBaseCost}
+      - originalPrice: ${computedOriginalPrice}
+      - offerPrice: ${computedOfferPrice}
+      - isSpecialOffer: true
+      - priceBreakdown: "${breakdownText.replace(/\n/g, '\\n')}"
+      Both originalPrice and offerPrice MUST be returned as integers, NOT as formatted strings.
+
+      Itinerary Duration Constraint:
+      Your itinerary array MUST contain exactly ${days} items (i.e. one entry per day from Day 1 to Day ${days}).
+      For example, if durationDays is 2, your itinerary array MUST contain exactly 2 objects: one for Day 1 and one for Day 2. If it is 1, contain exactly 1 object. Never truncate or skip any day.
+
       Instructions for Itinerary Compilation:
       - Stays: Make sure the day-wise itinerary explicitly mentions the selected hotel (e.g. staying at "${selectedHotel?.name || 'Grand Hyatt'}") for overnight stays.
+      - Temples mapping: If selected temples are provided (${templesToInclude.join(', ')}), prioritize visiting them in order, schedule them with respect to available travel time and darshan timings (incorporate specific morning/evening darshan hours in day activities), and name them explicitly.
+      - Meal Plan day-by-day mapping:
+        * If mealRequired is "CP - Breakfast": Day 1: "No meals included (Arrival day)", Day 2: "Breakfast (CP Plan) at the hotel".
+        * If mealRequired is "MAP - Breakfast + Dinner": Day 1: "Dinner (MAP Plan) at the hotel", Day 2: "Breakfast & Dinner (MAP Plan) at the hotel".
+        * If mealRequired is "AP - Breakfast + Lunch + Dinner": Day 1: "Lunch & Dinner (AP Plan)", Day 2: "Breakfast, Lunch & Dinner (AP Plan)".
+        * If mealRequired is "No": All days: "No meals included".
+        Structure each day's "mealPlan" field strictly according to these plan constraints.
       
       - Transport inclusion constraints:
         1. Flight: Check 'includeFlight' flag (value: ${!!includeFlight}) and 'selectedFlight'. If 'includeFlight' is false (or selectedFlight is null/None), you MUST NOT suggest or mention flight travel, airplane tickets, or airport transfers in the itinerary, overview, inclusions, or exclusions. If true, explicitly detail the flight ("${selectedFlight?.airline || 'IndiGo flight'}") arrival and route on Day 1.
         2. Train: Check 'includeTrain' flag (value: ${!!includeTrain}) and 'selectedTrain'. If 'includeTrain' is false (or selectedTrain is null/None), you MUST NOT suggest or mention train travel, train numbers, or railway station transfers in the itinerary, overview, inclusions, or exclusions. If true, explicitly detail the train ("${selectedTrain?.name || 'Trivandrum Mail'}") on Day 1.
         3. Car/Cab: Check 'includeCar' flag (value: ${!!includeCar}) and 'selectedCar'. If 'includeCar' is false (or selectedCar is null/None), you MUST NOT suggest or mention car rental, private driver, or vehicle transfer in the itinerary, overview, inclusions, or exclusions. If true, explicitly detail the vehicle ("${selectedCar?.type || 'AC Sedan'} operated by ${selectedCar?.operator || 'private driver'}") in the itinerary transfers.
 
+      Inclusions & Exclusions formatting:
+      - inclusions: Separate each inclusion item with a newline character. For pilgrimage packages with "${mealRequired}", use this template:
+        Airport / Railway Station Pick-up & Drop\\n${nights} Night Accommodation in ${selectedHotel?.name || 'a 3-Star Hotel'}\\n${mealRequired === 'CP - Breakfast' ? 'Daily Breakfast (Day 2 Only)' : mealRequired === 'MAP - Breakfast + Dinner' ? 'Daily Breakfast & Dinner' : mealRequired === 'AP - Breakfast + Lunch + Dinner' ? 'Daily Breakfast, Lunch & Dinner' : 'No Meals Included'}\\nPrivate ${selectedCar?.type || 'AC Vehicle'} for Sightseeing\\nDriver Allowance\\nToll Charges\\nParking Charges\\nFuel Charges\\nAll Transfers as per Itinerary
+      - exclusions: Separate each exclusion item with a newline character. Use this template:
+        Airfare / Train Fare\\n${mealRequired === 'CP - Breakfast' ? 'Lunch & Dinner' : mealRequired === 'MAP - Breakfast + Dinner' ? 'Lunch Only' : mealRequired === 'No' ? 'All Meals' : 'Personal Expenses'}\\nBoat Ride Charges\\nVIP / Sugam Darshan Charges\\nTemple Pooja / Abhishekam Charges\\nPersonal Expenses\\nTips & Porter Charges\\nCamera Charges (if applicable)\\nGST (if applicable)
+
       - Evocative and Detailed Content Rule:
         For each day in the itinerary, the content MUST be extremely descriptive, informative, and engaging:
-        * The "activities" field must be a rich, detailed paragraph (at least 4-5 sentences) detailing the visited sights, historical or natural features, and highlight spots.
+        * Do NOT restrict the descriptions to short summaries. Let the content be highly detailed and write at least 6-12 sentences per day.
+        * Provide rich formatting like bulleted highlights, sightseeing lists, or timing details in the "activities" field. Feel free to use double newlines (paragraphs) and markdown bold text (e.g., **Sightseeing Spot**) to format the itinerary day-wise activities clearly.
         * The "mealPlan" field must specify local culinary recommendations, dishes, and restaurant/hotel dining details.
         * The "transport" field must describe local transfer instructions, routes, vehicles, approximate travel time, and driving distances.
       
-      Your response MUST be a valid JSON object ONLY. Do not write any markdown wrappers (like \`\`\`json), explanations, or trailing characters.
+      Your response MUST be a valid JSON object ONLY.
       
       The JSON object MUST strictly conform to the following schema:
       {
@@ -1010,15 +1189,17 @@ router.post('/compile-draft', async (req, res) => {
         "tourType": "${tourType || 'Family Tours'}",
         "startingCity": "${startingCity}",
         "endingCity": "${endingCity}",
-        "durationDays": ${Number(durationDays)},
-        "durationNights": ${Number(durationNights)},
+        "durationDays": ${days},
+        "durationNights": ${nights},
+        "mealPlan": "${packageMealPlan}",
+        "templesList": ${JSON.stringify(templesToInclude)},
         "overview": "Thorough, engaging, premium paragraph describing the package experience incorporating the selected stays and transits.",
         "imageUrl": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=80",
         "itinerary": [
           {
             "day": 1,
             "title": "Arrival & Welcome",
-            "activities": "Detailed, creative description of activities and specific spots visited for this day.",
+            "activities": "Detailed, creative description of activities and specific spots visited for this day (at least 6-12 sentences, with bullet points or paragraphs if appropriate using markdown).",
             "hotel": "${selectedHotel?.name || 'Selected Premium Stay'}",
             "mealPlan": "Breakfast (Mention specific local dishes, cuisines or hotel dining recommendations)",
             "transport": "Transit detail using selected flights/trains and selected vehicle"
@@ -1027,9 +1208,11 @@ router.post('/compile-draft', async (req, res) => {
         "inclusions": "Separate each inclusion item with a newline character. Example: Daily Buffet Breakfast\\nStay at ${selectedHotel?.name || 'Premium Room'}\\nTransit in AC ${selectedCar?.type || 'Sedan'}\\nAll entry permits",
         "exclusions": "Separate each exclusion item with a newline character. Example: Flight Tickets\\nPersonal Laundry & Beverages\\nTravel Insurance",
         "optionalAddons": "Separate each addon with a newline. Example: Ayurvedic Spa Package\\nUpgrade to premium cottage",
-        "originalPrice": 45000,
-        "offerPrice": 39999,
+        "baseCost": ${totalBaseCost},
+        "originalPrice": ${computedOriginalPrice},
+        "offerPrice": ${computedOfferPrice},
         "isSpecialOffer": true,
+        "priceBreakdown": "${breakdownText.replace(/\n/g, '\\n')}",
         "termsAndConditions": "Standard package booking terms, advance payments, and document needs.",
         "cancellationPolicy": "Cancellation timeline: 30 days prior: 100% refund, 15 days prior: 50% refund, less than 7 days: no refund.",
         "seoTitle": "Premium SEO optimized title (max 60 chars)",
@@ -1038,17 +1221,28 @@ router.post('/compile-draft', async (req, res) => {
     `;
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4o',
       messages: [
         { role: 'system', content: 'You are an API that only returns pure, valid, parsed JSON conforming to the requested schema. Never output markdown format.' },
         { role: 'user', content: compilePrompt }
       ],
+      response_format: { type: "json_object" },
       temperature: 0.7,
+      max_tokens: 4000
     });
 
-    const cleanJsonText = completion.choices[0].message.content.trim().replace(/^```json/, '').replace(/```$/, '').trim();
+    const cleanJsonText = extractJson(completion.choices[0].message.content);
     const packageData = JSON.parse(cleanJsonText);
     
+    // Explicitly enforce Node-calculated prices to prevent any AI deviation
+    packageData.baseCost = totalBaseCost;
+    packageData.originalPrice = computedOriginalPrice;
+    packageData.offerPrice = computedOfferPrice;
+    packageData.isSpecialOffer = true;
+    packageData.priceBreakdown = breakdownText;
+    packageData.mealPlan = packageMealPlan;
+    packageData.templesList = templesToInclude;
+
     // Assign a beautiful preset image if imageUrl is empty or a generic placeholder
     if (!packageData.imageUrl || packageData.imageUrl.includes('photo-1507525428034') || packageData.imageUrl.includes('photo-1469854523086')) {
       packageData.imageUrl = getRandomPresetImage(packageData.tourType || tourType);

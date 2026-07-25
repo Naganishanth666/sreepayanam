@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Trash2, Plus, LogIn, ChevronDown, ChevronUp, X, Edit } from 'lucide-react';
 import { IMAGE_PRESETS } from '../utils/imagePresets';
 import NicheTravelFields from '../components/NicheTravelFields';
+import { renderRichText } from '../utils/textFormatter';
 
 const TOUR_TYPES = [
   'Family Tours','Pilgrimage Tours','Honeymoon Tours','Hill Station Tours',
@@ -18,6 +19,7 @@ const emptyForm = {
   overview: '', imageUrl: '',
   itinerary: [{ day: 1, title: '', activities: '', hotel: '', mealPlan: '', transport: '' }],
   inclusions: '', exclusions: '', optionalAddons: '',
+  templesList: [], priceBreakdown: '', mealPlan: '', baseCost: '',
   originalPrice: '', offerPrice: '', isSpecialOffer: false, offerValidity: '',
   termsAndConditions: '', cancellationPolicy: '',
   seoTitle: '', seoMetaDescription: '',
@@ -149,6 +151,7 @@ const AdminPage = () => {
     includeFlight: true,
     includeTrain: true,
     includeCar: true,
+    suggestTemples: false,
     
     // Additional AI customer-side fields
     travelCategory: 'National',
@@ -297,6 +300,7 @@ const AdminPage = () => {
   const [selectedFlight, setSelectedFlight] = useState(null);
   const [selectedTrain, setSelectedTrain] = useState(null);
   const [selectedCar, setSelectedCar] = useState(null);
+  const [selectedTemples, setSelectedTemples] = useState([]);
   const [selectedPdf, setSelectedPdf] = useState(null);
   const [importingPdf, setImportingPdf] = useState(false);
   const [parsedPackages, setParsedPackages] = useState([]);
@@ -572,6 +576,12 @@ const AdminPage = () => {
       if (builderParams.includeCar && data.cars && data.cars.length > 0) setSelectedCar(data.cars[0]);
       else setSelectedCar(null);
 
+      if (builderParams.suggestTemples && data.temples && data.temples.length > 0) {
+        setSelectedTemples(data.temples.map(t => t.name));
+      } else {
+        setSelectedTemples([]);
+      }
+
       setActiveChoiceTab('hotel');
       setBuilderStep(2);
     } catch (err) {
@@ -599,6 +609,8 @@ const AdminPage = () => {
           selectedFlight: builderParams.includeFlight ? selectedFlight : null,
           selectedTrain: builderParams.includeTrain ? selectedTrain : null,
           selectedCar: builderParams.includeCar ? selectedCar : null,
+          selectedTemples,
+          mealRequired: builderParams.mealRequired || 'No',
         })
       });
       const data = await res.json();
@@ -626,6 +638,10 @@ const AdminPage = () => {
         inclusions: data.inclusions || '',
         exclusions: data.exclusions || '',
         optionalAddons: data.optionalAddons || '',
+        baseCost: data.baseCost || '',
+        priceBreakdown: data.priceBreakdown || '',
+        mealPlan: data.mealPlan || '',
+        templesList: data.templesList || [],
         originalPrice: data.originalPrice || '',
         offerPrice: data.offerPrice || '',
         isSpecialOffer: !!data.isSpecialOffer,
@@ -657,7 +673,10 @@ const AdminPage = () => {
       const res = await fetch('/api/ai/generate-package', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: aiPrompt })
+        body: JSON.stringify({ 
+          prompt: aiPrompt,
+          ...builderParams
+        })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'AI generation failed');
@@ -685,6 +704,10 @@ const AdminPage = () => {
         inclusions: data.inclusions || '',
         exclusions: data.exclusions || '',
         optionalAddons: data.optionalAddons || '',
+        baseCost: data.baseCost || '',
+        priceBreakdown: data.priceBreakdown || '',
+        mealPlan: data.mealPlan || '',
+        templesList: data.templesList || [],
         originalPrice: data.originalPrice || '',
         offerPrice: data.offerPrice || '',
         isSpecialOffer: !!data.isSpecialOffer,
@@ -718,6 +741,16 @@ const AdminPage = () => {
   const [staffNoteText, setStaffNoteText] = useState('');
   const [bookingFilterStatus, setBookingFilterStatus] = useState('All');
   const [bookingFilterPayment, setBookingFilterPayment] = useState('All');
+
+  useEffect(() => {
+    if (builderParams.suggestTemples && builderParams.destination) {
+      setBuilderParams(prev => ({
+        ...prev,
+        startingCity: builderParams.destination,
+        endingCity: builderParams.destination
+      }));
+    }
+  }, [builderParams.suggestTemples, builderParams.destination]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -948,6 +981,10 @@ const AdminPage = () => {
       inclusions: Array.isArray(pkg.inclusions) ? pkg.inclusions.join('\n') : (pkg.inclusions || ''),
       exclusions: Array.isArray(pkg.exclusions) ? pkg.exclusions.join('\n') : (pkg.exclusions || ''),
       optionalAddons: Array.isArray(pkg.optionalAddons) ? pkg.optionalAddons.join('\n') : (pkg.optionalAddons || ''),
+      templesList: pkg.templesList || [],
+      priceBreakdown: pkg.priceBreakdown || '',
+      mealPlan: pkg.mealPlan || '',
+      baseCost: pkg.baseCost || '',
       originalPrice: pkg.originalPrice || '',
       offerPrice: pkg.offerPrice || '',
       isSpecialOffer: !!pkg.isSpecialOffer,
@@ -980,6 +1017,7 @@ const AdminPage = () => {
         durationNights: Number(formData.durationNights),
         originalPrice: Number(formData.originalPrice),
         offerPrice: formData.offerPrice ? Number(formData.offerPrice) : undefined,
+        baseCost: formData.baseCost ? Number(formData.baseCost) : undefined,
         inclusions: formData.inclusions.split('\n').map(s => s.trim()).filter(Boolean),
         exclusions: formData.exclusions.split('\n').map(s => s.trim()).filter(Boolean),
         optionalAddons: formData.optionalAddons.split('\n').map(s => s.trim()).filter(Boolean),
@@ -1387,6 +1425,28 @@ const AdminPage = () => {
                       </div>
                     </div>
 
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4, marginBottom: 8 }}>
+                      <input 
+                        type="checkbox" 
+                        name="suggestTemples" 
+                        id="suggestTemples" 
+                        checked={builderParams.suggestTemples} 
+                        onChange={(e) => {
+                          const val = e.target.checked;
+                          setBuilderParams(prev => ({ 
+                            ...prev, 
+                            suggestTemples: val,
+                            // If user turns on suggestTemples, automatically set Tour Type to Pilgrimage
+                            tourType: val ? 'Pilgrimage Tours' : prev.tourType
+                          }));
+                        }} 
+                        style={{ width: 18, height: 18, cursor: 'pointer' }} 
+                      />
+                      <label htmlFor="suggestTemples" style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--dark)', cursor: 'pointer' }}>
+                        ⛩️ Suggest Nearby Temples (Include Darshan Timings & priority mapping)
+                      </label>
+                    </div>
+
                     <div>
                       <button
                         type="button"
@@ -1417,8 +1477,10 @@ const AdminPage = () => {
                             <div style={fld}>
                               <label style={lbl}>Meal Required</label>
                               <select name="mealRequired" className="input-field" value={builderParams.mealRequired} onChange={handleParamChange}>
-                                <option value="Yes">Yes</option>
-                                <option value="No">No</option>
+                                <option value="CP - Breakfast">CP – Breakfast</option>
+                                <option value="MAP - Breakfast + Dinner">MAP - Breakfast + Dinner</option>
+                                <option value="AP - Breakfast + Lunch + Dinner">AP - Breakfast + Lunch + Dinner</option>
+                                <option value="No">No meals</option>
                               </select>
                             </div>
                             <div style={fld}>
@@ -1548,7 +1610,8 @@ const AdminPage = () => {
                         { id: 'hotel', label: '🏨 Hotels', color: '#db2777', show: true },
                         { id: 'flight', label: '✈️ Flights', color: '#2563eb', show: builderParams.includeFlight },
                         { id: 'train', label: '🚆 Trains', color: '#059669', show: builderParams.includeTrain },
-                        { id: 'car', label: '🚗 Cars/Transfers', color: '#7c3aed', show: builderParams.includeCar }
+                        { id: 'car', label: '🚗 Cars/Transfers', color: '#7c3aed', show: builderParams.includeCar },
+                        { id: 'temple', label: '⛩️ Temples', color: '#ea580c', show: builderParams.suggestTemples }
                       ].filter(t => t.show).map(t => (
                         <button
                           key={t.id}
@@ -1713,6 +1776,42 @@ const AdminPage = () => {
                           </div>
                         );
                       })}
+
+                      {activeChoiceTab === 'temple' && suggestedChoices.temples?.map(opt => {
+                        const isSelected = selectedTemples.includes(opt.name);
+                        return (
+                          <div
+                            key={opt.name}
+                            onClick={() => {
+                              setSelectedTemples(prev => 
+                                prev.includes(opt.name) 
+                                  ? prev.filter(t => t !== opt.name) 
+                                  : [...prev, opt.name]
+                              );
+                            }}
+                            style={{
+                              ...optionCardStyle,
+                              cursor: 'pointer',
+                              border: isSelected ? '2px solid #ea580c' : '1px solid #e2e8f0',
+                              background: isSelected ? '#fff7ed' : 'white',
+                            }}
+                          >
+                            <div style={optionHeaderStyle}>
+                              <strong style={{ fontSize: '0.9rem', color: 'var(--dark)' }}>
+                                {isSelected ? '🟢 ' : '⚪ '}{opt.name}
+                              </strong>
+                              <span style={{ background: '#ffedd5', color: '#ea580c', padding: '2px 6px', borderRadius: 4, fontSize: '0.72rem', fontWeight: 700 }}>
+                                {opt.recommendedTime || '1.5 Hours'}
+                              </span>
+                            </div>
+                            <p style={{ margin: '4px 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                              📍 Distance: {opt.distance} <br />
+                              🕒 Darshan Timings: {opt.darshanTimings}
+                            </p>
+                            <div style={matchReasonStyle}>✨ <em>{opt.specialty}</em></div>
+                          </div>
+                        );
+                      })}
                     </div>
 
                     {/* Compilation Review Summary */}
@@ -1723,6 +1822,7 @@ const AdminPage = () => {
                         {builderParams.includeFlight && <div>✈️ Flight Selected: <strong style={{ color: '#2563eb' }}>{selectedFlight?.airline || 'None selected'}</strong></div>}
                         {builderParams.includeTrain && <div>🚆 Train Selected: <strong style={{ color: '#059669' }}>{selectedTrain?.name || 'None selected (Optional)'}</strong></div>}
                         {builderParams.includeCar && <div>🚗 Car Selected: <strong style={{ color: '#7c3aed' }}>{selectedCar?.type || 'None selected'}</strong></div>}
+                        {builderParams.suggestTemples && <div>⛩️ Temples Selected: <strong style={{ color: '#ea580c' }}>{selectedTemples.length > 0 ? selectedTemples.join(', ') : 'None selected'}</strong></div>}
                       </div>
                     </div>
 
@@ -1781,6 +1881,26 @@ const AdminPage = () => {
                       {TOUR_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </Field>
+                  <Row>
+                    <Field label="Meal Plan (e.g. CP/MAP/AP)">
+                      <input name="mealPlan" className="input-field" placeholder="e.g. MAP Plan - Daily Breakfast & Dinner" value={formData.mealPlan} onChange={handleChange} />
+                    </Field>
+                    <Field label="Temples Included (Comma-separated)">
+                      <input 
+                        name="templesList" 
+                        className="input-field" 
+                        placeholder="e.g. Guruvayur Temple, Vadakkunnathan Temple" 
+                        value={Array.isArray(formData.templesList) ? formData.templesList.join(', ') : formData.templesList} 
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setFormData(prev => ({
+                            ...prev,
+                            templesList: val.split(',').map(s => s.trim()).filter(Boolean)
+                          }));
+                        }} 
+                      />
+                    </Field>
+                  </Row>
                   <Row>
                     <Field label="Starting City">
                       <input name="startingCity" className="input-field" placeholder="e.g. Chennai" value={formData.startingCity} onChange={handleChange} />
@@ -1883,6 +2003,12 @@ const AdminPage = () => {
                         value={day.title} onChange={e => updateItinerary(i, 'title', e.target.value)} />
                       <textarea className="input-field" rows="3" placeholder="Activities for the day..."
                         value={day.activities} onChange={e => updateItinerary(i, 'activities', e.target.value)} style={{ marginBottom: 10 }} />
+                      {day.activities && (day.activities.includes('**') || day.activities.includes('\n')) && (
+                        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 12, marginBottom: 10, fontSize: '0.85rem' }}>
+                          <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, display: 'block', marginBottom: 4 }}>Formatted Preview:</span>
+                          <div style={{ color: 'var(--text-main)', display: 'block' }}>{renderRichText(day.activities)}</div>
+                        </div>
+                      )}
                       <Row>
                         <input className="input-field" placeholder="Hotel name" value={day.hotel}
                           onChange={e => updateItinerary(i, 'hotel', e.target.value)} />
@@ -1925,6 +2051,14 @@ const AdminPage = () => {
                     </Field>
                     <Field label="Offer Price (₹)">
                       <input type="number" name="offerPrice" className="input-field" placeholder="45000" value={formData.offerPrice} onChange={handleChange} />
+                    </Field>
+                  </Row>
+                  <Row>
+                    <Field label="Base/Wholesale Cost (₹) (For margin tracking)">
+                      <input type="number" name="baseCost" className="input-field" placeholder="38000" value={formData.baseCost} onChange={handleChange} />
+                    </Field>
+                    <Field label="Price Margin & Breakdown (Auto justification)">
+                      <textarea name="priceBreakdown" className="input-field" rows="2" placeholder="e.g. Hotel: 12000, Vehicle: 15000..." value={formData.priceBreakdown} onChange={handleChange} />
                     </Field>
                   </Row>
                   <Row>

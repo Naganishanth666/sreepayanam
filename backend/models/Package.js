@@ -38,6 +38,10 @@ const packageSchema = new mongoose.Schema({
   exclusions: [String],
   optionalAddons: [String],
   
+  templesList: [String],
+  priceBreakdown: { type: String },
+  mealPlan: { type: String }, // e.g., "CP - Breakfast", "MAP - Breakfast + Dinner"
+  
   termsAndConditions: { type: String },
   cancellationPolicy: { type: String },
   
@@ -72,15 +76,19 @@ packageSchema.pre('validate', function() {
 });
 
 packageSchema.pre('save', function() {
-  // Enforce a strict 10% profit margin standard on all tours
-  this.profitMarginPercent = 10;
-  if (this.baseCost) {
-    this.offerPrice = Math.round(this.baseCost * 1.10);
+  if (this.baseCost && this.offerPrice) {
+    // Calculate profit margin based on user cost and sell price
+    this.profitMarginPercent = Math.round(((this.offerPrice - this.baseCost) / this.baseCost) * 100);
+  } else if (this.baseCost) {
+    const margin = this.profitMarginPercent || 10;
+    this.offerPrice = Math.round(this.baseCost * (1 + margin / 100));
   } else if (this.offerPrice) {
-    this.baseCost = Math.round(this.offerPrice / 1.10);
+    const margin = this.profitMarginPercent || 10;
+    this.baseCost = Math.round(this.offerPrice / (1 + margin / 100));
   } else if (this.originalPrice) {
-    this.baseCost = Math.round(this.originalPrice / 1.10);
-    this.offerPrice = Math.round(this.baseCost * 1.10);
+    const margin = this.profitMarginPercent || 10;
+    this.offerPrice = this.originalPrice;
+    this.baseCost = Math.round(this.offerPrice / (1 + margin / 100));
   }
   this.updatedAt = Date.now();
 });
