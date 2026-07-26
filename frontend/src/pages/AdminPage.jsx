@@ -181,7 +181,7 @@ const AdminPage = () => {
     wheelchairFriendly: false,
     
     // Meal details
-    mealRequired: 'Yes',
+    mealRequired: 'MAP - Breakfast + Dinner',
     mealPlan: 'MAP (Breakfast + Dinner)',
     foodPreference: 'Veg',
     specialMeal: '',

@@ -14,7 +14,8 @@ const formatDetailedPreferences = (body) => {
   const excludeKeys = [
     'destination', 'startingCity', 'endingCity', 'durationDays', 'durationNights',
     'packageCategory', 'tourType', 'selectedHotel', 'selectedFlight', 'selectedTrain',
-    'selectedCar', 'customPrompt', 'includeFlight', 'includeTrain', 'includeCar', 'category', 'prompt'
+    'selectedCar', 'customPrompt', 'includeFlight', 'includeTrain', 'includeCar', 'category', 'prompt',
+    'mealRequired', 'mealPlan', 'suggestTemples'
   ];
   let formatted = '';
   for (const [key, value] of Object.entries(body)) {
@@ -664,6 +665,9 @@ router.post('/generate-package', async (req, res) => {
     const formattedPreferences = formatDetailedPreferences(req.body);
     const days = Number(durationDays) || 2;
     const nights = Number(durationNights) || 1;
+    
+    // Calculate dynamic word count target per day to prevent exceeding OpenAI's output token limit (max 4096 tokens)
+    const targetWordsPerDay = days <= 3 ? 600 : days === 4 ? 500 : days === 5 ? 400 : 300;
 
     // Set package-level meal plan description
     let packageMealPlan = "No meals included";
@@ -672,6 +676,10 @@ router.post('/generate-package', async (req, res) => {
     else if (mealRequired === "AP - Breakfast + Lunch + Dinner") packageMealPlan = "AP - Breakfast, Lunch & Dinner";
     else if (mealRequired === "No") packageMealPlan = "No meals included";
     else if (mealRequired === "Yes") packageMealPlan = "Breakfast & Dinner Included";
+
+    const itineraryMealPlanDesc = mealRequired === "No"
+      ? "Strictly output 'No meals included'. Do NOT suggest any breakfasts, dinners, lunches, or hotel/restaurant dining recommendations."
+      : "Structure according to the day-by-day mapping constraint. Mention the included meals for this day and suggest specific local dishes, cuisines, or restaurants.";
 
     const generatorPrompt = `
       Create a fully written, highly professional travel package matching the following prompt: "${prompt || `Generate a tour package to ${destination || 'a beautiful place'}`}".
@@ -689,7 +697,7 @@ router.post('/generate-package', async (req, res) => {
       Set originalPrice as the retail price (cost * 1.50) and offerPrice as the selling price.
       Both originalPrice and offerPrice MUST be returned as integers, not formatted strings.
       Generate a detailed text block in "priceBreakdown" explaining the wholesale cost breakdown (Hotel, Car transport, tolls/driver, meals).
-
+ 
       Itinerary Duration Constraint:
       Your itinerary array MUST contain exactly ${days} items (i.e. one entry per day from Day 1 to Day ${days}).
       For example, if durationDays is 2, your itinerary array MUST contain exactly 2 objects: one for Day 1 and one for Day 2. If it is 1, contain exactly 1 object. Never truncate or skip any day.
@@ -703,6 +711,7 @@ router.post('/generate-package', async (req, res) => {
         * If mealRequired is "MAP - Breakfast + Dinner": Day 1: "Dinner (MAP Plan) at the hotel", Day 2: "Breakfast & Dinner (MAP Plan) at the hotel".
         * If mealRequired is "AP - Breakfast + Lunch + Dinner": Day 1: "Lunch & Dinner (AP Plan)", Day 2: "Breakfast, Lunch & Dinner (AP Plan)".
         * If mealRequired is "No": All days: "No meals included".
+      ${mealRequired === 'No' ? 'CRITICAL: Since No meals are included (mealRequired is "No"), you MUST NOT suggest, mention, or include any breakfasts, lunches, dinners, evening dining, or hotel/restaurant meals anywhere in the itinerary day-wise activities, overview, inclusions, or exclusions.' : ''}
 
       Inclusions & Exclusions formatting:
       - inclusions: Separate each inclusion item with a newline character. Use this template:
@@ -712,8 +721,9 @@ router.post('/generate-package', async (req, res) => {
 
       Daily Activity Detail:
       For each day in the itinerary, the content MUST be extremely descriptive, informative, and engaging:
-      * Do NOT restrict the descriptions to short summaries. Let the content be highly detailed and write at least 6-12 sentences per day.
-      * Provide rich formatting like bulleted highlights, sightseeing lists, or timing details in the "activities" field. Feel free to use double newlines (paragraphs) and markdown bold text (e.g., **Sightseeing Spot**) to format the itinerary day-wise activities clearly.
+      * For each day, the "activities" field MUST be extremely detailed, descriptive, and contain at least ${targetWordsPerDay} words. Do NOT write short summaries. Describe every sightseeing location, its history, charm, recommended timings, transit experiences, and local context in depth. Use multiple rich paragraphs and markdown formatting (like bolding and lists).
+      * The package "overview" field MUST be a detailed, multi-paragraph essay of at least 300 to 500 words highlighting the key destinations, experiences, and theme of the trip.
+      * The "mealPlan" field must follow the mealRequired constraints: ${itineraryMealPlanDesc}
       
       The JSON object MUST strictly conform to the following schema:
       {
@@ -727,15 +737,15 @@ router.post('/generate-package', async (req, res) => {
         "durationNights": ${nights},
         "mealPlan": "${packageMealPlan}",
         "templesList": ["Temple Name 1", "Temple Name 2"],
-        "overview": "Thorough, engaging, premium paragraph describing the package experience.",
+        "overview": "Thorough, engaging, premium description of the package experience. MUST be at least 300 to 500 words, structured in multiple readable paragraphs.",
         "imageUrl": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=80",
         "itinerary": [
           {
             "day": 1,
             "title": "Arrival & Backwaters Cruise",
-            "activities": "Detailed, creative description of activities and specific spots visited for this day (at least 6-12 sentences, with bullet points or paragraphs if appropriate using markdown).",
+            "activities": "Extremely detailed description of activities and specific spots visited for this day. MUST be at least ${targetWordsPerDay} words in length, containing multiple paragraphs, rich descriptive details of spots, history, timings, and experience using markdown formatting.",
             "hotel": "Name of a specific realistic premium hotel or resort matching the location",
-            "mealPlan": "Include specific local dishes, cuisines, or restaurants suggested",
+            "mealPlan": "${itineraryMealPlanDesc}",
             "transport": "Specific flight details (airlines, routes), train options, or car travel/road transfers, with transit times and distance"
           }
         ],
@@ -757,11 +767,11 @@ router.post('/generate-package', async (req, res) => {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
-        { role: 'system', content: 'You are an API that only returns pure, valid, parsed JSON conforming to the requested schema. Never output markdown format.' },
+        { role: 'system', content: `You are an API that only returns pure, valid, parsed JSON conforming to the requested schema. Never output markdown format outside the JSON. Crucially, you MUST write extremely detailed, long-form content: the "overview" field MUST be a multi-paragraph text of at least 300 to 500 words, and the "activities" field for each day in the itinerary MUST be at least ${targetWordsPerDay} words long, detailing sightseeing spots, history, culture, recommended timings, and experience in multiple descriptive paragraphs. Do not summarize or truncate.` },
         { role: 'user', content: generatorPrompt }
       ],
       response_format: { type: "json_object" },
-      temperature: 0.7,
+      temperature: 0.75,
       max_tokens: 4000
     });
 
@@ -1074,6 +1084,9 @@ router.post('/compile-draft', async (req, res) => {
     const nights = Number(durationNights) || 1;
     const templesToInclude = Array.isArray(selectedTemples) ? selectedTemples : [];
     
+    // Calculate dynamic word count target per day to prevent exceeding OpenAI's output token limit (max 4096 tokens)
+    const targetWordsPerDay = days <= 3 ? 600 : days === 4 ? 500 : days === 5 ? 400 : 300;
+    
     // Set package-level meal plan description
     let packageMealPlan = "No meals included";
     if (mealRequired === "CP - Breakfast") packageMealPlan = "CP - Breakfast Only";
@@ -1110,9 +1123,13 @@ router.post('/compile-draft', async (req, res) => {
     const computedOriginalPrice = Math.round((totalBaseCost * 1.50) / 100) * 100;
 
     // Build the breakdown text
-    const breakdownText = `Hotel Stay (${nights} Night${nights > 1 ? 's' : ''}): ₹${hotelCost.toLocaleString()}\nPrivate AC Transport (${days} Days): ₹${carCost.toLocaleString()}\nMeal Plan (${mealRequired || 'No'}): Included\nTolls, Parking, Permits & Driver Allowance: ₹${extraCosts.toLocaleString()}\nTotal Wholesale Cost: ₹${totalBaseCost.toLocaleString()}\nSreePayanam Selling Price: ₹${computedOfferPrice.toLocaleString()}`;
+    const breakdownText = `Hotel Stay (${nights} Night${nights > 1 ? 's' : ''}): ₹${hotelCost.toLocaleString()}\nPrivate AC Transport (${days} Days): ₹${carCost.toLocaleString()}\nMeal Plan (${mealRequired || 'No'}): ${mealRequired === 'No' ? 'Not Included' : 'Included'}\nTolls, Parking, Permits & Driver Allowance: ₹${extraCosts.toLocaleString()}\nTotal Wholesale Cost: ₹${totalBaseCost.toLocaleString()}\nSreePayanam Selling Price: ₹${computedOfferPrice.toLocaleString()}`;
 
     const formattedPreferences = formatDetailedPreferences(req.body);
+
+    const itineraryMealPlanDesc = mealRequired === "No"
+      ? "Strictly output 'No meals included'. Do NOT suggest any breakfasts, dinners, lunches, or hotel/restaurant dining recommendations."
+      : "Structure according to the day-by-day mapping constraint. Mention the included meals for this day and suggest specific local dishes, cuisines, or restaurants.";
 
     const compilePrompt = `
       Create a fully written, highly professional travel package matching the following details.
@@ -1160,6 +1177,7 @@ router.post('/compile-draft', async (req, res) => {
         * If mealRequired is "AP - Breakfast + Lunch + Dinner": Day 1: "Lunch & Dinner (AP Plan)", Day 2: "Breakfast, Lunch & Dinner (AP Plan)".
         * If mealRequired is "No": All days: "No meals included".
         Structure each day's "mealPlan" field strictly according to these plan constraints.
+      ${mealRequired === 'No' ? 'CRITICAL: Since No meals are included (mealRequired is "No"), you MUST NOT suggest, mention, or include any breakfasts, lunches, dinners, evening dining, or hotel/restaurant meals anywhere in the itinerary day-wise activities, overview, inclusions, or exclusions.' : ''}
       
       - Transport inclusion constraints:
         1. Flight: Check 'includeFlight' flag (value: ${!!includeFlight}) and 'selectedFlight'. If 'includeFlight' is false (or selectedFlight is null/None), you MUST NOT suggest or mention flight travel, airplane tickets, or airport transfers in the itinerary, overview, inclusions, or exclusions. If true, explicitly detail the flight ("${selectedFlight?.airline || 'IndiGo flight'}") arrival and route on Day 1.
@@ -1174,9 +1192,9 @@ router.post('/compile-draft', async (req, res) => {
 
       - Evocative and Detailed Content Rule:
         For each day in the itinerary, the content MUST be extremely descriptive, informative, and engaging:
-        * Do NOT restrict the descriptions to short summaries. Let the content be highly detailed and write at least 6-12 sentences per day.
-        * Provide rich formatting like bulleted highlights, sightseeing lists, or timing details in the "activities" field. Feel free to use double newlines (paragraphs) and markdown bold text (e.g., **Sightseeing Spot**) to format the itinerary day-wise activities clearly.
-        * The "mealPlan" field must specify local culinary recommendations, dishes, and restaurant/hotel dining details.
+        * For each day, the "activities" field MUST be extremely detailed, descriptive, and contain at least ${targetWordsPerDay} words. Do NOT write short summaries. Describe every sightseeing location, its history, charm, recommended timings, transit experiences, and local context in depth. Use multiple rich paragraphs and markdown formatting (like bolding and lists).
+        * The package "overview" field MUST be a detailed, multi-paragraph essay of at least 300 to 500 words highlighting the key destinations, experiences, and theme of the trip.
+        * The "mealPlan" field must follow the mealRequired constraints: ${itineraryMealPlanDesc}
         * The "transport" field must describe local transfer instructions, routes, vehicles, approximate travel time, and driving distances.
       
       Your response MUST be a valid JSON object ONLY.
@@ -1193,15 +1211,15 @@ router.post('/compile-draft', async (req, res) => {
         "durationNights": ${nights},
         "mealPlan": "${packageMealPlan}",
         "templesList": ${JSON.stringify(templesToInclude)},
-        "overview": "Thorough, engaging, premium paragraph describing the package experience incorporating the selected stays and transits.",
+        "overview": "Thorough, engaging, premium description of the package experience. MUST be at least 300 to 500 words, structured in multiple readable paragraphs.",
         "imageUrl": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=80",
         "itinerary": [
           {
             "day": 1,
             "title": "Arrival & Welcome",
-            "activities": "Detailed, creative description of activities and specific spots visited for this day (at least 6-12 sentences, with bullet points or paragraphs if appropriate using markdown).",
+            "activities": "Extremely detailed description of activities and specific spots visited for this day. MUST be at least ${targetWordsPerDay} words in length, containing multiple paragraphs, rich descriptive details of spots, history, timings, and experience using markdown formatting.",
             "hotel": "${selectedHotel?.name || 'Selected Premium Stay'}",
-            "mealPlan": "Breakfast (Mention specific local dishes, cuisines or hotel dining recommendations)",
+            "mealPlan": "${itineraryMealPlanDesc}",
             "transport": "Transit detail using selected flights/trains and selected vehicle"
           }
         ],
@@ -1223,11 +1241,11 @@ router.post('/compile-draft', async (req, res) => {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
-        { role: 'system', content: 'You are an API that only returns pure, valid, parsed JSON conforming to the requested schema. Never output markdown format.' },
+        { role: 'system', content: `You are an API that only returns pure, valid, parsed JSON conforming to the requested schema. Never output markdown format outside the JSON. Crucially, you MUST write extremely detailed, long-form content: the "overview" field MUST be a multi-paragraph text of at least 300 to 500 words, and the "activities" field for each day in the itinerary MUST be at least ${targetWordsPerDay} words long, detailing sightseeing spots, history, culture, recommended timings, and experience in multiple descriptive paragraphs. Do not summarize or truncate.` },
         { role: 'user', content: compilePrompt }
       ],
       response_format: { type: "json_object" },
-      temperature: 0.7,
+      temperature: 0.75,
       max_tokens: 4000
     });
 
