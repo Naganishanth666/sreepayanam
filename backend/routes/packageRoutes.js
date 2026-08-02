@@ -27,8 +27,10 @@ router.get('/:id', async (req, res) => {
 // POST a new package (Admin only)
 router.post('/', checkAdmin, async (req, res) => {
   try {
+    const { ensureMandatoryPolicies } = require('../utils/policyConstants');
+    
     // Map legacy fields to new schema fields for backwards compatibility
-    const data = {
+    let data = {
       ...req.body,
       overview: req.body.overview || req.body.description,
       originalPrice: req.body.originalPrice || req.body.price,
@@ -37,6 +39,10 @@ router.post('/', checkAdmin, async (req, res) => {
       durationNights: req.body.durationNights || (req.body.durationDays - 1) || 1,
       isActive: true,
     };
+    
+    // Ensure mandatory policies for National packages
+    data = ensureMandatoryPolicies(data);
+    
     const pkg = new Package(data);
     const newPackage = await pkg.save();
     res.status(201).json(newPackage);
@@ -48,9 +54,15 @@ router.post('/', checkAdmin, async (req, res) => {
 // PUT update a package (Admin only)
 router.put('/:id', checkAdmin, async (req, res) => {
   try {
+    const { ensureMandatoryPolicies } = require('../utils/policyConstants');
+    
+    let data = { ...req.body };
+    // Ensure mandatory policies for National packages
+    data = ensureMandatoryPolicies(data);
+    
     const pkg = await Package.findOneAndUpdate(
       { packageId: req.params.id },
-      { ...req.body, updatedAt: new Date() },
+      { ...data, updatedAt: new Date() },
       { new: true }
     );
     if (!pkg) return res.status(404).json({ message: 'Package not found' });

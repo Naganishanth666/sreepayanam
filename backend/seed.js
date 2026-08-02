@@ -636,8 +636,10 @@ async function seedDatabase() {
     if (count === 0 || process.env.FORCE_SEED === 'true') {
       console.log('Clearing existing packages...');
       await Package.deleteMany({});
-      console.log('Inserting 14 premium packages...');
-      await Package.insertMany(packages);
+      console.log('Inserting 14 premium packages with mandatory national policies...');
+      const { ensureMandatoryPolicies } = require('./utils/policyConstants');
+      const processedPackages = packages.map(pkg => ensureMandatoryPolicies({ ...pkg }));
+      await Package.insertMany(processedPackages);
       console.log('Database successfully seeded with full SreePayanam package catalog!');
     } else {
       console.log(`Database already contains ${count} packages. Skipping seeding to prevent data loss. (Set FORCE_SEED=true to override).`);

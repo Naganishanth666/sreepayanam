@@ -9,6 +9,12 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { renderRichText } from '../utils/textFormatter';
+import {
+  MANDATORY_GENERAL_TERMS,
+  MANDATORY_PAYMENT_POLICY,
+  MANDATORY_CANCELLATION_POLICY,
+  MANDATORY_RESCHEDULING_POLICY
+} from '../utils/policyConstants';
 
 const WHATSAPP_NUMBER = '919443217654'; // Real contact number
 
@@ -440,25 +446,127 @@ const PackageDetails = () => {
           )}
 
           {/* Tab: Policy */}
-          {activeTab === 'policy' && (
-            <motion.div key="pol" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-              {pkg.termsAndConditions && (
-                <div className="glass-card" style={{ padding: 28, marginBottom: 20 }}>
-                  <h3 style={{ marginBottom: 16, color: 'var(--dark)', fontWeight: 700 }}>📋 Terms & Conditions</h3>
-                  <p style={{ lineHeight: 1.9, color: 'var(--text-main)', whiteSpace: 'pre-line' }}>{pkg.termsAndConditions}</p>
-                </div>
-              )}
-              {pkg.cancellationPolicy && (
-                <div className="glass-card" style={{ padding: 28 }}>
-                  <h3 style={{ marginBottom: 16, color: '#ef4444', fontWeight: 700 }}>🚫 Cancellation Policy</h3>
-                  <p style={{ lineHeight: 1.9, color: 'var(--text-main)', whiteSpace: 'pre-line' }}>{pkg.cancellationPolicy}</p>
-                </div>
-              )}
-              {!pkg.termsAndConditions && !pkg.cancellationPolicy && (
-                <div className="glass-card" style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>Policy details not added yet.</div>
-              )}
-            </motion.div>
-          )}
+          {activeTab === 'policy' && (() => {
+            const getCleanPolicies = () => {
+              let cleanTerms = pkg.termsAndConditions || '';
+              if (cleanTerms.includes("General Terms & Conditions")) {
+                cleanTerms = cleanTerms.split("General Terms & Conditions")[0].trim();
+              }
+              
+              let cleanCancellation = pkg.cancellationPolicy || '';
+              if (cleanCancellation.includes("Cancellation & Refund Policy")) {
+                cleanCancellation = cleanCancellation.split("Cancellation & Refund Policy")[0].trim();
+              }
+              
+              return { cleanTerms, cleanCancellation };
+            };
+            
+            const { cleanTerms, cleanCancellation } = getCleanPolicies();
+            const isNational = pkg.packageCategory === 'National';
+
+            return (
+              <motion.div key="pol" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                {/* 1. Package Specific Terms & Conditions */}
+                {cleanTerms && (
+                  <div className="glass-card" style={{ padding: 28, marginBottom: 20 }}>
+                    <h3 style={{ marginBottom: 16, color: 'var(--dark)', fontWeight: 700 }}>📋 Package Specific Terms &amp; Conditions</h3>
+                    <p style={{ lineHeight: 1.9, color: 'var(--text-main)', whiteSpace: 'pre-line' }}>{cleanTerms}</p>
+                  </div>
+                )}
+
+                {/* 2. Package Specific Cancellation Policy */}
+                {cleanCancellation && (
+                  <div className="glass-card" style={{ padding: 28, marginBottom: 20 }}>
+                    <h3 style={{ marginBottom: 16, color: '#ef4444', fontWeight: 700 }}>🚫 Package Specific Cancellation Policy</h3>
+                    <p style={{ lineHeight: 1.9, color: 'var(--text-main)', whiteSpace: 'pre-line' }}>{cleanCancellation}</p>
+                  </div>
+                )}
+
+                {/* 3. Standard General Terms & Policies (for National Packages) */}
+                {isNational && (
+                  <div style={{ marginTop: 32 }}>
+                    <h3 style={{ marginBottom: 20, color: 'var(--dark)', fontWeight: 800, fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      🛡️ Standard General Terms &amp; Policies
+                    </h3>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                      {/* General Terms */}
+                      <div className="glass-card" style={{ padding: 24, backgroundColor: 'white' }}>
+                        <h4 style={{ color: 'var(--primary)', fontWeight: 700, marginBottom: 14, fontSize: '1.05rem', borderBottom: '1px solid #f1f5f9', paddingBottom: 10 }}>
+                          General Terms &amp; Conditions
+                        </h4>
+                        <ul style={{ paddingLeft: 20, margin: 0, display: 'flex', flexDirection: 'column', gap: 10, listStyleType: 'disc' }}>
+                          {MANDATORY_GENERAL_TERMS.map((item, idx) => (
+                            <li key={idx} style={{ lineHeight: 1.7, color: 'var(--text-main)', fontSize: '0.9rem' }}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* Booking & Payment */}
+                      <div className="glass-card" style={{ padding: 24, backgroundColor: 'white' }}>
+                        <h4 style={{ color: 'var(--primary)', fontWeight: 700, marginBottom: 14, fontSize: '1.05rem', borderBottom: '1px solid #f1f5f9', paddingBottom: 10 }}>
+                          Booking &amp; Payment Policy
+                        </h4>
+                        <ul style={{ paddingLeft: 20, margin: 0, display: 'flex', flexDirection: 'column', gap: 10, listStyleType: 'disc' }}>
+                          {MANDATORY_PAYMENT_POLICY.map((item, idx) => (
+                            <li key={idx} style={{ lineHeight: 1.7, color: 'var(--text-main)', fontSize: '0.9rem' }}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* Cancellation & Refund */}
+                      <div className="glass-card" style={{ padding: 24, backgroundColor: 'white' }}>
+                        <h4 style={{ color: '#ef4444', fontWeight: 700, marginBottom: 14, fontSize: '1.05rem', borderBottom: '1px solid #f1f5f9', paddingBottom: 10 }}>
+                          Cancellation &amp; Refund Policy
+                        </h4>
+                        <ul style={{ paddingLeft: 20, margin: 0, display: 'flex', flexDirection: 'column', gap: 10, listStyleType: 'disc' }}>
+                          {MANDATORY_CANCELLATION_POLICY.map((item, idx) => (
+                            <li key={idx} style={{ lineHeight: 1.7, color: 'var(--text-main)', fontSize: '0.9rem' }}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* Date Change / Rescheduling */}
+                      <div className="glass-card" style={{ padding: 24, backgroundColor: 'white' }}>
+                        <h4 style={{ color: 'var(--primary)', fontWeight: 700, marginBottom: 14, fontSize: '1.05rem', borderBottom: '1px solid #f1f5f9', paddingBottom: 10 }}>
+                          Date Change / Rescheduling Policy
+                        </h4>
+                        <ul style={{ paddingLeft: 20, margin: 0, display: 'flex', flexDirection: 'column', gap: 10, listStyleType: 'disc' }}>
+                          {MANDATORY_RESCHEDULING_POLICY.map((item, idx) => (
+                            <li key={idx} style={{ lineHeight: 1.7, color: 'var(--text-main)', fontSize: '0.9rem' }}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* Final-Quotation Clause */}
+                      <div style={{ 
+                        padding: 24, 
+                        borderRadius: 16, 
+                        backgroundColor: '#fffbeb', 
+                        border: '1.5px solid #fef3c7',
+                        boxShadow: '0 4px 12px rgba(245, 158, 11, 0.05)'
+                      }}>
+                        <h4 style={{ color: '#d97706', fontWeight: 800, marginBottom: 10, fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                          ⚠️ Important Final-Quotation Clause
+                        </h4>
+                        <p style={{ lineHeight: 1.7, color: '#78350f', fontSize: '0.92rem', margin: '0 0 16px 0' }}>
+                          These are SreePayanam's standard general terms and policies. Package-specific pricing, payment terms, cancellation/refund conditions, date-change rules, itinerary, hotels, vehicles, inclusions and exclusions may vary. In all cases, the terms and conditions specifically mentioned in the <strong>FINAL CONFIRMED QUOTATION / BOOKING CONFIRMATION</strong> shall prevail.
+                        </p>
+                        <div style={{ borderTop: '1px solid #fde68a', paddingTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                          <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#b45309' }}>SreePayanam International Pvt. Ltd.</span>
+                          <span style={{ fontSize: '0.85rem', fontStyle: 'italic', fontWeight: 600, color: '#d97706' }}>Travel Smarter. Journey Better.</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {!cleanTerms && !cleanCancellation && !isNational && (
+                  <div className="glass-card" style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>Policy details not added yet.</div>
+                )}
+              </motion.div>
+            );
+          })()}
         </div>
 
         {/* Sidebar */}

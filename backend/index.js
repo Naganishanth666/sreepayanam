@@ -44,6 +44,40 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/sreepayan
   } catch (migErr) {
     console.error('[Migration] Failed to run packageId migration:', migErr);
   }
+
+  // Run migration to ensure mandatory policies for National packages
+  try {
+    const Package = require('./models/Package');
+    const { ensureMandatoryPolicies } = require('./utils/policyConstants');
+    const nationalPackages = await Package.find({ packageCategory: 'National' });
+    console.log(`[Migration] Checking ${nationalPackages.length} National packages for mandatory policies...`);
+    let updatedCount = 0;
+    for (const pkg of nationalPackages) {
+      let pkgObj = pkg.toObject();
+      const originalTerms = pkgObj.termsAndConditions || '';
+      const originalCancellation = pkgObj.cancellationPolicy || '';
+      pkgObj = ensureMandatoryPolicies(pkgObj);
+      if (
+        pkgObj.termsAndConditions !== originalTerms ||
+        pkgObj.cancellationPolicy !== originalCancellation
+      ) {
+        await Package.updateOne(
+          { _id: pkg._id },
+          {
+            $set: {
+              termsAndConditions: pkgObj.termsAndConditions,
+              cancellationPolicy: pkgObj.cancellationPolicy
+            }
+          }
+        );
+        console.log(`[Migration] Updated policies for National package: "${pkg.title}" (ID: ${pkg.packageId})`);
+        updatedCount++;
+      }
+    }
+    console.log(`[Migration] National package policies migration completed. Updated ${updatedCount} packages.`);
+  } catch (migTermsErr) {
+    console.error('[Migration] Failed to run National package policies migration:', migTermsErr);
+  }
 })
 .catch((err) => console.error('MongoDB connection error:', err));
 

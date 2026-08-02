@@ -801,6 +801,10 @@ router.post('/generate-package', async (req, res) => {
       packageData.imageUrl = getRandomPresetImage(packageData.tourType || tourType);
     }
     
+    // Ensure mandatory policies for National packages
+    const { ensureMandatoryPolicies } = require('../utils/policyConstants');
+    ensureMandatoryPolicies(packageData);
+    
     res.json(packageData);
 
   } catch (error) {
@@ -1265,6 +1269,10 @@ router.post('/compile-draft', async (req, res) => {
     if (!packageData.imageUrl || packageData.imageUrl.includes('photo-1507525428034') || packageData.imageUrl.includes('photo-1469854523086')) {
       packageData.imageUrl = getRandomPresetImage(packageData.tourType || tourType);
     }
+    
+    // Ensure mandatory policies for National packages
+    const { ensureMandatoryPolicies } = require('../utils/policyConstants');
+    ensureMandatoryPolicies(packageData);
     
     res.json(packageData);
 
