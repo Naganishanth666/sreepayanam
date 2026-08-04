@@ -778,21 +778,41 @@ router.post('/generate-package', async (req, res) => {
     const cleanJsonText = extractJson(completion.choices[0].message.content);
     const packageData = JSON.parse(cleanJsonText);
 
-    // Validate and normalize pricing data in Node.js
-    packageData.baseCost = extractNumericPrice(packageData.baseCost);
-    packageData.originalPrice = extractNumericPrice(packageData.originalPrice);
-    packageData.offerPrice = extractNumericPrice(packageData.offerPrice);
+    // Calculate exact pricing using SreePayanam costing engine
+    const { calculateCosting } = require('../utils/costingEngine');
+    const adultCount = Number(req.body.totalPassengers || 2) - Number(req.body.numChildren || 0);
+    const childWithBedCount = Number(req.body.childWithBed || 0);
+    const childNoBedCount = Number(req.body.childWithoutBed || 0);
+    const infantCount = Number(req.body.numInfants || 0);
+    const hotelCategory = req.body.hotelCategory || '3 Star';
+    const vehicleType = req.body.vehicleType || req.body.carType || null;
+    const mealPlan = req.body.mealRequired || 'MAP';
+    const markupPercent = Number(req.body.markupPercent) || 25;
+    const bufferPercent = Number(req.body.bufferPercent) || 3;
+
+    const costingParams = {
+      adultCount,
+      childWithBedCount,
+      childNoBedCount,
+      infantCount,
+      durationDays: days,
+      durationNights: nights,
+      hotelCategory,
+      mealPlan,
+      vehicleType,
+      markupPercent,
+      bufferPercent
+    };
+
+    const costing = calculateCosting(costingParams);
+
+    packageData.costingBreakdown = costing;
+    packageData.status = 'Draft';
+    packageData.baseCost = costing.supplierCost;
+    packageData.originalPrice = costing.sellingPrice;
+    packageData.offerPrice = costing.customerPrice;
+    packageData.profitMarginPercent = costing.profitMarginPercent;
     
-    if (!packageData.baseCost || isNaN(packageData.baseCost)) {
-      const dailyRate = packageData.packageCategory === 'International' ? 10000 : 4000;
-      packageData.baseCost = Math.round((dailyRate * days));
-    }
-    if (!packageData.originalPrice || isNaN(packageData.originalPrice)) {
-      packageData.originalPrice = Math.round((packageData.baseCost * 1.50) / 100) * 100;
-    }
-    if (!packageData.offerPrice || isNaN(packageData.offerPrice)) {
-      packageData.offerPrice = Math.round((packageData.baseCost * 1.275) / 100) * 100;
-    }
     packageData.isSpecialOffer = true;
     packageData.mealPlan = packageMealPlan;
     
@@ -1102,32 +1122,56 @@ router.post('/compile-draft', async (req, res) => {
     const openai = getOpenAIClient(res);
     if (!openai) return;
 
-    // Calculate exact pricing in Node.js to prevent AI math errors
-    const hotelRate = selectedHotel ? extractNumericPrice(selectedHotel.price || selectedHotel.rate) : 3500;
-    const hotelCost = hotelRate * nights;
-
-    const flightPrice = (includeFlight && selectedFlight) ? extractNumericPrice(selectedFlight.price || selectedFlight.rate) : 0;
-    const flightCost = flightPrice * passengers;
-
-    const trainPrice = (includeTrain && selectedTrain) ? extractNumericPrice(selectedTrain.price || selectedTrain.rate) : 0;
-    const trainCost = trainPrice * passengers;
-
-    const carRate = (includeCar && selectedCar) ? extractNumericPrice(selectedCar.price || selectedCar.rate) : 3000;
-    const carCost = carRate * days;
-
-    // Estimate meals & driver/tolls/permits extra costs dynamically to total around ₹14,500 cost for 2 pax
-    let extraCosts = 2000; // Tolls/Parking/Driver allowance default
-    if (mealRequired && mealRequired !== "No") {
-      extraCosts += (mealRequired.includes("AP") ? 2500 : 1500);
+    // Calculate exact pricing using SreePayanam costing engine
+    const { calculateCosting } = require('../utils/costingEngine');
+    const adultCount = Number(req.body.totalPassengers || 2) - Number(req.body.numChildren || 0);
+    const childWithBedCount = Number(req.body.childWithBed || 0);
+    const childNoBedCount = Number(req.body.childWithoutBed || 0);
+    const infantCount = Number(req.body.numInfants || 0);
+    const hotelCategory = req.body.hotelCategory || '3 Star';
+    
+    let hotelRoomRate = null;
+    if (selectedHotel) {
+      hotelRoomRate = extractNumericPrice(selectedHotel.price || selectedHotel.rate || selectedHotel.netRate);
     }
     
-    const totalBaseCost = hotelCost + flightCost + trainCost + carCost + extraCosts;
-    // Selling price: markup by 25-30% to fit SreePayanam margins (e.g. cost ₹14,500 -> selling ₹18,500)
-    const computedOfferPrice = Math.round((totalBaseCost * 1.275) / 100) * 100;
-    const computedOriginalPrice = Math.round((totalBaseCost * 1.50) / 100) * 100;
+    let vehicleDailyRate = null;
+    if (includeCar && selectedCar) {
+      vehicleDailyRate = extractNumericPrice(selectedCar.price || selectedCar.rate || selectedCar.netRate);
+    }
+    
+    let flightTrainCost = 0;
+    if (includeFlight && selectedFlight) {
+      flightTrainCost += extractNumericPrice(selectedFlight.price || selectedFlight.rate || selectedFlight.netRate) * (adultCount + childWithBedCount + childNoBedCount);
+    }
+    if (includeTrain && selectedTrain) {
+      flightTrainCost += extractNumericPrice(selectedTrain.price || selectedTrain.rate || selectedTrain.netRate) * (adultCount + childWithBedCount + childNoBedCount);
+    }
+
+    const costingParams = {
+      adultCount,
+      childWithBedCount,
+      childNoBedCount,
+      infantCount,
+      durationDays: days,
+      durationNights: nights,
+      hotelCategory,
+      hotelRoomRate,
+      mealPlan: mealRequired || 'MAP',
+      vehicleType: selectedCar ? selectedCar.type : null,
+      vehicleDailyRate,
+      miscCost: flightTrainCost,
+      markupPercent: Number(req.body.markupPercent) || 25,
+      bufferPercent: Number(req.body.bufferPercent) || 3
+    };
+
+    const costing = calculateCosting(costingParams);
+    const totalBaseCost = costing.supplierCost;
+    const computedOfferPrice = costing.customerPrice;
+    const computedOriginalPrice = costing.sellingPrice;
 
     // Build the breakdown text
-    const breakdownText = `Hotel Stay (${nights} Night${nights > 1 ? 's' : ''}): ₹${hotelCost.toLocaleString()}\nPrivate AC Transport (${days} Days): ₹${carCost.toLocaleString()}\nMeal Plan (${mealRequired || 'No'}): ${mealRequired === 'No' ? 'Not Included' : 'Included'}\nTolls, Parking, Permits & Driver Allowance: ₹${extraCosts.toLocaleString()}\nTotal Wholesale Cost: ₹${totalBaseCost.toLocaleString()}\nSreePayanam Selling Price: ₹${computedOfferPrice.toLocaleString()}`;
+    const breakdownText = `Hotel Cost (${costing.hotelRooms} Rooms, ${nights} Nights): ₹${costing.hotelCost.toLocaleString()}\nTransport Cost: ₹${costing.transportCost.toLocaleString()}\nMeal Cost (${mealRequired || 'No'}): ₹${costing.mealCost.toLocaleString()}\nFlight/Train Tickets: ₹${flightTrainCost.toLocaleString()}\nTolls, Parking, Permits & Driver Allowance: ₹${costing.tollPermitParkingCost.toLocaleString()}\nTotal Wholesale Cost: ₹${totalBaseCost.toLocaleString()}\nSreePayanam Selling Price: ₹${computedOriginalPrice.toLocaleString()}\nCustomer Price (incl. tax/discount): ₹${computedOfferPrice.toLocaleString()}`;
 
     const formattedPreferences = formatDetailedPreferences(req.body);
 
@@ -1257,9 +1301,12 @@ router.post('/compile-draft', async (req, res) => {
     const packageData = JSON.parse(cleanJsonText);
     
     // Explicitly enforce Node-calculated prices to prevent any AI deviation
-    packageData.baseCost = totalBaseCost;
-    packageData.originalPrice = computedOriginalPrice;
-    packageData.offerPrice = computedOfferPrice;
+    packageData.costingBreakdown = costing;
+    packageData.status = 'Draft';
+    packageData.baseCost = costing.supplierCost;
+    packageData.originalPrice = costing.sellingPrice;
+    packageData.offerPrice = costing.customerPrice;
+    packageData.profitMarginPercent = costing.profitMarginPercent;
     packageData.isSpecialOffer = true;
     packageData.priceBreakdown = breakdownText;
     packageData.mealPlan = packageMealPlan;

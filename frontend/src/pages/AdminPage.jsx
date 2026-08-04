@@ -4,6 +4,7 @@ import { Trash2, Plus, LogIn, ChevronDown, ChevronUp, X, Edit } from 'lucide-rea
 import { IMAGE_PRESETS } from '../utils/imagePresets';
 import NicheTravelFields from '../components/NicheTravelFields';
 import { renderRichText } from '../utils/textFormatter';
+import { calculateCosting } from '../utils/costingEngine';
 
 const TOUR_TYPES = [
   'Family Tours','Pilgrimage Tours','Honeymoon Tours','Hill Station Tours',
@@ -24,6 +25,134 @@ const emptyForm = {
   termsAndConditions: '', cancellationPolicy: '',
   seoTitle: '', seoMetaDescription: '',
   isActive: true,
+  status: 'Approved',
+  
+  // Costing breakdown inputs
+  adultCount: 2,
+  childWithBedCount: 0,
+  childNoBedCount: 0,
+  infantCount: 0,
+  hotelRooms: '',
+  hotelExtraBeds: '',
+  hotelRoomRate: '',
+  hotelExtraBedRate: '',
+  hotelCnbRate: '',
+  
+  vehicleType: '',
+  vehicleDailyRate: '',
+  vehicleDays: '',
+  vehicleKm: '',
+  vehicleRatePerKm: '',
+  vehicleNightCharges: '',
+  vehicleCalculationMode: 'Daily',
+
+  mealPlanRate: '',
+  mealNights: '',
+
+  sightseeingCostPerPax: '',
+  activityCostPerPax: '',
+
+  guideCostPerDay: '',
+  tollPermitParkingCost: '',
+  driverAllowancePerDay: '',
+  escortCostPerDay: '',
+  insuranceCostPerPax: '',
+  miscCost: '',
+
+  bufferPercent: 3,
+  markupPercent: 25,
+  taxPercent: 5,
+  discountPercent: 0,
+  discountAmount: 0,
+  discountType: 'Percentage',
+};
+
+const flattenCostingData = (data) => {
+  const cb = data.costingBreakdown || {};
+  return {
+    status: data.status || 'Approved',
+    adultCount: cb.adultCount !== undefined && cb.adultCount !== null ? cb.adultCount : 2,
+    childWithBedCount: cb.childWithBedCount !== undefined && cb.childWithBedCount !== null ? cb.childWithBedCount : 0,
+    childNoBedCount: cb.childNoBedCount !== undefined && cb.childNoBedCount !== null ? cb.childNoBedCount : 0,
+    infantCount: cb.infantCount !== undefined && cb.infantCount !== null ? cb.infantCount : 0,
+    
+    hotelRooms: cb.hotelRooms !== undefined && cb.hotelRooms !== null ? cb.hotelRooms : '',
+    hotelExtraBeds: cb.hotelExtraBeds !== undefined && cb.hotelExtraBeds !== null ? cb.hotelExtraBeds : '',
+    hotelRoomRate: cb.hotelRoomRate !== undefined && cb.hotelRoomRate !== null ? cb.hotelRoomRate : '',
+    hotelExtraBedRate: cb.hotelExtraBedRate !== undefined && cb.hotelExtraBedRate !== null ? cb.hotelExtraBedRate : '',
+    hotelCnbRate: cb.hotelCnbRate !== undefined && cb.hotelCnbRate !== null ? cb.hotelCnbRate : '',
+    
+    vehicleType: cb.vehicleType !== undefined && cb.vehicleType !== null ? cb.vehicleType : '',
+    vehicleDailyRate: cb.vehicleDailyRate !== undefined && cb.vehicleDailyRate !== null ? cb.vehicleDailyRate : '',
+    vehicleDays: cb.vehicleDays !== undefined && cb.vehicleDays !== null ? cb.vehicleDays : '',
+    vehicleKm: cb.vehicleKm !== undefined && cb.vehicleKm !== null ? cb.vehicleKm : '',
+    vehicleRatePerKm: cb.vehicleRatePerKm !== undefined && cb.vehicleRatePerKm !== null ? cb.vehicleRatePerKm : '',
+    vehicleNightCharges: cb.vehicleNightCharges !== undefined && cb.vehicleNightCharges !== null ? cb.vehicleNightCharges : '',
+    vehicleCalculationMode: cb.vehicleCalculationMode !== undefined && cb.vehicleCalculationMode !== null ? cb.vehicleCalculationMode : 'Daily',
+    
+    mealPlanRate: cb.mealPlanRate !== undefined && cb.mealPlanRate !== null ? cb.mealPlanRate : '',
+    mealNights: cb.mealNights !== undefined && cb.mealNights !== null ? cb.mealNights : '',
+    
+    sightseeingCostPerPax: cb.sightseeingCostPerPax !== undefined && cb.sightseeingCostPerPax !== null ? cb.sightseeingCostPerPax : '',
+    activityCostPerPax: cb.activityCostPerPax !== undefined && cb.activityCostPerPax !== null ? cb.activityCostPerPax : '',
+    
+    guideCostPerDay: cb.guideCostPerDay !== undefined && cb.guideCostPerDay !== null ? cb.guideCostPerDay : '',
+    tollPermitParkingCost: cb.tollPermitParkingCost !== undefined && cb.tollPermitParkingCost !== null ? cb.tollPermitParkingCost : '',
+    driverAllowancePerDay: cb.driverAllowancePerDay !== undefined && cb.driverAllowancePerDay !== null ? cb.driverAllowancePerDay : '',
+    escortCostPerDay: cb.escortCostPerDay !== undefined && cb.escortCostPerDay !== null ? cb.escortCostPerDay : '',
+    insuranceCostPerPax: cb.insuranceCostPerPax !== undefined && cb.insuranceCostPerPax !== null ? cb.insuranceCostPerPax : '',
+    miscCost: cb.miscCost !== undefined && cb.miscCost !== null ? cb.miscCost : '',
+    
+    bufferPercent: cb.bufferPercent !== undefined && cb.bufferPercent !== null ? cb.bufferPercent : 3,
+    markupPercent: cb.markupPercent !== undefined && cb.markupPercent !== null ? cb.markupPercent : 25,
+    taxPercent: cb.taxPercent !== undefined && cb.taxPercent !== null ? cb.taxPercent : 5,
+    discountPercent: cb.discountPercent !== undefined && cb.discountPercent !== null ? cb.discountPercent : 0,
+    discountAmount: cb.discountAmount !== undefined && cb.discountAmount !== null ? cb.discountAmount : 0,
+    discountType: cb.discountType !== undefined && cb.discountType !== null ? cb.discountType : 'Percentage',
+  };
+};
+
+const recalculateCost = (currentForm) => {
+  const params = {
+    adultCount: Number(currentForm.adultCount) || 2,
+    childWithBedCount: Number(currentForm.childWithBedCount) || 0,
+    childNoBedCount: Number(currentForm.childNoBedCount) || 0,
+    infantCount: Number(currentForm.infantCount) || 0,
+    durationDays: Number(currentForm.durationDays) || 1,
+    durationNights: Number(currentForm.durationNights) || (Number(currentForm.durationDays) - 1 || 1),
+    hotelCategory: currentForm.hotelCategory || '3 Star',
+    hotelRooms: currentForm.hotelRooms,
+    hotelExtraBeds: currentForm.hotelExtraBeds,
+    hotelRoomRate: currentForm.hotelRoomRate,
+    hotelExtraBedRate: currentForm.hotelExtraBedRate,
+    hotelCnbRate: currentForm.hotelCnbRate,
+    vehicleType: currentForm.vehicleType,
+    vehicleDailyRate: currentForm.vehicleDailyRate,
+    vehicleDays: currentForm.vehicleDays,
+    vehicleCalculationMode: currentForm.vehicleCalculationMode,
+    vehicleKm: currentForm.vehicleKm,
+    vehicleRatePerKm: currentForm.vehicleRatePerKm,
+    vehicleNightCharges: currentForm.vehicleNightCharges,
+    mealPlan: currentForm.mealPlan || 'MAP',
+    mealPlanRate: currentForm.mealPlanRate,
+    mealNights: currentForm.mealNights,
+    sightseeingCostPerPax: currentForm.sightseeingCostPerPax,
+    activityCostPerPax: currentForm.activityCostPerPax,
+    guideCostPerDay: currentForm.guideCostPerDay,
+    tollPermitParkingCost: currentForm.tollPermitParkingCost,
+    driverAllowancePerDay: currentForm.driverAllowancePerDay,
+    escortCostPerDay: currentForm.escortCostPerDay,
+    insuranceCostPerPax: currentForm.insuranceCostPerPax,
+    miscCost: currentForm.miscCost,
+    bufferPercent: currentForm.bufferPercent,
+    markupPercent: currentForm.markupPercent,
+    taxPercent: currentForm.taxPercent,
+    discountPercent: currentForm.discountPercent,
+    discountAmount: currentForm.discountAmount,
+    discountType: currentForm.discountType,
+  };
+  
+  return calculateCosting(params);
 };
 
 const emptyLeadForm = {
@@ -650,7 +779,8 @@ const AdminPage = () => {
         cancellationPolicy: data.cancellationPolicy || '',
         seoTitle: data.seoTitle || '',
         seoMetaDescription: data.seoMetaDescription || '',
-        isActive: true
+        isActive: true,
+        ...flattenCostingData(data)
       });
       
       setSuccess('🪄 AI drafted package successfully! Form below is populated with your selected choices.');
@@ -716,7 +846,8 @@ const AdminPage = () => {
         cancellationPolicy: data.cancellationPolicy || '',
         seoTitle: data.seoTitle || '',
         seoMetaDescription: data.seoMetaDescription || '',
-        isActive: true
+        isActive: true,
+        ...flattenCostingData(data)
       });
       
       setSuccess('🪄 AI generated the package successfully! Review the sections below and click Create Package.');
@@ -762,7 +893,9 @@ const AdminPage = () => {
 
   const fetchPackages = async () => {
     try {
-      const res = await fetch('/api/packages');
+      const res = await fetch('/api/packages', {
+        headers: { 'x-admin-password': password }
+      });
       const data = await res.json();
       setPackages(Array.isArray(data) ? data : []);
     } catch (err) { console.error(err); }
@@ -919,6 +1052,24 @@ const AdminPage = () => {
     const { name, value, type, checked } = e.target;
     setFormData(f => {
       let updated = { ...f, [name]: type === 'checkbox' ? checked : value };
+      
+      const costingFields = [
+        'adultCount', 'childWithBedCount', 'childNoBedCount', 'infantCount',
+        'hotelRoomRate', 'hotelExtraBeds', 'hotelRooms', 'hotelExtraBedRate', 'hotelCnbRate',
+        'vehicleType', 'vehicleDailyRate', 'vehicleDays', 'vehicleKm', 'vehicleRatePerKm', 'vehicleNightCharges', 'vehicleCalculationMode',
+        'mealPlanRate', 'mealNights', 'sightseeingCostPerPax', 'activityCostPerPax',
+        'guideCostPerDay', 'tollPermitParkingCost', 'driverAllowancePerDay', 'escortCostPerDay', 'insuranceCostPerPax', 'miscCost',
+        'bufferPercent', 'markupPercent', 'taxPercent', 'discountPercent', 'discountAmount', 'discountType', 'durationDays', 'durationNights'
+      ];
+      
+      if (costingFields.includes(name)) {
+        const costing = recalculateCost(updated);
+        updated.baseCost = costing.supplierCost;
+        updated.originalPrice = costing.sellingPrice;
+        updated.offerPrice = costing.customerPrice;
+        updated.profitMarginPercent = costing.profitMarginPercent;
+      }
+      
       if (name === 'tourType') {
         const currentPresets = IMAGE_PRESETS[f.tourType] || [];
         const newPresets = IMAGE_PRESETS[value] || [];
@@ -994,6 +1145,7 @@ const AdminPage = () => {
       seoTitle: pkg.seoTitle || '',
       seoMetaDescription: pkg.seoMetaDescription || '',
       isActive: pkg.isActive !== undefined ? pkg.isActive : true,
+      ...flattenCostingData(pkg)
     });
     setOpenSection('basic');
     setSuccess(`✍️ Editing package "${pkg.title}". Make changes and click 'Update Package'.`);
@@ -1007,10 +1159,75 @@ const AdminPage = () => {
     setError('');
   };
 
+  const handlePublishDraft = async (pkg) => {
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/packages/${pkg.packageId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({
+          ...pkg,
+          status: 'Approved'
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Failed to approve draft.');
+      }
+      setSuccess(`🟢 Approved and published "${pkg.title}"!`);
+      fetchPackages();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true); setError(''); setSuccess('');
     try {
+      const costingParams = {
+        adultCount: Number(formData.adultCount) || 2,
+        childWithBedCount: Number(formData.childWithBedCount) || 0,
+        childNoBedCount: Number(formData.childNoBedCount) || 0,
+        infantCount: Number(formData.infantCount) || 0,
+        durationDays: Number(formData.durationDays) || 1,
+        durationNights: Number(formData.durationNights) || (Number(formData.durationDays) - 1 || 1),
+        hotelCategory: formData.hotelCategory || '3 Star',
+        hotelRooms: formData.hotelRooms,
+        hotelExtraBeds: formData.hotelExtraBeds,
+        hotelRoomRate: formData.hotelRoomRate,
+        hotelExtraBedRate: formData.hotelExtraBedRate,
+        hotelCnbRate: formData.hotelCnbRate,
+        vehicleType: formData.vehicleType,
+        vehicleDailyRate: formData.vehicleDailyRate,
+        vehicleDays: formData.vehicleDays,
+        vehicleCalculationMode: formData.vehicleCalculationMode,
+        vehicleKm: formData.vehicleKm,
+        vehicleRatePerKm: formData.vehicleRatePerKm,
+        vehicleNightCharges: formData.vehicleNightCharges,
+        mealPlan: formData.mealPlan || 'MAP',
+        mealPlanRate: formData.mealPlanRate,
+        mealNights: formData.mealNights,
+        sightseeingCostPerPax: formData.sightseeingCostPerPax,
+        activityCostPerPax: formData.activityCostPerPax,
+        guideCostPerDay: formData.guideCostPerDay,
+        tollPermitParkingCost: formData.tollPermitParkingCost,
+        driverAllowancePerDay: formData.driverAllowancePerDay,
+        escortCostPerDay: formData.escortCostPerDay,
+        insuranceCostPerPax: formData.insuranceCostPerPax,
+        miscCost: formData.miscCost,
+        bufferPercent: formData.bufferPercent,
+        markupPercent: formData.markupPercent,
+        taxPercent: formData.taxPercent,
+        discountPercent: formData.discountPercent,
+        discountAmount: formData.discountAmount,
+        discountType: formData.discountType,
+      };
+
+      const calculated = calculateCosting(costingParams);
+
       const payload = {
         ...formData,
         durationDays: Number(formData.durationDays),
@@ -1021,6 +1238,8 @@ const AdminPage = () => {
         inclusions: formData.inclusions.split('\n').map(s => s.trim()).filter(Boolean),
         exclusions: formData.exclusions.split('\n').map(s => s.trim()).filter(Boolean),
         optionalAddons: formData.optionalAddons.split('\n').map(s => s.trim()).filter(Boolean),
+        status: formData.status || 'Approved',
+        costingBreakdown: calculated
       };
       const url = editingId ? `/api/packages/${editingId}` : '/api/packages';
       const method = editingId ? 'PUT' : 'POST';
@@ -2074,6 +2293,380 @@ const AdminPage = () => {
                   </Row>
                 </Section>
 
+                {/* COSTING PANEL */}
+                <Section id="costing" title="⚙️ AI Costing Engine Panel" openSection={openSection} setOpenSection={setOpenSection}>
+                  {/* Status Dropdown */}
+                  <div style={{ background: 'rgba(255, 193, 7, 0.05)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(255, 193, 7, 0.2)', marginBottom: '24px' }}>
+                    <h4 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '600', color: '#b38600', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span>Status & Approval Workflow</span>
+                    </h4>
+                    <Row>
+                      <Field label="Package Status">
+                        <select name="status" className="input-field" value={formData.status} onChange={handleChange} style={{ borderColor: formData.status === 'Draft' ? '#ffc107' : '#28a745', fontWeight: 'bold' }}>
+                          <option value="Draft">🟡 Draft – Awaiting Admin Approval</option>
+                          <option value="Approved">🟢 Approved – Publish & Show Publicly</option>
+                        </select>
+                      </Field>
+                      <Field label="Package Visibility">
+                        <select name="isActive" className="input-field" value={formData.isActive ? "true" : "false"} onChange={(e) => handleChange({ target: { name: 'isActive', value: e.target.value === 'true' } })}>
+                          <option value="true">Active (Visible)</option>
+                          <option value="false">Inactive (Hidden)</option>
+                        </select>
+                      </Field>
+                    </Row>
+                  </div>
+
+                  {/* Pax & Duration details */}
+                  <h4 style={{ fontSize: '15px', fontWeight: '600', margin: '16px 0 8px 0', borderBottom: '1px solid #eee', paddingBottom: '4px' }}>👥 Passenger count & Days</h4>
+                  <Row>
+                    <Field label="Adults count">
+                      <input type="number" name="adultCount" className="input-field" min="1" value={formData.adultCount} onChange={handleChange} />
+                    </Field>
+                    <Field label="Children count (With Extra Bed)">
+                      <input type="number" name="childWithBedCount" className="input-field" min="0" value={formData.childWithBedCount} onChange={handleChange} />
+                    </Field>
+                    <Field label="Children count (No Bed)">
+                      <input type="number" name="childNoBedCount" className="input-field" min="0" value={formData.childNoBedCount} onChange={handleChange} />
+                    </Field>
+                    <Field label="Infants count">
+                      <input type="number" name="infantCount" className="input-field" min="0" value={formData.infantCount} onChange={handleChange} />
+                    </Field>
+                  </Row>
+
+                  {/* Hotels Subsection */}
+                  <h4 style={{ fontSize: '15px', fontWeight: '600', margin: '20px 0 8px 0', borderBottom: '1px solid #eee', paddingBottom: '4px' }}>🏨 Hotels & Accommodation</h4>
+                  <Row>
+                    <Field label="Number of Rooms">
+                      <input type="number" name="hotelRooms" className="input-field" placeholder="Auto allocated" value={formData.hotelRooms} onChange={handleChange} />
+                    </Field>
+                    <Field label="Extra Beds count">
+                      <input type="number" name="hotelExtraBeds" className="input-field" placeholder="Auto allocated" value={formData.hotelExtraBeds} onChange={handleChange} />
+                    </Field>
+                    <Field label="Room Rate per night (₹)">
+                      <input type="number" name="hotelRoomRate" className="input-field" placeholder="Auto allocated" value={formData.hotelRoomRate} onChange={handleChange} />
+                    </Field>
+                  </Row>
+                  <Row>
+                    <Field label="Extra Bed Rate per night (₹)">
+                      <input type="number" name="hotelExtraBedRate" className="input-field" placeholder="Auto allocated" value={formData.hotelExtraBedRate} onChange={handleChange} />
+                    </Field>
+                    <Field label="Child No Bed Rate per night (₹)">
+                      <input type="number" name="hotelCnbRate" className="input-field" placeholder="Auto allocated" value={formData.hotelCnbRate} onChange={handleChange} />
+                    </Field>
+                  </Row>
+
+                  {/* Transport Subsection */}
+                  <h4 style={{ fontSize: '15px', fontWeight: '600', margin: '20px 0 8px 0', borderBottom: '1px solid #eee', paddingBottom: '4px' }}>🚗 Vehicle & Transport</h4>
+                  <Row>
+                    <Field label="Vehicle Type">
+                      <input name="vehicleType" className="input-field" placeholder="e.g. Sedan, Innova, Tempo Traveller" value={formData.vehicleType} onChange={handleChange} />
+                    </Field>
+                    <Field label="Calculation Mode">
+                      <select name="vehicleCalculationMode" className="input-field" value={formData.vehicleCalculationMode} onChange={handleChange}>
+                        <option value="Daily">Daily Rental Rate</option>
+                        <option value="KM">Per Kilometer (KM) Rate</option>
+                      </select>
+                    </Field>
+                  </Row>
+                  {formData.vehicleCalculationMode === 'Daily' ? (
+                    <Row>
+                      <Field label="Daily Vehicle Rate (₹)">
+                        <input type="number" name="vehicleDailyRate" className="input-field" placeholder="Auto allocated" value={formData.vehicleDailyRate} onChange={handleChange} />
+                      </Field>
+                      <Field label="Vehicle Days count">
+                        <input type="number" name="vehicleDays" className="input-field" placeholder="Auto allocated" value={formData.vehicleDays} onChange={handleChange} />
+                      </Field>
+                    </Row>
+                  ) : (
+                    <Row>
+                      <Field label="Estimated Kilometers (KM)">
+                        <input type="number" name="vehicleKm" className="input-field" placeholder="e.g. 500" value={formData.vehicleKm} onChange={handleChange} />
+                      </Field>
+                      <Field label="Rate per KM (₹)">
+                        <input type="number" name="vehicleRatePerKm" className="input-field" placeholder="e.g. 15" value={formData.vehicleRatePerKm} onChange={handleChange} />
+                      </Field>
+                      <Field label="Driver Night Charges / Stay (₹)">
+                        <input type="number" name="vehicleNightCharges" className="input-field" placeholder="e.g. 1000" value={formData.vehicleNightCharges} onChange={handleChange} />
+                      </Field>
+                    </Row>
+                  )}
+
+                  {/* Meals Subsection */}
+                  <h4 style={{ fontSize: '15px', fontWeight: '600', margin: '20px 0 8px 0', borderBottom: '1px solid #eee', paddingBottom: '4px' }}>🍽️ Meal Plan Costs</h4>
+                  <Row>
+                    <Field label="Meal Plan Cost per PAX per Night (₹)">
+                      <input type="number" name="mealPlanRate" className="input-field" placeholder="Auto allocated" value={formData.mealPlanRate} onChange={handleChange} />
+                    </Field>
+                    <Field label="Number of Meal Nights">
+                      <input type="number" name="mealNights" className="input-field" placeholder="Auto allocated" value={formData.mealNights} onChange={handleChange} />
+                    </Field>
+                  </Row>
+
+                  {/* Sightseeing, Activities & Guides Subsection */}
+                  <h4 style={{ fontSize: '15px', fontWeight: '600', margin: '20px 0 8px 0', borderBottom: '1px solid #eee', paddingBottom: '4px' }}>🎟️ Sightseeing, Activities & Guides</h4>
+                  <Row>
+                    <Field label="Sightseeing Cost per PAX (₹)">
+                      <input type="number" name="sightseeingCostPerPax" className="input-field" placeholder="500" value={formData.sightseeingCostPerPax} onChange={handleChange} />
+                    </Field>
+                    <Field label="Activity Cost per PAX (₹)">
+                      <input type="number" name="activityCostPerPax" className="input-field" placeholder="500" value={formData.activityCostPerPax} onChange={handleChange} />
+                    </Field>
+                  </Row>
+                  <Row>
+                    <Field label="Guide Cost per Day (₹)">
+                      <input type="number" name="guideCostPerDay" className="input-field" placeholder="0" value={formData.guideCostPerDay} onChange={handleChange} />
+                    </Field>
+                    <Field label="Toll, Permit, Parking Total (₹)">
+                      <input type="number" name="tollPermitParkingCost" className="input-field" placeholder="1500" value={formData.tollPermitParkingCost} onChange={handleChange} />
+                    </Field>
+                  </Row>
+                  <Row>
+                    <Field label="Driver Allowance per Day (₹)">
+                      <input type="number" name="driverAllowancePerDay" className="input-field" placeholder="500" value={formData.driverAllowancePerDay} onChange={handleChange} />
+                    </Field>
+                    <Field label="Escort Cost per Day (₹)">
+                      <input type="number" name="escortCostPerDay" className="input-field" placeholder="0" value={formData.escortCostPerDay} onChange={handleChange} />
+                    </Field>
+                    <Field label="Travel Insurance per PAX (₹)">
+                      <input type="number" name="insuranceCostPerPax" className="input-field" placeholder="200" value={formData.insuranceCostPerPax} onChange={handleChange} />
+                    </Field>
+                  </Row>
+
+                  {/* Operational Overhead, Markup, Taxes & Discounts */}
+                  <h4 style={{ fontSize: '15px', fontWeight: '600', margin: '20px 0 8px 0', borderBottom: '1px solid #eee', paddingBottom: '4px' }}>🛡️ Operational Overhead & Profit Control</h4>
+                  <Row>
+                    <Field label="Operational Buffer (%)">
+                      <input type="number" name="bufferPercent" className="input-field" min="0" max="100" value={formData.bufferPercent} onChange={handleChange} />
+                    </Field>
+                    <Field label="SreePayanam Markup (10-35%)">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
+                        <input 
+                          type="range" 
+                          name="markupPercent" 
+                          min="10" 
+                          max="35" 
+                          value={formData.markupPercent || 25} 
+                          onChange={handleChange} 
+                          style={{ flex: 1, height: '8px', borderRadius: '4px', accentColor: 'var(--primary)', cursor: 'pointer' }}
+                        />
+                        <span style={{ fontWeight: 'bold', fontSize: '0.95rem', minWidth: '40px', color: 'var(--primary)' }}>
+                          {formData.markupPercent || 25}%
+                        </span>
+                      </div>
+                    </Field>
+                    <Field label="Tax / GST (%)">
+                      <input type="number" name="taxPercent" className="input-field" min="0" max="100" value={formData.taxPercent} onChange={handleChange} />
+                    </Field>
+                  </Row>
+                  <Row>
+                    <Field label="Discount Type">
+                      <select name="discountType" className="input-field" value={formData.discountType} onChange={handleChange}>
+                        <option value="Percentage">Percentage (%)</option>
+                        <option value="Fixed">Fixed Amount (₹)</option>
+                      </select>
+                    </Field>
+                    {formData.discountType === 'Percentage' ? (
+                      <Field label="Discount Percent (%)">
+                        <input type="number" name="discountPercent" className="input-field" min="0" max="100" value={formData.discountPercent} onChange={handleChange} />
+                      </Field>
+                    ) : (
+                      <Field label="Discount Amount (₹)">
+                        <input type="number" name="discountAmount" className="input-field" min="0" value={formData.discountAmount} onChange={handleChange} />
+                      </Field>
+                    )}
+                    <Field label="Miscellaneous Costs (₹)">
+                      <input type="number" name="miscCost" className="input-field" placeholder="0" value={formData.miscCost} onChange={handleChange} />
+                    </Field>
+                  </Row>
+
+                  {/* Real-time Profit Tracking summary */}
+                  <div style={{ background: '#ffffff', padding: '24px', borderRadius: '16px', marginTop: '28px', border: '1px solid #e2e8f0', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05)' }}>
+                    <h5 style={{ margin: '0 0 16px 0', fontSize: '1.05rem', fontWeight: 'bold', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '1.2rem' }}>📊</span> Costing Engine Premium Price Breakdown
+                    </h5>
+                    
+                    {(() => {
+                      const cost = recalculateCost(formData);
+                      return (
+                        <div style={{ overflowX: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem', minWidth: '600px' }}>
+                            <thead>
+                              <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                                <th style={{ textAlign: 'left', padding: '12px 16px', fontWeight: '700', color: '#475569' }}>Pricing Component</th>
+                                <th style={{ textAlign: 'left', padding: '12px 16px', fontWeight: '700', color: '#475569' }}>Rate / Formula</th>
+                                <th style={{ textAlign: 'right', padding: '12px 16px', fontWeight: '700', color: '#475569' }}>Amount (₹)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                <td style={{ padding: '12px 16px', fontWeight: '500', color: '#1e293b' }}>
+                                  🏨 Hotel Cost
+                                </td>
+                                <td style={{ padding: '12px 16px', color: '#64748b' }}>
+                                  {cost.hotelRooms} Rooms x ₹{cost.hotelRoomRate}/nt x {cost.hotelNights} nts + Extras
+                                </td>
+                                <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '600', color: '#1e293b' }}>
+                                  ₹{cost.hotelCost.toLocaleString()}
+                                </td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                <td style={{ padding: '12px 16px', fontWeight: '500', color: '#1e293b' }}>
+                                  🚗 Transport Cost ({cost.vehicleType || 'None'})
+                                </td>
+                                <td style={{ padding: '12px 16px', color: '#64748b' }}>
+                                  {cost.vehicleCalculationMode === 'Daily' 
+                                    ? `₹${cost.vehicleDailyRate}/day x ${cost.vehicleDays} days`
+                                    : `${cost.vehicleKm} KM x ₹${cost.vehicleRatePerKm}/KM + ₹${cost.vehicleNightCharges} night charges`
+                                  }
+                                </td>
+                                <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '600', color: '#1e293b' }}>
+                                  ₹{cost.transportCost.toLocaleString()}
+                                </td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                <td style={{ padding: '12px 16px', fontWeight: '500', color: '#1e293b' }}>
+                                  🍽️ Meal Cost
+                                </td>
+                                <td style={{ padding: '12px 16px', color: '#64748b' }}>
+                                  ₹{cost.mealPlanRate}/pax x {cost.adultCount + cost.childCount} pax x {cost.mealNights} nts
+                                </td>
+                                <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '600', color: '#1e293b' }}>
+                                  ₹{cost.mealCost.toLocaleString()}
+                                </td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                <td style={{ padding: '12px 16px', fontWeight: '500', color: '#1e293b' }}>
+                                  🎟️ Sightseeing & Activities
+                                </td>
+                                <td style={{ padding: '12px 16px', color: '#64748b' }}>
+                                  ₹{cost.sightseeingCostPerPax} (Sightseeing) + ₹{cost.activityCostPerPax} (Activities) per pax
+                                </td>
+                                <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '600', color: '#1e293b' }}>
+                                  ₹{(cost.sightseeingCost + cost.activityCost).toLocaleString()}
+                                </td>
+                              </tr>
+                              <tr style={{ borderBottom: '1.5px solid #e2e8f0' }}>
+                                <td style={{ padding: '12px 16px', fontWeight: '500', color: '#1e293b' }}>
+                                  ⚙️ Other Supplier Costs
+                                </td>
+                                <td style={{ padding: '12px 16px', color: '#64748b' }}>
+                                  Guide, Driver Allowances, Toll/Permit/Parking, Insurance, Misc
+                                </td>
+                                <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '600', color: '#1e293b' }}>
+                                  ₹{(cost.guideCost + cost.tollPermitParkingCost + cost.driverAllowance + cost.escortCost + cost.insuranceCost + cost.miscCost).toLocaleString()}
+                                </td>
+                              </tr>
+                              
+                              {/* Summary calculations */}
+                              <tr style={{ background: '#fcfcfd', borderBottom: '1px solid #f1f5f9' }}>
+                                <td style={{ padding: '12px 16px', fontWeight: '600', color: '#ef4444' }}>
+                                  💰 Total Supplier Cost
+                                </td>
+                                <td style={{ padding: '12px 16px', color: '#64748b' }}>
+                                  Sum of all supplier rates
+                                </td>
+                                <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '700', color: '#ef4444' }}>
+                                  ₹{cost.supplierCost.toLocaleString()}
+                                </td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                <td style={{ padding: '12px 16px', fontWeight: '500', color: '#475569' }}>
+                                  🛡️ Operational Buffer
+                                </td>
+                                <td style={{ padding: '12px 16px', color: '#64748b' }}>
+                                  {cost.bufferPercent}% of Supplier Cost
+                                </td>
+                                <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '600', color: '#475569' }}>
+                                  ₹{cost.bufferAmount.toLocaleString()}
+                                </td>
+                              </tr>
+                              <tr style={{ background: '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
+                                <td style={{ padding: '12px 16px', fontWeight: '600', color: '#0f172a' }}>
+                                  Landed Cost
+                                </td>
+                                <td style={{ padding: '12px 16px', color: '#64748b' }}>
+                                  Supplier Cost + Buffer
+                                </td>
+                                <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '700', color: '#0f172a' }}>
+                                  ₹{cost.landedCost.toLocaleString()}
+                                </td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                <td style={{ padding: '12px 16px', fontWeight: '500', color: '#10b981' }}>
+                                  Markup Amount
+                                </td>
+                                <td style={{ padding: '12px 16px', color: '#64748b' }}>
+                                  {cost.markupPercent}% of Landed Cost
+                                </td>
+                                <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '600', color: '#10b981' }}>
+                                  ₹{cost.markupAmount.toLocaleString()}
+                                </td>
+                              </tr>
+                              <tr style={{ background: '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
+                                <td style={{ padding: '12px 16px', fontWeight: '600', color: '#0f172a' }}>
+                                  Selling Price (Subtotal)
+                                </td>
+                                <td style={{ padding: '12px 16px', color: '#64748b' }}>
+                                  Landed Cost + Markup
+                                </td>
+                                <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '700', color: '#0f172a' }}>
+                                  ₹{cost.sellingPrice.toLocaleString()}
+                                </td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                <td style={{ padding: '12px 16px', fontWeight: '500', color: '#475569' }}>
+                                  🏛️ Taxes / GST
+                                </td>
+                                <td style={{ padding: '12px 16px', color: '#64748b' }}>
+                                  {cost.taxPercent}% of Selling Price
+                                </td>
+                                <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '600', color: '#475569' }}>
+                                  ₹{cost.taxAmount.toLocaleString()}
+                                </td>
+                              </tr>
+                              {cost.discountAmount > 0 && (
+                                <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                  <td style={{ padding: '12px 16px', fontWeight: '500', color: '#f59e0b' }}>
+                                    🏷️ Applied Discount
+                                  </td>
+                                  <td style={{ padding: '12px 16px', color: '#64748b' }}>
+                                    {cost.discountType === 'Percentage' ? `${cost.discountPercent}% off` : 'Fixed Amount'}
+                                  </td>
+                                  <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '600', color: '#f59e0b' }}>
+                                    -₹{cost.discountAmount.toLocaleString()}
+                                  </td>
+                                </tr>
+                              )}
+                              <tr style={{ background: '#eff6ff', borderBottom: '2px solid #3b82f6' }}>
+                                <td style={{ padding: '14px 16px', fontWeight: '800', color: '#1d4ed8', fontSize: '0.95rem' }}>
+                                  💳 Customer Selling Price
+                                </td>
+                                <td style={{ padding: '14px 16px', color: '#1d4ed8', fontWeight: '600' }}>
+                                  Final Price (Selling Price + Taxes - Discount)
+                                </td>
+                                <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: '900', color: '#1d4ed8', fontSize: '1.05rem' }}>
+                                  ₹{cost.customerPrice.toLocaleString()}
+                                </td>
+                              </tr>
+                              <tr style={{ background: '#f0fdf4', borderBottom: '1.5px solid #22c55e' }}>
+                                <td style={{ padding: '12px 16px', fontWeight: '800', color: '#15803d' }}>
+                                  📊 Net Profit / Margin
+                                </td>
+                                <td style={{ padding: '12px 16px', color: '#15803d', fontWeight: '600' }}>
+                                  Net Profit Margin: {cost.profitMarginPercent}%
+                                </td>
+                                <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '800', color: '#15803d' }}>
+                                  ₹{cost.netProfit.toLocaleString()} ({cost.profitMarginPercent}%)
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </Section>
+
                 {/* TERMS */}
                 <Section id="terms" title="📄 Terms, Conditions & Policies" openSection={openSection} setOpenSection={setOpenSection}>
                   <Field label="Terms & Conditions">
@@ -2132,7 +2725,18 @@ const AdminPage = () => {
                           onError={e => { e.target.src = 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=100&q=80'; }}
                           style={{ width: 50, height: 50, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--dark)', marginBottom: 4 }}>{pkg.title}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
+                            <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--dark)' }}>{pkg.title}</div>
+                            {pkg.status === 'Draft' ? (
+                              <span style={{ fontSize: '0.68rem', fontWeight: 800, padding: '2px 6px', borderRadius: '4px', background: '#fffbeb', color: '#b45309', border: '1px solid #fef3c7' }}>
+                                Draft
+                              </span>
+                            ) : (
+                              <span style={{ fontSize: '0.68rem', fontWeight: 800, padding: '2px 6px', borderRadius: '4px', background: '#f0fdf4', color: '#15803d', border: '1px solid #dcfce7' }}>
+                                Approved
+                              </span>
+                            )}
+                          </div>
                           <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                             {pkg.packageCategory} • {pkg.tourType}
                           </div>
@@ -2144,23 +2748,35 @@ const AdminPage = () => {
                             {' '}<span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>• {pkg.durationDays}D/{pkg.durationNights}N</span>
                           </div>
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          <button
-                            type="button"
-                            onClick={() => handleEditClick(pkg)}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', padding: 6 }}
-                            title="Edit package details"
-                          >
-                            <Edit size={18} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(pkg.packageId)}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 6 }}
-                            title="Delete package"
-                          >
-                            <Trash2 size={18} />
-                          </button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
+                          {pkg.status === 'Draft' && (
+                            <button
+                              type="button"
+                              onClick={() => handlePublishDraft(pkg)}
+                              style={{ background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', padding: '4px 8px', fontSize: '0.72rem', fontWeight: 'bold' }}
+                              title="Approve & Publish Draft"
+                            >
+                              Publish
+                            </button>
+                          )}
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button
+                              type="button"
+                              onClick={() => handleEditClick(pkg)}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', padding: 6 }}
+                              title="Edit package details"
+                            >
+                              <Edit size={18} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(pkg.packageId)}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 6 }}
+                              title="Delete package"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
