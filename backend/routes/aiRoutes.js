@@ -4,11 +4,20 @@ const { OpenAI } = require('openai');
 const multer = require('multer');
 const { PDFParse } = require('pdf-parse');
 const Package = require('../models/Package');
+const { checkAdmin } = require('../middleware/auth');
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+  limits: { fileSize: 10 * 1024 * 1024, files: 1, fields: 12 }, // 10MB limit
+  fileFilter: (req, file, callback) => {
+    if (file.mimetype !== 'application/pdf') return callback(new Error('Only PDF brochures are supported.'));
+    return callback(null, true);
+  }
 });
+
+const cleanAiText = (value, maxLength = 1600) => typeof value === 'string'
+  ? value.replace(/[<>\u0000-\u001F]/g, '').trim().slice(0, maxLength)
+  : '';
 
 const formatDetailedPreferences = (body) => {
   const excludeKeys = [
@@ -29,7 +38,9 @@ const formatDetailedPreferences = (body) => {
         .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
         .join(' ');
       
-      const formattedVal = Array.isArray(value) ? value.join(', ') : value;
+      const formattedVal = Array.isArray(value)
+        ? value.slice(0, 30).map(item => cleanAiText(String(item), 180)).join(', ')
+        : cleanAiText(String(value), 400);
       formatted += `- ${formattedKey}: ${formattedVal}\n`;
     }
   }
@@ -261,7 +272,7 @@ const getRandomPresetImage = (tourType) => {
 // Helper to initialize OpenAI client
 const getOpenAIClient = (res) => {
   if (!process.env.OPENAI_API_KEY) {
-    res.status(500).json({ message: 'OpenAI API key is not configured in .env' });
+    res.status(503).json({ message: 'The travel assistant is temporarily unavailable.' });
     return null;
   }
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -270,7 +281,8 @@ const getOpenAIClient = (res) => {
 // 1. AI Customized Tour Assistant & Planner (B2C Customers)
 router.post('/plan', async (req, res) => {
   try {
-    const { prompt } = req.body;
+    const prompt = cleanAiText(req.body?.prompt, 1800);
+    if (!prompt) return res.status(400).json({ message: 'Tell us a little about the trip you want to plan.' });
     const openai = getOpenAIClient(res);
     if (!openai) return;
 
@@ -314,7 +326,7 @@ router.post('/plan', async (req, res) => {
 // 1.5 AI Structured Custom Tour Planner (B2C Customers with detailed preferences)
 router.post('/plan-structured', async (req, res) => {
   try {
-    const preferences = req.body;
+    const preferences = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
     const {
       destination,
       startingCity,
@@ -342,7 +354,7 @@ router.post('/plan-structured', async (req, res) => {
           .split('_')
           .map(word => word.charAt(0).toUpperCase() + word.slice(1))
           .join(' ');
-        formattedPreferences += `- ${formattedKey}: ${value}\n`;
+        formattedPreferences += `- ${formattedKey}: ${Array.isArray(value) ? value.slice(0, 30).map(item => cleanAiText(String(item), 180)).join(', ') : cleanAiText(String(value), 400)}\n`;
       }
     }
 
@@ -422,7 +434,7 @@ router.post('/plan-structured', async (req, res) => {
 });
 
 // 1.6 AI PDF Brochure Parser & Package Creator (Admin only)
-router.post('/parse-brochure', upload.single('brochure'), async (req, res) => {
+router.post('/parse-brochure', checkAdmin, upload.single('brochure'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No PDF brochure file uploaded.' });
@@ -656,7 +668,7 @@ JSON Schema to conform to:
 });
 
 // 2. AI Package Content Generator (For Admin Dashboard)
-router.post('/generate-package', async (req, res) => {
+router.post('/generate-package', checkAdmin, async (req, res) => {
   try {
     const { prompt, destination, durationDays, durationNights, tourType, packageCategory, mealRequired, suggestTemples } = req.body;
     const openai = getOpenAIClient(res);
@@ -787,7 +799,7 @@ router.post('/generate-package', async (req, res) => {
     const hotelCategory = req.body.hotelCategory || '3 Star';
     const vehicleType = req.body.vehicleType || req.body.carType || null;
     const mealPlan = req.body.mealRequired || 'MAP';
-    const markupPercent = Number(req.body.markupPercent) || 25;
+    const markupPercent = Number(req.body.markupPercent) || 30;
     const bufferPercent = Number(req.body.bufferPercent) || 3;
 
     const costingParams = {
@@ -836,7 +848,14 @@ router.post('/generate-package', async (req, res) => {
 // 3. Customer Support AI Chatbot (Interactive widget)
 router.post('/chat', async (req, res) => {
   try {
-    const { messages } = req.body;
+    const safeMessages = Array.isArray(req.body?.messages)
+      ? req.body.messages
+        .slice(-20)
+        .filter(message => message && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
+        .map(message => ({ role: message.role, content: cleanAiText(message.content, 1200) }))
+        .filter(message => message.content)
+      : [];
+    if (!safeMessages.length) return res.status(400).json({ message: 'Send a message to start the conversation.' });
     const openai = getOpenAIClient(res);
     if (!openai) return;
 
@@ -868,19 +887,19 @@ router.post('/chat', async (req, res) => {
       model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
-        ...messages
+        ...safeMessages
       ],
     });
 
     res.json({ response: completion.choices[0].message.content });
   } catch (error) {
     console.error('AI Chat Error:', error);
-    res.status(500).json({ message: 'Error processing your chat' });
+    res.status(500).json({ message: 'The travel assistant could not respond right now.' });
   }
 });
 
 // 4. CRM AI Lead Scoring (For CRM Panel)
-router.post('/score-lead', async (req, res) => {
+router.post('/score-lead', checkAdmin, async (req, res) => {
   try {
     const { enquiry } = req.body;
     const openai = getOpenAIClient(res);
@@ -1080,7 +1099,7 @@ router.post('/suggest-options', async (req, res) => {
 });
 
 // 6. Compile Draft from Chosen Options
-router.post('/compile-draft', async (req, res) => {
+router.post('/compile-draft', checkAdmin, async (req, res) => {
   try {
     const {
       destination,
@@ -1161,7 +1180,7 @@ router.post('/compile-draft', async (req, res) => {
       vehicleType: selectedCar ? selectedCar.type : null,
       vehicleDailyRate,
       miscCost: flightTrainCost,
-      markupPercent: Number(req.body.markupPercent) || 25,
+      markupPercent: Number(req.body.markupPercent) || 30,
       bufferPercent: Number(req.body.bufferPercent) || 3
     };
 

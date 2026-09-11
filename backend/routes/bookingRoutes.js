@@ -1,13 +1,39 @@
 const express = require('express');
+const crypto = require('crypto');
+const mongoose = require('mongoose');
 const router = express.Router();
 const Booking = require('../models/Booking');
 const Package = require('../models/Package');
 const { checkAdmin } = require('../middleware/auth');
 
+// Card and net-banking flows are intentionally disabled until a PCI-compliant
+// payment provider is integrated. The app must not simulate a payment gateway.
+const PAYMENT_METHODS = new Set(['UPI', 'Bank Transfer']);
+const BOOKING_STATUSES = new Set(['Pending', 'Confirmed', 'Completed', 'Cancelled']);
+const cleanText = (value, maxLength) => typeof value === 'string'
+  ? value.replace(/[<>\u0000-\u001F]/g, '').trim().slice(0, maxLength)
+  : '';
+const validEmail = value => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+const validPhone = value => /^\+?[0-9 ()-]{8,20}$/.test(value);
+const boundedNumber = (value, fallback, min, max) => {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(Math.max(number, min), max);
+};
+const publicBooking = booking => ({
+  bookingId: booking.bookingId,
+  packageName: booking.packageName,
+  bookingStatus: booking.bookingStatus,
+  paymentStatus: booking.paymentStatus,
+  totalAmount: booking.totalAmount,
+  pendingAmount: booking.pendingAmount,
+  createdAt: booking.createdAt
+});
+
 // HELPER: Generate a unique, professional Booking Reference ID (e.g., SP-202605-A7B9)
 const generateBookingId = () => {
   const dateStr = new Date().toISOString().slice(0, 7).replace('-', ''); // YYYYMM
-  const randomChars = Math.random().toString(36).substring(2, 6).toUpperCase(); // 4 random alpha-numeric
+  const randomChars = crypto.randomBytes(4).toString('hex').toUpperCase();
   return `SP-${dateStr}-${randomChars}`;
 };
 
@@ -32,29 +58,42 @@ router.post('/', async (req, res) => {
       paymentAmount
     } = req.body;
 
-    // Validate core fields
-    if (!customerName || !emailId || !mobileNumber || !travelDate || !numberOfPassengers) {
-      return res.status(400).json({ message: 'Missing required customer contact or travel parameter.' });
+    const safeCustomerName = cleanText(customerName, 120);
+    const safeEmail = cleanText(emailId, 160).toLowerCase();
+    const safeMobile = cleanText(mobileNumber, 24);
+    const safePackageId = cleanText(packageId, 80);
+    const safeTravelDate = new Date(travelDate);
+    const passengerCount = boundedNumber(String(numberOfPassengers).replace('+', ''), 0, 1, 100);
+    const safeAdultCount = boundedNumber(adultCount, passengerCount, 1, passengerCount);
+    const safeChildCount = boundedNumber(childCount, 0, 0, Math.max(passengerCount - safeAdultCount, 0));
+
+    if (!safeCustomerName || !validEmail(safeEmail) || !validPhone(safeMobile) || !Number.isFinite(safeTravelDate.getTime()) || !passengerCount) {
+      return res.status(400).json({ message: 'Please provide valid customer, contact and travel details.' });
     }
 
-    // Resolve pricing
+    // Resolve pricing on the server. Client-submitted totals are not trusted
+    // when a published package is selected.
     let totalAmount = 0;
     let packageName = 'Custom Booking';
 
-    if (packageId) {
-      const pkg = await Package.findOne({ packageId });
+    if (safePackageId) {
+      const pkg = await Package.findOne({ packageId: safePackageId, isActive: true, status: { $ne: 'Draft' } });
       if (!pkg) {
         return res.status(404).json({ message: 'Requested tour package not found.' });
       }
-      packageName = pkg.title;
-      const basePrice = pkg.offerPrice || pkg.originalPrice || pkg.price || 0;
+      packageName = cleanText(pkg.title, 180);
+      const basePrice = Number(pkg.offerPrice || pkg.originalPrice || 0);
+      if (!Number.isFinite(basePrice) || basePrice <= 0) {
+        return res.status(409).json({ message: 'This package is not ready for online booking.' });
+      }
       // Total amount = base price * passengers + 5% GST/Taxes
-      const subtotal = basePrice * Number(numberOfPassengers);
+      const subtotal = basePrice * passengerCount;
       const tax = subtotal * 0.05; // 5% GST
       totalAmount = Math.round(subtotal + tax);
     } else {
-      // For custom bookings, totalAmount is passed from request or calculated dynamically
-      totalAmount = req.body.totalAmount || 0;
+      // Custom quotes must use the planner enquiry flow; accepting a client
+      // supplied total here would allow a caller to underpay a booking.
+      return res.status(400).json({ message: 'Select a published package before starting checkout.' });
     }
 
     if (totalAmount <= 0) {
@@ -65,40 +104,52 @@ router.post('/', async (req, res) => {
 
     const bookingData = {
       bookingId,
-      packageId: packageId || null,
+      packageId: safePackageId || null,
       packageName,
-      customerName,
-      emailId,
-      mobileNumber,
-      travelDate: new Date(travelDate),
-      numberOfPassengers: Number(numberOfPassengers),
-      adultCount: Number(adultCount || numberOfPassengers),
-      childCount: Number(childCount || 0),
-      fromLocation,
-      toLocation,
-      travelDetails: travelDetails || {},
-      remarks,
+      customerName: safeCustomerName,
+      emailId: safeEmail,
+      mobileNumber: safeMobile,
+      travelDate: safeTravelDate,
+      numberOfPassengers: passengerCount,
+      adultCount: safeAdultCount,
+      childCount: safeChildCount,
+      fromLocation: cleanText(fromLocation, 120),
+      toLocation: cleanText(toLocation, 120),
+      travelDetails: {
+        category: cleanText(travelDetails?.category, 40),
+        hotelCategory: cleanText(travelDetails?.hotelCategory, 60),
+        flightClass: cleanText(travelDetails?.flightClass, 60),
+        trainClass: cleanText(travelDetails?.trainClass, 60),
+        carType: cleanText(travelDetails?.carType, 60)
+      },
+      remarks: cleanText(remarks, 2000),
       totalAmount,
       paidAmount: 0,
       pendingAmount: totalAmount,
       payments: []
     };
 
-    // If customer has submitted payment credentials immediately during checkout, log it!
-    if (paymentMethod && transactionId && paymentAmount) {
+    // If the customer submitted a payment claim, validate it against the
+    // server-calculated total before writing it to the booking ledger.
+    if (paymentMethod || transactionId || paymentAmount) {
       const amountNum = Number(paymentAmount);
+      const safePaymentMethod = cleanText(paymentMethod, 40);
+      const safeTransactionId = cleanText(transactionId, 120);
+      if (!PAYMENT_METHODS.has(safePaymentMethod) || !safeTransactionId || !Number.isFinite(amountNum) || amountNum <= 0 || amountNum > totalAmount) {
+        return res.status(400).json({ message: 'Payment details are invalid or exceed the booking amount.' });
+      }
       
       // UPI validation security safeguard
       let secureNotes = '';
-      if (paymentMethod === 'UPI') {
+      if (safePaymentMethod === 'UPI') {
         const upiSuffix = process.env.UPI_SUFFIX || 'upi';
         secureNotes = `Locked to Official UPI Destination VPA: 9443217654@${upiSuffix}`;
       }
 
       bookingData.payments.push({
         amount: amountNum,
-        paymentMethod,
-        transactionId: transactionId.trim(),
+        paymentMethod: safePaymentMethod,
+        transactionId: safeTransactionId,
         status: 'Pending Verification',
         notes: `Initial checkout payment claim. ${secureNotes}`.trim()
       });
@@ -109,12 +160,12 @@ router.post('/', async (req, res) => {
 
     res.status(201).json({
       message: 'Booking created successfully! Awaiting payment verification.',
-      booking
+      booking: publicBooking(booking)
     });
 
   } catch (err) {
     console.error('Checkout error:', err);
-    res.status(500).json({ message: 'Server checkout error', error: err.message });
+    res.status(500).json({ message: 'Server checkout error. Please try again.' });
   }
 });
 
@@ -122,36 +173,50 @@ router.post('/', async (req, res) => {
 router.post('/:id/payment', async (req, res) => {
   try {
     const { amount, paymentMethod, transactionId, notes } = req.body;
-    
-    if (!amount || !paymentMethod || !transactionId) {
+    const amountNum = Number(amount);
+    const safePaymentMethod = cleanText(paymentMethod, 40);
+    const safeTransactionId = cleanText(transactionId, 120);
+
+    if (!Number.isFinite(amountNum) || amountNum <= 0 || !PAYMENT_METHODS.has(safePaymentMethod) || !safeTransactionId) {
       return res.status(400).json({ message: 'Missing transaction details: amount, method, or transaction reference.' });
     }
 
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(404).json({ message: 'Booking reference not found.' });
+    }
     const booking = await Booking.findById(req.params.id);
     if (!booking) {
       return res.status(404).json({ message: 'Booking reference not found.' });
     }
 
-    let secureNotes = notes || '';
-    if (paymentMethod === 'UPI') {
+    if (booking.payments.some(payment => payment.transactionId === safeTransactionId)) {
+      return res.status(409).json({ message: 'This payment reference has already been logged.' });
+    }
+
+    if (amountNum > booking.pendingAmount) {
+      return res.status(400).json({ message: 'Payment amount exceeds the outstanding booking balance.' });
+    }
+
+    let secureNotes = cleanText(notes, 1000);
+    if (safePaymentMethod === 'UPI') {
       const upiSuffix = process.env.UPI_SUFFIX || 'upi';
       secureNotes = `Locked to Official UPI Destination VPA: 9443217654@${upiSuffix}. ${secureNotes}`.trim();
     }
 
     booking.payments.push({
-      amount: Number(amount),
-      paymentMethod,
-      transactionId: transactionId.trim(),
+      amount: amountNum,
+      paymentMethod: safePaymentMethod,
+      transactionId: safeTransactionId,
       status: 'Pending Verification',
       notes: secureNotes
     });
 
     await booking.save();
-    res.json({ message: 'Payment reference logged successfully. Pending verification.', booking });
+    res.json({ message: 'Payment reference logged successfully. Pending verification.', booking: publicBooking(booking) });
 
   } catch (err) {
     console.error('Payment submission error:', err);
-    res.status(500).json({ message: 'Server payment logging error', error: err.message });
+    res.status(500).json({ message: 'Server payment logging error. Please try again.' });
   }
 });
 
@@ -169,7 +234,13 @@ router.get('/', checkAdmin, async (req, res) => {
 // 4. Update Booking Status (Admin Only CRM)
 router.put('/:id/status', checkAdmin, async (req, res) => {
   try {
-    const { bookingStatus } = req.body;
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(404).json({ message: 'Booking not found.' });
+    }
+    const bookingStatus = cleanText(req.body?.bookingStatus, 30);
+    if (!BOOKING_STATUSES.has(bookingStatus)) {
+      return res.status(400).json({ message: 'Invalid booking status.' });
+    }
     
     const booking = await Booking.findById(req.params.id);
     if (!booking) {
@@ -196,6 +267,9 @@ router.put('/:id/status', checkAdmin, async (req, res) => {
 // 5. Verify & Audit a Pending Payment Claim (Admin Only CRM)
 router.put('/:id/verify-payment/:paymentId', checkAdmin, async (req, res) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id) || !mongoose.isValidObjectId(req.params.paymentId)) {
+      return res.status(404).json({ message: 'Booking or payment reference not found.' });
+    }
     const { action } = req.body; // 'approve' or 'reject'
     
     if (!action || !['approve', 'reject'].includes(action)) {
@@ -215,6 +289,10 @@ router.put('/:id/verify-payment/:paymentId', checkAdmin, async (req, res) => {
 
     if (payment.status !== 'Pending Verification') {
       return res.status(400).json({ message: 'This transaction was already audited and processed.' });
+    }
+
+    if (action === 'approve' && payment.amount > booking.pendingAmount) {
+      return res.status(400).json({ message: 'This payment exceeds the remaining booking balance.' });
     }
 
     if (action === 'approve') {
@@ -250,9 +328,13 @@ router.put('/:id/verify-payment/:paymentId', checkAdmin, async (req, res) => {
 // 6. Append Administrative/Staff CRM Notes (Admin Only CRM)
 router.post('/:id/notes', checkAdmin, async (req, res) => {
   try {
-    const { text, addedBy } = req.body;
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(404).json({ message: 'Booking reference not found.' });
+    }
+    const text = cleanText(req.body?.text, 1000);
+    const addedBy = cleanText(req.body?.addedBy, 120);
     
-    if (!text || !text.trim()) {
+    if (!text) {
       return res.status(400).json({ message: 'Note text cannot be empty.' });
     }
 
@@ -262,7 +344,7 @@ router.post('/:id/notes', checkAdmin, async (req, res) => {
     }
 
     booking.notes.push({
-      text: text.trim(),
+      text,
       addedBy: addedBy || 'Admin'
     });
 

@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, X, Send, Bot, Sparkles, RefreshCw } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 
 const Chatbot = () => {
   const { isLoggedIn } = useAuth();
@@ -44,7 +44,7 @@ const Chatbot = () => {
       if (!res.ok) throw new Error(data.message || 'Chatbot error');
 
       setMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
-    } catch (err) {
+    } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, I'm having trouble connecting. Feel free to contact our customer support directly!" }]);
     } finally {
       setLoading(false);
@@ -242,7 +242,7 @@ const Chatbot = () => {
                 </div>
 
                 {/* Input Form */}
-                <form onSubmit={handleSend} style={{
+                <form onSubmit={handleSend} noValidate style={{
                   padding: '12px 16px',
                   background: 'white',
                   borderTop: '1px solid #f1f5f9',

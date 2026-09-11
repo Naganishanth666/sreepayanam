@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trash2, Plus, LogIn, ChevronDown, ChevronUp, X, Edit } from 'lucide-react';
+import { Trash2, Plus, LogIn, ChevronDown, ChevronUp, X, Edit, Eye, EyeOff } from 'lucide-react';
 import { IMAGE_PRESETS } from '../utils/imagePresets';
 import NicheTravelFields from '../components/NicheTravelFields';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { renderRichText } from '../utils/textFormatter';
 import { calculateCosting } from '../utils/costingEngine';
 
@@ -60,7 +61,7 @@ const emptyForm = {
   miscCost: '',
 
   bufferPercent: 3,
-  markupPercent: 25,
+  markupPercent: 30,
   taxPercent: 5,
   discountPercent: 0,
   discountAmount: 0,
@@ -104,7 +105,7 @@ const flattenCostingData = (data) => {
     miscCost: cb.miscCost !== undefined && cb.miscCost !== null ? cb.miscCost : '',
     
     bufferPercent: cb.bufferPercent !== undefined && cb.bufferPercent !== null ? cb.bufferPercent : 3,
-    markupPercent: cb.markupPercent !== undefined && cb.markupPercent !== null ? cb.markupPercent : 25,
+    markupPercent: cb.markupPercent !== undefined && cb.markupPercent !== null ? cb.markupPercent : 30,
     taxPercent: cb.taxPercent !== undefined && cb.taxPercent !== null ? cb.taxPercent : 5,
     discountPercent: cb.discountPercent !== undefined && cb.discountPercent !== null ? cb.discountPercent : 0,
     discountAmount: cb.discountAmount !== undefined && cb.discountAmount !== null ? cb.discountAmount : 0,
@@ -256,9 +257,11 @@ const AdminPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [openSection, setOpenSection] = useState('basic');
   const [formData, setFormData] = useState(emptyForm);
-  const [aiPrompt, setAiPrompt] = useState('');
   const [aiGenerating, setAiGenerating] = useState(false);
   const [editingId, setEditingId] = useState(null);
 
@@ -385,7 +388,6 @@ const AdminPage = () => {
     cruiseLinePreference: '',
     cabinCategory: '',
     destinationCruise: '',
-    durationNights: '',
     shoreExcursions: 'No',
     diningPreference: '',
     onboardGratuitiesPrepaid: 'No',
@@ -643,6 +645,7 @@ const AdminPage = () => {
     try {
       const res = await fetch('/api/ai/parse-brochure', {
         method: 'POST',
+        headers: { 'x-admin-password': password },
         body: formDataObj
       });
       const data = await res.json();
@@ -680,7 +683,7 @@ const AdminPage = () => {
     try {
       const res = await fetch('/api/ai/suggest-options', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
         body: JSON.stringify({
           category: 'all',
           ...builderParams,
@@ -727,7 +730,7 @@ const AdminPage = () => {
     try {
       const res = await fetch('/api/ai/compile-draft', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
         body: JSON.stringify({
           ...builderParams,
           durationDays: Number(builderParams.durationDays),
@@ -794,72 +797,6 @@ const AdminPage = () => {
     }
   };
 
-  const handleAiGenerate = async () => {
-    if (!aiPrompt.trim()) return;
-    setAiGenerating(true);
-    setError('');
-    setSuccess('');
-    try {
-      const res = await fetch('/api/ai/generate-package', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          prompt: aiPrompt,
-          ...builderParams
-        })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'AI generation failed');
-      
-      // Update form data state with the response
-      setFormData({
-        title: data.title || '',
-        destination: data.destination || '',
-        packageCategory: data.packageCategory || 'National',
-        tourType: data.tourType || 'Family Tours',
-        startingCity: data.startingCity || '',
-        endingCity: data.endingCity || '',
-        durationDays: data.durationDays || '',
-        durationNights: data.durationNights || '',
-        overview: data.overview || '',
-        imageUrl: data.imageUrl || '',
-        itinerary: Array.isArray(data.itinerary) ? data.itinerary.map(day => ({
-          day: day.day || 1,
-          title: day.title || '',
-          activities: day.activities || '',
-          hotel: day.hotel || '',
-          mealPlan: day.mealPlan || '',
-          transport: day.transport || ''
-        })) : [{ day: 1, title: '', activities: '', hotel: '', mealPlan: '', transport: '' }],
-        inclusions: data.inclusions || '',
-        exclusions: data.exclusions || '',
-        optionalAddons: data.optionalAddons || '',
-        baseCost: data.baseCost || '',
-        priceBreakdown: data.priceBreakdown || '',
-        mealPlan: data.mealPlan || '',
-        templesList: data.templesList || [],
-        originalPrice: data.originalPrice || '',
-        offerPrice: data.offerPrice || '',
-        isSpecialOffer: !!data.isSpecialOffer,
-        offerValidity: data.offerValidity || '',
-        termsAndConditions: data.termsAndConditions || '',
-        cancellationPolicy: data.cancellationPolicy || '',
-        seoTitle: data.seoTitle || '',
-        seoMetaDescription: data.seoMetaDescription || '',
-        isActive: true,
-        ...flattenCostingData(data)
-      });
-      
-      setSuccess('🪄 AI generated the package successfully! Review the sections below and click Create Package.');
-      setOpenSection('basic');
-      setAiPrompt('');
-    } catch (err) {
-      setError(`AI Error: ${err.message}`);
-    } finally {
-      setAiGenerating(false);
-    }
-  };
-
   const [activeTab, setActiveTab] = useState('packages');
   const [enquiries, setEnquiries] = useState([]);
   const [enquiriesLoading, setEnquiriesLoading] = useState(false);
@@ -883,12 +820,14 @@ const AdminPage = () => {
     }
   }, [builderParams.suggestTemples, builderParams.destination]);
 
+  // The loaders are also used by explicit refresh actions; this lifecycle hook only runs when admin access is established.
   useEffect(() => {
     if (isAuthenticated) {
       fetchPackages();
       fetchEnquiries();
       fetchBookings();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
   const fetchPackages = async () => {
@@ -904,7 +843,9 @@ const AdminPage = () => {
   const fetchEnquiries = async () => {
     setEnquiriesLoading(true);
     try {
-      const res = await fetch('/api/enquiries');
+      const res = await fetch('/api/enquiries', {
+        headers: { 'x-admin-password': password }
+      });
       const data = await res.json();
       setEnquiries(Array.isArray(data) ? data : []);
     } catch (err) { console.error(err); }
@@ -967,9 +908,9 @@ const AdminPage = () => {
         fetchBookings();
       } else {
         const data = await res.json();
-        alert(data.message || 'Auditing verification failed.');
+        setError(data.message || 'Auditing verification failed.');
       }
-    } catch (err) { console.error(err); }
+    } catch (err) { setError(err.message || 'Auditing verification failed.'); }
   };
 
   const handleAppendStaffNote = async (bookingId) => {
@@ -995,7 +936,7 @@ const AdminPage = () => {
     try {
       const res = await fetch('/api/ai/score-lead', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
         body: JSON.stringify({ enquiry })
       });
       const data = await res.json();
@@ -1261,15 +1202,25 @@ const AdminPage = () => {
     finally { setLoading(false); }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this package?')) return;
+  const handleDelete = async () => {
+    if (!deleteTarget?.packageId) return;
+    setDeleteBusy(true);
     try {
-      const res = await fetch(`/api/packages/${id}`, {
+      const res = await fetch(`/api/packages/${deleteTarget.packageId}`, {
         method: 'DELETE', headers: { 'x-admin-password': password }
       });
-      if (!res.ok) throw new Error('Failed to delete');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || 'Failed to delete package.');
+      }
+      setDeleteTarget(null);
+      setSuccess(`Package "${deleteTarget.title}" was deleted.`);
       fetchPackages();
-    } catch (err) { alert(err.message); }
+    } catch (err) {
+      setError(err.message || 'Failed to delete package.');
+    } finally {
+      setDeleteBusy(false);
+    }
   };
 
 
@@ -1281,8 +1232,14 @@ const AdminPage = () => {
           <h2 style={{ textAlign: 'center', marginBottom: 8, color: 'var(--dark)' }}>Admin Access</h2>
           <p style={{ textAlign: 'center', color: 'var(--text-muted)', marginBottom: 24, fontSize: '0.9rem' }}>SreePayanam Tours &amp; Travels</p>
           {error && <div style={sty.errBox}>{error}</div>}
-          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <input type="password" className="input-field" placeholder="Admin Password" value={password} onChange={e => setPassword(e.target.value)} />
+          <form onSubmit={handleLogin} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <label className="sr-only" htmlFor="admin-password">Admin password</label>
+            <div className="password-field-wrap">
+              <input id="admin-password" type={showAdminPassword ? 'text' : 'password'} className="input-field" placeholder="Admin Password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" />
+              <button type="button" className="password-toggle" onClick={() => setShowAdminPassword(value => !value)} aria-label={showAdminPassword ? 'Hide admin password' : 'Show admin password'}>
+                {showAdminPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+              </button>
+            </div>
             <button type="submit" className="btn btn-primary" disabled={loading}>
               {loading ? 'Verifying...' : 'Login'}
             </button>
@@ -1762,7 +1719,7 @@ const AdminPage = () => {
                           try {
                             const res = await fetch('/api/ai/generate-package', {
                               method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
+                              headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
                               body: JSON.stringify({
                                 prompt: `Build a package for ${builderParams.durationDays} Days to ${builderParams.destination}. ${builderParams.customPrompt}`,
                                 ...builderParams
@@ -2077,7 +2034,7 @@ const AdminPage = () => {
                 )}
               </div>
 
-              <form onSubmit={handleSubmit}>
+              <form onSubmit={handleSubmit} noValidate>
 
                 {/* BASIC INFO */}
                 <Section id="basic" title="📋 Basic Information" openSection={openSection} setOpenSection={setOpenSection}>
@@ -2201,7 +2158,7 @@ const AdminPage = () => {
                 {/* OVERVIEW */}
                 <Section id="overview" title="📝 Overview & Description" openSection={openSection} setOpenSection={setOpenSection}>
                   <Field label="Package Overview *">
-                    <textarea required name="overview" className="input-field" rows="5"
+                    <textarea required name="overview" className="input-field resize-none" rows="5"
                       placeholder="Describe the full package experience..." value={formData.overview} onChange={handleChange} />
                   </Field>
                 </Section>
@@ -2220,7 +2177,7 @@ const AdminPage = () => {
                       </div>
                       <input className="input-field" placeholder="Day title (e.g. Arrival & Backwaters)" style={{ marginBottom: 10 }}
                         value={day.title} onChange={e => updateItinerary(i, 'title', e.target.value)} />
-                      <textarea className="input-field" rows="3" placeholder="Activities for the day..."
+                      <textarea className="input-field resize-none" rows="3" placeholder="Activities for the day..."
                         value={day.activities} onChange={e => updateItinerary(i, 'activities', e.target.value)} style={{ marginBottom: 10 }} />
                       {day.activities && (day.activities.includes('**') || day.activities.includes('\n')) && (
                         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 12, marginBottom: 10, fontSize: '0.85rem' }}>
@@ -2249,15 +2206,15 @@ const AdminPage = () => {
                 {/* INCLUSIONS / EXCLUSIONS */}
                 <Section id="inclEx" title="✅ Inclusions & Exclusions" openSection={openSection} setOpenSection={setOpenSection}>
                   <Field label="Inclusions (one per line) *">
-                    <textarea required name="inclusions" className="input-field" rows="5"
+                    <textarea required name="inclusions" className="input-field resize-none" rows="5"
                       placeholder="Hotel accommodation&#10;Daily breakfast&#10;All transfers&#10;Tour guide" value={formData.inclusions} onChange={handleChange} />
                   </Field>
                   <Field label="Exclusions (one per line) *">
-                    <textarea required name="exclusions" className="input-field" rows="5"
+                    <textarea required name="exclusions" className="input-field resize-none" rows="5"
                       placeholder="Flight tickets&#10;Personal expenses&#10;Travel insurance" value={formData.exclusions} onChange={handleChange} />
                   </Field>
                   <Field label="Optional Add-ons (one per line)">
-                    <textarea name="optionalAddons" className="input-field" rows="3"
+                    <textarea name="optionalAddons" className="input-field resize-none" rows="3"
                       placeholder="Houseboat upgrade&#10;Ayurvedic massage" value={formData.optionalAddons} onChange={handleChange} />
                   </Field>
                 </Section>
@@ -2277,7 +2234,7 @@ const AdminPage = () => {
                       <input type="number" name="baseCost" className="input-field" placeholder="38000" value={formData.baseCost} onChange={handleChange} />
                     </Field>
                     <Field label="Price Margin & Breakdown (Auto justification)">
-                      <textarea name="priceBreakdown" className="input-field" rows="2" placeholder="e.g. Hotel: 12000, Vehicle: 15000..." value={formData.priceBreakdown} onChange={handleChange} />
+                      <textarea name="priceBreakdown" className="input-field resize-none" rows="2" placeholder="e.g. Hotel: 12000, Vehicle: 15000..." value={formData.priceBreakdown} onChange={handleChange} />
                     </Field>
                   </Row>
                   <Row>
@@ -2445,12 +2402,12 @@ const AdminPage = () => {
                           name="markupPercent" 
                           min="10" 
                           max="35" 
-                          value={formData.markupPercent || 25} 
+                          value={formData.markupPercent || 30}
                           onChange={handleChange} 
                           style={{ flex: 1, height: '8px', borderRadius: '4px', accentColor: 'var(--primary)', cursor: 'pointer' }}
                         />
                         <span style={{ fontWeight: 'bold', fontSize: '0.95rem', minWidth: '40px', color: 'var(--primary)' }}>
-                          {formData.markupPercent || 25}%
+                          {formData.markupPercent || 30}%
                         </span>
                       </div>
                     </Field>
@@ -2670,11 +2627,11 @@ const AdminPage = () => {
                 {/* TERMS */}
                 <Section id="terms" title="📄 Terms, Conditions & Policies" openSection={openSection} setOpenSection={setOpenSection}>
                   <Field label="Terms & Conditions">
-                    <textarea name="termsAndConditions" className="input-field" rows="4"
+                    <textarea name="termsAndConditions" className="input-field resize-none" rows="4"
                       placeholder="Payment terms, booking conditions..." value={formData.termsAndConditions} onChange={handleChange} />
                   </Field>
                   <Field label="Cancellation Policy">
-                    <textarea name="cancellationPolicy" className="input-field" rows="4"
+                    <textarea name="cancellationPolicy" className="input-field resize-none" rows="4"
                       placeholder="30 days before: 100% refund&#10;15 days before: 50% refund..." value={formData.cancellationPolicy} onChange={handleChange} />
                   </Field>
                 </Section>
@@ -2685,7 +2642,7 @@ const AdminPage = () => {
                     <input name="seoTitle" className="input-field" placeholder="Kerala Tour Package - 5 Days | SreePayanam" value={formData.seoTitle} onChange={handleChange} />
                   </Field>
                   <Field label="SEO Meta Description">
-                    <textarea name="seoMetaDescription" className="input-field" rows="3"
+                    <textarea name="seoMetaDescription" className="input-field resize-none" rows="3"
                       placeholder="Book the best Kerala tour package..." value={formData.seoMetaDescription} onChange={handleChange} />
                   </Field>
                 </Section>
@@ -2770,7 +2727,8 @@ const AdminPage = () => {
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleDelete(pkg.packageId)}
+                              onClick={() => setDeleteTarget(pkg)}
+                              aria-label={`Delete ${pkg.title}`}
                               style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 6 }}
                               title="Delete package"
                             >
@@ -3052,7 +3010,7 @@ const AdminPage = () => {
                                               <div><strong>Private Pool Villa:</strong> {enq.privatePoolVilla || enq.detailedPreferences?.privatePoolVilla || 'No'}</div>
                                               <div><strong>Photography:</strong> {enq.photographyService || enq.detailedPreferences?.photographyService || 'No'}</div>
                                               <div style={{ gridColumn: 'span 2' }}>
-                                                <strong>Complimentary Benefits:</strong> {Array.isArray(enq.complimentaryBenefits || enq.detailedPreferences?.complimentaryBenefits) ? (enq.complimentaryBenefits || enq.detailedPreferences?.complimentaryBenefits).join(', ') : 'None'}
+                                                <strong>Complimentary Benefits:</strong> {Array.isArray(enq.complimentaryBenefits) ? enq.complimentaryBenefits.join(', ') : Array.isArray(enq.detailedPreferences?.complimentaryBenefits) ? enq.detailedPreferences.complimentaryBenefits.join(', ') : 'None'}
                                               </div>
                                             </>
                                           )}
@@ -3227,8 +3185,9 @@ const AdminPage = () => {
                                     className="btn btn-primary"
                                     style={{ marginTop: 8, padding: '4px 10px', fontSize: '0.75rem' }}
                                     onClick={() => {
-                                      navigator.clipboard.writeText(scoreInfo.followUpMessage);
-                                      alert('Copied follow-up draft message to clipboard!');
+                                      navigator.clipboard?.writeText(scoreInfo.followUpMessage)
+                                        .then(() => setSuccess('Follow-up draft copied to clipboard.'))
+                                        .catch(() => setError('Copy failed. Select the message and copy it manually.'));
                                     }}
                                   >
                                     Copy Message
@@ -3696,7 +3655,7 @@ const AdminPage = () => {
                   {editingLead ? `Modifying Lead ID: ${editingLead._id}` : 'Fill in the customer information and specialized niche details below.'}
                 </p>
 
-                <form onSubmit={handleLeadSubmit}>
+                <form onSubmit={handleLeadSubmit} noValidate>
                   {/* General Fields */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 20 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -3961,7 +3920,7 @@ const AdminPage = () => {
                     <textarea
                       rows="3"
                       placeholder="Enter details here..."
-                      className="input-field"
+                      className="input-field resize-none"
                       value={leadFormData.remarks}
                       onChange={e => handleLeadFormChange('remarks', e.target.value)}
                     />
@@ -3990,6 +3949,15 @@ const AdminPage = () => {
             </div>
           )}
         </AnimatePresence>
+        <ConfirmDialog
+          open={Boolean(deleteTarget)}
+          title="Delete this tour package?"
+          message={deleteTarget ? `“${deleteTarget.title}” will be removed from the package manager. This cannot be undone.` : ''}
+          confirmLabel="Delete package"
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteTarget(null)}
+          busy={deleteBusy}
+        />
       </div>
     </div>
   );

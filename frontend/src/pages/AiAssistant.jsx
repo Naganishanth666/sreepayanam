@@ -1,2537 +1,640 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
-  Sparkles, Send, Bot, User, MapPin, Clock, Plane, Train, Car,
-  Home, Utensils, Download, Phone, ArrowRight, ChevronDown, ChevronUp,
-  RefreshCw, FileText, CheckCircle, XCircle, Users, Calendar, AlertCircle,
-  Briefcase, Shield, Globe, Check, ChevronLeft, MessageSquare, Info
+  ArrowLeft, ArrowRight, Check, CheckCircle2, CircleHelp, Download,
+  FileText, Hotel, MapPin, MessageCircle, RefreshCw, Send, ShieldCheck,
+  Sparkles
 } from 'lucide-react';
+import {
+  DESTINATION_CATALOG,
+  DESTINATION_KIND_LABELS,
+  flattenDestinationGroups,
+  toCatalogPackage
+} from '../data/destinationCatalog';
+import { calculateCosting } from '../utils/costingEngine';
+import { downloadQuotationPdf } from '../utils/quotationPdf';
+
+const STEPS = [
+  { id: 1, name: 'Route', detail: 'Package & dates' },
+  { id: 2, name: 'Places', detail: 'Your shortlist' },
+  { id: 3, name: 'Comfort', detail: 'Stay & movement' },
+  { id: 4, name: 'Contact', detail: 'Get the quote' }
+];
+
+const DEFAULT_FORM = {
+  packageId: DESTINATION_CATALOG[0].id,
+  departureCity: '',
+  travelStartDate: '',
+  returnDate: '',
+  durationDays: DESTINATION_CATALOG[0].durationDays,
+  durationNights: DESTINATION_CATALOG[0].durationNights,
+  adultCount: 2,
+  childWithBedCount: 0,
+  childNoBedCount: 0,
+  infantCount: 0,
+  hotelCategory: '3 Star',
+  hotelRooms: '',
+  mealPlan: 'MAP',
+  vehicleType: 'Sedan',
+  guideRequired: 'No',
+  entryTickets: 'Yes',
+  fullName: '',
+  mobileNumber: '',
+  email: '',
+  city: '',
+  contactMethod: 'WhatsApp',
+  notes: '',
+  consent: false
+};
+
+const formatINR = value => `INR ${Number(value || 0).toLocaleString('en-IN')}`;
+
+const safeJson = async response => {
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
+};
+
+const buildItinerary = (destinations, days) => {
+  const totalDays = Math.max(1, Number(days) || 1);
+  const items = destinations.length ? destinations : ['Flexible local discovery'];
+  return Array.from({ length: totalDays }, (_, index) => {
+    const start = Math.floor(index * items.length / totalDays);
+    const end = Math.max(start + 1, Math.floor((index + 1) * items.length / totalDays));
+    const dayItems = items.slice(start, end);
+    return {
+      day: index + 1,
+      title: index === 0 ? 'Arrival & settle in' : index === totalDays - 1 ? 'Last light & return' : 'Discover the route',
+      places: dayItems.join(' · ')
+    };
+  });
+};
+
+const Field = ({ id, label, required = false, error, help, children, className = '' }) => (
+  <div className={`planner-field-wrap ${className}`}>
+    <label className="field-label" htmlFor={id}>
+      {label} {required && <span className="required" aria-hidden="true">*</span>}
+    </label>
+    {children}
+    {help && !error && <span id={`${id}-help`} className="field-error" style={{ color: 'var(--color-muted)' }}>{help}</span>}
+    {error && <span id={`${id}-error`} className="field-error" role="alert">{error}</span>}
+  </div>
+);
+
+const getAria = (id, error, help) => ({
+  'aria-invalid': error ? 'true' : undefined,
+  'aria-describedby': error ? `${id}-error` : help ? `${id}-help` : undefined
+});
 
 const AiAssistant = () => {
-  // Tab control: 'guided' or 'chat'
-  const [activeTab, setActiveTab] = useState('guided');
-  
-  // Wizard current step: 1 to 5
+  const reduceMotion = useReducedMotion();
+  const [activeTab, setActiveTab] = useState('planner');
   const [currentStep, setCurrentStep] = useState(1);
-
-  // Guided planner 10-section form state
-  const [form, setForm] = useState({
-    // Section 1: Customer Details
-    full_name: '',
-    mobile_number: '',
-    whatsapp_number: '',
-    email: '',
-    location: '',
-    contact_method: 'WhatsApp',
-
-    // Section 2: Trip Details
-    travel_category: 'National',
-    tour_type: 'Family Tours',
-    departure_city: '',
-    destination_places: '',
-    suggest_destination: false,
-    travel_start_date: '',
-    return_date: '',
-    num_days: 5,
-    num_nights: 4,
-    date_flexibility: 'Exact Dates',
-
-    // Section 3: Passenger Details
-    total_passengers: 2,
-    num_male: 1,
-    num_female: 1,
-    num_children: 0,
-    children_ages: '',
-    num_infants: 0,
-    infant_ages: '',
-    num_seniors: 0,
-    special_assistance: '',
-
-    // Section 4: Hotel Requirement
-    hotel_required: 'Yes',
-    hotel_category: '3-Star',
-    room_type: 'Double',
-    num_rooms: 1,
-    extra_bed: 'No',
-    child_with_bed: 0,
-    child_without_bed: 0,
-    preferred_location: '',
-    lift_required: false,
-    wheelchair_friendly: false,
-
-    // Section 5: Meal Plan
-    meal_required: 'Yes',
-    meal_plan: 'MAP (Breakfast + Dinner)',
-    food_preference: 'Veg',
-    special_meal: '',
-
-    // Section 6: Transport Requirement
-    flight_ticket: false,
-    train_ticket: false,
-    bus_ticket: false,
-    local_transport: 'Sedan',
-    airport_pickup_drop: true,
-    vehicle_category: 'Budget',
-    ac_preference: 'AC',
-    transport_type: 'Private',
-    pickup_location: '',
-    drop_location: '',
-    luggage_details: '',
-    driver_language: 'English',
-
-    // Section 7: Sightseeing & Activities
-    places_to_cover: '',
-    travel_pace: 'Moderate',
-    interest_type: 'Nature',
-    guide_required: 'No',
-    entry_tickets: true,
-    special_darshan: false,
-    ritual_pooja: false,
-
-    // Section 8: Visa, Passport & Insurance
-    passport_available: 'No',
-    passport_validity: '',
-    visa_assistance: 'No',
-    travel_insurance: 'No',
-    insurance_type: 'Standard',
-    nationality: 'Indian',
-    residence_country: 'India',
-
-    // Section 9: Budget & Pricing Preference
-    budget_type: 'Standard',
-    approx_budget: '',
-    currency: 'INR',
-    price_preference: 'Per Person',
-    inclusions_preference: '',
-
-    // Section 10: Special Requirements
-    special_arrangement: '',
-    language_preference: 'English',
-    emergency_contact: '',
-    other_request: '',
-
-    // MICE
-    company_name: '',
-    event_type: '',
-    event_duration_days: '',
-    venue_preference: '',
-    room_occupancy: '',
-    meeting_room_required: 'No',
-    audio_visual_required: 'No',
-    team_building_activities: 'No',
-    gala_dinner_required: 'No',
-    approximate_pax: '',
-
-    // Medical
-    patient_name: '',
-    age: '',
-    gender: 'Male',
-    medical_condition: '',
-    preferred_treatment_country: '',
-    treatment_category: '',
-    hospital_preference: '',
-    medical_history_details: '',
-    visa_assistance_required: 'No',
-    translator_required: 'No',
-    accommodation_for_attendants: 'No',
-    wheelchair_assistance: 'No',
-
-    // Cruise
-    cruise_line_preference: '',
-    cabin_category: '',
-    destination_cruise: '',
-    duration_nights: '',
-    shore_excursions: 'No',
-    dining_preference: '',
-    onboard_gratuities_prepaid: 'No',
-
-    // Educational
-    institution_name: '',
-    department_grade: '',
-    contact_person_designation: '',
-    number_of_students: '',
-    number_of_teachers: '',
-    study_subject_focus: '',
-    industrial_visit_required: 'No',
-    guide_lecture_required: 'No',
-    certificate_of_participation: 'No',
-    supervisor_accommodation_sharing: 'Twin Sharing',
-
-    // Honeymoon
-    couple_names: '',
-    marriage_date: '',
-    honeymoon_theme: '',
-    complimentary_benifits: [], // Array of strings
-    room_view_preference: '',
-    private_pool_villa: 'No',
-    photography_service: 'No',
-
-    // Pilgrimage
-    deity_temple_name: '',
-    primary_destination: '',
-    special_darshan_passes: 'No',
-    ritual_pooja_arrangements: 'No',
-    senior_citizen_assistance: 'No',
-    vegetarian_jain_food: 'Standard',
-    physical_disability_assistance: 'None',
-    dress_code_guidelines_accepted: 'No',
-  });
-
-  const handleBenefitChange = (benefit) => {
-    setForm(prev => {
-      const current = prev.complimentary_benifits || [];
-      if (current.includes(benefit)) {
-        return { ...prev, complimentary_benifits: current.filter(b => b !== benefit) };
-      } else {
-        return { ...prev, complimentary_benifits: [...current, benefit] };
-      }
-    });
-  };
-
-  // Chat state
+  const [form, setForm] = useState(DEFAULT_FORM);
+  const [remotePackages, setRemotePackages] = useState([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogStatus, setCatalogStatus] = useState('');
+  const [selectedDestinations, setSelectedDestinations] = useState(
+    flattenDestinationGroups(DESTINATION_CATALOG[0].groups)
+      .filter(place => place.kind === 'recommended')
+      .map(place => place.id)
+  );
+  const [customPlaces, setCustomPlaces] = useState([]);
+  const [customPlace, setCustomPlace] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [validationError, setValidationError] = useState('');
+  const [quote, setQuote] = useState(null);
+  const [requestState, setRequestState] = useState('idle');
+  const [requestError, setRequestError] = useState('');
+  const [enquirySuccess, setEnquirySuccess] = useState(false);
   const [chatMessages, setChatMessages] = useState([
-    { role: 'assistant', content: 'Hi there! I am the Sreepayanam AI Travel Assistant. Tell me what kind of trip you are looking for, and I will find the perfect package for you!' }
+    { role: 'assistant', content: 'Tell me the feeling you want from this trip — temple trail, cool hills, coast, or somewhere completely new.' }
   ]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const chatListRef = useRef(null);
+  const mutationController = useRef(null);
 
-  // Guided planner result / status
-  const [plannerLoading, setPlannerLoading] = useState(false);
-  const [loadingStep, setLoadingStep] = useState(0);
-  const [planResult, setPlanResult] = useState(null);
-  const [openDay, setOpenDay] = useState(0);
-  const [enquirySuccess, setEnquirySuccess] = useState(false);
-  const [validationError, setValidationError] = useState('');
+  const packageOptions = useMemo(() => {
+    const local = [...DESTINATION_CATALOG];
+    remotePackages.forEach(pkg => {
+      const item = toCatalogPackage(pkg);
+      if (!local.some(existing => existing.id === item.id)) local.push(item);
+    });
+    return local;
+  }, [remotePackages]);
 
-  // Auto-scroll chat list
+  const selectedPackage = useMemo(
+    () => packageOptions.find(pkg => pkg.id === form.packageId) || packageOptions[0],
+    [form.packageId, packageOptions]
+  );
+
+  const allDestinations = useMemo(() => [
+    ...flattenDestinationGroups(selectedPackage?.groups || []),
+    ...customPlaces
+  ], [selectedPackage, customPlaces]);
+
+  const selectedLabels = useMemo(
+    () => allDestinations.filter(place => selectedDestinations.includes(place.id)).map(place => place.label),
+    [allDestinations, selectedDestinations]
+  );
+
+  const pricingParams = useMemo(() => ({
+    adultCount: form.adultCount,
+    childWithBedCount: form.childWithBedCount,
+    childNoBedCount: form.childNoBedCount,
+    infantCount: form.infantCount,
+    durationDays: form.durationDays,
+    durationNights: form.durationNights,
+    hotelCategory: form.hotelCategory,
+    hotelRooms: form.hotelRooms,
+    vehicleType: form.vehicleType,
+    vehicleDays: form.durationDays,
+    mealPlan: form.mealPlan,
+    mealNights: form.durationNights,
+    guideCostPerDay: form.guideRequired === 'Yes' ? 1000 : 0,
+    sightseeingCostPerPax: selectedLabels.length ? 600 : 500,
+    activityCostPerPax: form.entryTickets === 'Yes' ? 500 : 150,
+    bufferPercent: 3,
+    markupPercent: 30,
+    taxPercent: 5
+  }), [form, selectedLabels.length]);
+
+  const liveEstimate = useMemo(() => calculateCosting(pricingParams), [pricingParams]);
+  const itinerary = useMemo(() => buildItinerary(selectedLabels, form.durationDays), [selectedLabels, form.durationDays]);
+  const totalTravellers = Number(form.adultCount || 0) + Number(form.childWithBedCount || 0) + Number(form.childNoBedCount || 0) + Number(form.infantCount || 0);
+  const visibleTotal = quote?.customerPrice || liveEstimate.customerPrice;
+
   useEffect(() => {
-    if (chatListRef.current) {
-      chatListRef.current.scrollTop = chatListRef.current.scrollHeight;
-    }
+    const controller = new AbortController();
+    fetch('/api/packages', { signal: controller.signal })
+      .then(async response => {
+        const data = await safeJson(response);
+        if (!response.ok) throw new Error(data.message || 'Live package catalogue unavailable.');
+        return data;
+      })
+      .then(data => setRemotePackages(Array.isArray(data) ? data : []))
+      .catch(error => {
+        if (error.name !== 'AbortError') setCatalogStatus('Using the routebook catalog while live packages reconnect.');
+      })
+      .finally(() => setCatalogLoading(false));
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => () => mutationController.current?.abort(), []);
+
+  useEffect(() => {
+    if (chatListRef.current) chatListRef.current.scrollTop = chatListRef.current.scrollHeight;
   }, [chatMessages, chatLoading]);
 
-  // Loading animation phrases
-  const loadingPhrases = [
-    'Scanning premium destination maps...',
-    'Matching best flights and connection routing...',
-    'Curating handpicked hotels & local homestays...',
-    'Sourcing authentic local dining recommendations...',
-    'Assembling a custom day-by-day travel timeline...',
-    'Submitting your detailed inquiry to our booking desk...',
-    'Finalizing details for your perfect getaway...'
-  ];
-
-  useEffect(() => {
-    let interval;
-    if (plannerLoading) {
-      setLoadingStep(0);
-      interval = setInterval(() => {
-        setLoadingStep(prev => (prev < loadingPhrases.length - 1 ? prev + 1 : prev));
-      }, 3000);
-    }
-    return () => clearInterval(interval);
-  }, [plannerLoading]);
-
-  // Validate fields for a specific wizard step
-  const validateStep = (step) => {
-    setValidationError('');
-    if (step === 1) {
-      if (!form.full_name.trim()) return 'Please enter your Full Name.';
-      if (!form.mobile_number.trim()) return 'Please enter your Mobile Number.';
-      if (!form.email.trim()) return 'Please enter your Email Address.';
-      if (!/\S+@\S+\.\S+/.test(form.email)) return 'Please enter a valid Email Address.';
-    } else if (step === 2) {
-      if (!form.destination_places.trim()) return 'Please specify your target Destination(s).';
-      if (!form.total_passengers || form.total_passengers < 1) return 'Passenger count must be at least 1.';
-      
-      // Category Specific Validation
-      if (form.tour_type === 'MICE Tours' || form.tour_type === 'Corporate Tours') {
-        if (!form.company_name.trim()) return 'Company / Organization Name is required.';
-        if (!form.event_type) return 'Event Type is required.';
-        if (!form.event_duration_days || form.event_duration_days < 1) return 'Event Duration in days is required.';
-        if (!form.approximate_pax || form.approximate_pax < 1) return 'Approximate Pax is required.';
-      }
-      if (form.tour_type === 'Medical Tours') {
-        if (!form.patient_name.trim()) return 'Patient Name is required.';
-        if (!form.age || form.age < 1) return 'Patient Age is required.';
-        if (!form.gender) return 'Patient Gender is required.';
-        if (!form.medical_condition.trim()) return 'Medical Condition / Treatment Need is required.';
-        if (!form.preferred_treatment_country) return 'Preferred Treatment Country is required.';
-        if (!form.treatment_category) return 'Treatment Category is required.';
-      }
-      if (form.tour_type === 'Cruise Packages') {
-        if (!form.cruise_line_preference) return 'Cruise Line Preference is required.';
-        if (!form.cabin_category) return 'Cabin Category Preference is required.';
-        if (!form.destination_cruise) return 'Destination Cruise is required.';
-        if (!form.duration_nights || form.duration_nights < 1) return 'Duration in Nights is required.';
-      }
-      if (form.tour_type === 'School / College Tours' || form.tour_type === 'Education Tours') {
-        if (!form.institution_name.trim()) return 'Institution Name is required.';
-        if (!form.department_grade.trim()) return 'Department / Grade / Standard is required.';
-        if (!form.number_of_students || form.number_of_students < 1) return 'Number of Students is required.';
-        if (!form.number_of_teachers || form.number_of_teachers < 1) return 'Number of Teachers / Escorts is required.';
-      }
-      if (form.tour_type === 'Honeymoon Tours') {
-        if (!form.couple_names.trim()) return 'Couple Names are required.';
-        if (!form.marriage_date) return 'Marriage Date is required.';
-        if (!form.honeymoon_theme) return 'Honeymoon Theme / Vibe is required.';
-      }
-      if (form.tour_type === 'Pilgrimage Tours') {
-        if (!form.deity_temple_name.trim()) return 'Deity / Temple Name is required.';
-        if (!form.primary_destination) return 'Primary Destination is required.';
-      }
-    }
-    return '';
-  };
-
-  const handleNextStep = () => {
-    const error = validateStep(currentStep);
-    if (error) {
-      setValidationError(error);
-      return;
-    }
-    setCurrentStep(prev => Math.min(prev + 1, 5));
-  };
-
-  const handlePrevStep = () => {
-    setValidationError('');
-    setCurrentStep(prev => Math.max(prev - 1, 1));
-  };
-
-  // Handle guided planner generation & auto-submits lead
-  const handleGeneratePlan = async (e) => {
-    e.preventDefault();
-    const error = validateStep(currentStep);
-    if (error) {
-      setValidationError(error);
-      return;
-    }
-
-    setPlannerLoading(true);
-    setPlanResult(null);
+  const invalidateQuote = () => {
+    setQuote(null);
     setEnquirySuccess(false);
+    setRequestError('');
+    if (requestState !== 'idle') setRequestState('idle');
+  };
 
+  const updateField = (name, value) => {
+    setForm(previous => ({ ...previous, [name]: value }));
+    setFieldErrors(previous => ({ ...previous, [name]: '' }));
+    setValidationError('');
+    invalidateQuote();
+  };
+
+  const handlePackageChange = event => {
+    const nextPackage = packageOptions.find(pkg => pkg.id === event.target.value) || packageOptions[0];
+    const recommended = flattenDestinationGroups(nextPackage?.groups || [])
+      .filter(place => place.kind === 'recommended')
+      .map(place => place.id);
+    setForm(previous => ({
+      ...previous,
+      packageId: nextPackage.id,
+      durationDays: nextPackage.durationDays,
+      durationNights: nextPackage.durationNights
+    }));
+    setSelectedDestinations(recommended);
+    setCustomPlaces([]);
+    setFieldErrors(previous => ({ ...previous, packageId: '', destinationPicker: '' }));
+    invalidateQuote();
+  };
+
+  const toggleDestination = id => {
+    setSelectedDestinations(previous => previous.includes(id) ? previous.filter(item => item !== id) : [...previous, id]);
+    setFieldErrors(previous => ({ ...previous, destinationPicker: '' }));
+    invalidateQuote();
+  };
+
+  const selectRecommended = () => {
+    const recommended = allDestinations.filter(place => place.kind === 'recommended').map(place => place.id);
+    setSelectedDestinations(recommended);
+    invalidateQuote();
+  };
+
+  const clearDestinations = () => {
+    setSelectedDestinations([]);
+    invalidateQuote();
+  };
+
+  const addCustomPlace = event => {
+    event.preventDefault();
+    const label = customPlace.trim().slice(0, 140);
+    if (!label) return;
+    const item = { id: `custom-${Date.now()}`, label, groupId: 'custom', kind: 'optional' };
+    setCustomPlaces(previous => [...previous, item]);
+    setSelectedDestinations(previous => [...previous, item.id]);
+    setCustomPlace('');
+    invalidateQuote();
+  };
+
+  const validateStep = step => {
+    const errors = {};
+    if (step === 1) {
+      if (!form.packageId) errors.packageId = 'Choose a tour package to continue.';
+      if (!Number(form.durationDays) || Number(form.durationDays) < 1) errors.durationDays = 'Add at least one travel day.';
+      if (form.travelStartDate && form.returnDate && new Date(form.returnDate).getTime() < new Date(form.travelStartDate).getTime()) errors.returnDate = 'Return date must be on or after the start date.';
+    }
+    if (step === 2) {
+      if (!selectedDestinations.length) errors.destinationPicker = 'Choose at least one place, or add a place of your own.';
+      if (!Number(form.adultCount) || Number(form.adultCount) < 1) errors.adultCount = 'At least one adult is required.';
+    }
+    if (step === 3) {
+      if (!Number(form.adultCount) || Number(form.adultCount) < 1) errors.adultCount = 'At least one adult is required.';
+      if (Number(form.durationNights) < 0) errors.durationNights = 'Nights cannot be negative.';
+    }
+    if (step === 4) {
+      if (!form.fullName.trim()) errors.fullName = 'Add your full name.';
+      if (!/^\+?[0-9 ()-]{8,20}$/.test(form.mobileNumber.trim())) errors.mobileNumber = 'Enter a valid mobile number.';
+      if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) errors.email = 'Enter a valid email address.';
+      if (!form.consent) errors.consent = 'Please allow us to use these details to prepare your quote.';
+    }
+    setFieldErrors(errors);
+    const firstError = Object.keys(errors)[0];
+    if (firstError) {
+      setValidationError('Check the highlighted detail before continuing.');
+      window.setTimeout(() => document.getElementById(firstError)?.focus(), 0);
+      return false;
+    }
+    setValidationError('');
+    return true;
+  };
+
+  const goToStep = step => {
+    if (step > currentStep && !validateStep(currentStep)) return;
+    setCurrentStep(step);
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  };
+
+  const buildQuotePayload = () => ({
+    packageId: selectedPackage?.packageId || selectedPackage?.id,
+    packageName: selectedPackage?.name,
+    selectedDestinations: selectedLabels,
+    ...pricingParams
+  });
+
+  const submitEnquiry = async nextQuote => {
+    const controller = new AbortController();
+    mutationController.current = controller;
+    setRequestState('sending');
+    setRequestError('');
     try {
-      // 1. Submit lead to CRM database first
-      const remarks = `AI-Generated Tour Planner Lead:
-- Category: ${form.travel_category} (${form.tour_type})
-- Route: ${form.departure_city || 'Anywhere'} → ${form.destination_places}
-- Budget Category: ${form.budget_type} (${form.approx_budget ? `${form.currency} ${form.approx_budget}` : 'Not Specified'})
-- Transport Requested: ${form.local_transport} (AC: ${form.ac_preference}, Type: ${form.transport_type})
-- Sightseeing Pace: ${form.travel_pace}
-- Meals: ${form.meal_required === 'Yes' ? `${form.meal_plan} (${form.food_preference})` : 'None'}
-- Special Wishes: ${form.special_arrangement || 'None'}
-- Client Notes: ${form.other_request || 'None'}`;
-
-      const enquiryPayload = {
-        enquiryType: 'Tour Package Enquiry',
-        customerName: form.full_name,
-        mobileNumber: form.mobile_number,
-        emailId: form.email,
-        travelDate: form.travel_start_date ? new Date(form.travel_start_date) : undefined,
-        returnDate: form.return_date ? new Date(form.return_date) : undefined,
-        fromLocation: form.departure_city,
-        toLocation: form.destination_places,
-        numberOfPassengers: form.total_passengers,
-        adultCount: form.num_male + form.num_female + form.num_seniors,
-        childCount: form.num_children,
-        budget: form.approx_budget ? Number(form.approx_budget) : undefined,
-        preferredCategory: form.budget_type,
-        hotelCategory: form.hotel_category,
-        hotelRooms: form.num_rooms,
-        carType: form.local_transport,
-        remarks: remarks,
-        detailedPreferences: form,
-
-        // MICE / Corporate Tours
-        companyName: form.company_name,
-        eventType: form.event_type,
-        eventDurationDays: form.event_duration_days ? Number(form.event_duration_days) : undefined,
-        venuePreference: form.venue_preference,
-        roomOccupancy: form.room_occupancy,
-        meetingRoomRequired: form.meeting_room_required,
-        audioVisualRequired: form.audio_visual_required,
-        teamBuildingActivities: form.team_building_activities,
-        galaDinnerRequired: form.gala_dinner_required,
-        approximatePax: form.approximate_pax ? Number(form.approximate_pax) : undefined,
-
-        // Medical Tours
-        patientName: form.patient_name,
-        patientAge: form.age ? Number(form.age) : undefined,
-        patientGender: form.gender,
-        medicalCondition: form.medical_condition,
-        preferredTreatmentCountry: form.preferred_treatment_country,
-        treatmentCategory: form.treatment_category,
-        hospitalPreference: form.hospital_preference,
-        medicalHistoryDetails: form.medical_history_details,
-        visaAssistanceRequired: form.visa_assistance_required,
-        translatorRequired: form.translator_required,
-        accommodationForAttendants: form.accommodation_for_attendants,
-        wheelchairAssistance: form.wheelchair_assistance,
-
-        // Cruise Packages
-        cruiseLinePreference: form.cruise_line_preference,
-        cabinCategory: form.cabin_category,
-        destinationCruise: form.destination_cruise,
-        durationNights: form.duration_nights ? Number(form.duration_nights) : undefined,
-        shoreExcursions: form.shore_excursions,
-        diningPreference: form.dining_preference,
-        onboardGratuitiesPrepaid: form.onboard_gratuities_prepaid,
-
-        // Educational Tours
-        institutionName: form.institution_name,
-        departmentGrade: form.department_grade,
-        contactPersonDesignation: form.contact_person_designation,
-        numberOfStudents: form.number_of_students ? Number(form.number_of_students) : undefined,
-        numberOfTeachers: form.number_of_teachers ? Number(form.number_of_teachers) : undefined,
-        studySubjectFocus: form.study_subject_focus,
-        industrialVisitRequired: form.industrial_visit_required,
-        guideLectureRequired: form.guide_lecture_required,
-        certificateOfParticipation: form.certificate_of_participation,
-        supervisorAccommodationSharing: form.supervisor_accommodation_sharing,
-
-        // Honeymoon Tours
-        coupleNames: form.couple_names,
-        marriageDate: form.marriage_date ? new Date(form.marriage_date) : undefined,
-        honeymoonTheme: form.honeymoon_theme,
-        complimentaryBenefits: form.complimentary_benifits,
-        roomViewPreference: form.room_view_preference,
-        privatePoolVilla: form.private_pool_villa,
-        photographyService: form.photography_service,
-
-        // Pilgrimage Tours
-        deityTempleName: form.deity_temple_name,
-        primaryDestination: form.primary_destination,
-        specialDarshanPasses: form.special_darshan_passes,
-        ritualPoojaArrangements: form.ritual_pooja_arrangements,
-        seniorCitizenAssistance: form.senior_citizen_assistance,
-        vegetarianJainFood: form.vegetarian_jain_food,
-        physicalDisabilityAssistance: form.physical_disability_assistance,
-        dressCodeGuidelinesAccepted: form.dress_code_guidelines_accepted
-      };
-
-      const enquiryRes = await fetch('/api/enquiries', {
+      const response = await fetch('/api/enquiries', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(enquiryPayload)
+        signal: controller.signal,
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': nextQuote.quoteReference },
+        body: JSON.stringify({
+          enquiryType: 'Tour Package Enquiry',
+          customerName: form.fullName.trim(),
+          mobileNumber: form.mobileNumber.trim(),
+          emailId: form.email.trim(),
+          travelDate: form.travelStartDate || undefined,
+          returnDate: form.returnDate || undefined,
+          fromLocation: form.departureCity.trim(),
+          toLocation: selectedPackage?.destination || selectedPackage?.name,
+          numberOfPassengers: totalTravellers,
+          adultCount: Number(form.adultCount),
+          childCount: Number(form.childWithBedCount || 0) + Number(form.childNoBedCount || 0),
+          preferredCategory: selectedPackage?.tourType,
+          hotelCategory: form.hotelCategory,
+          hotelRooms: Number(form.hotelRooms) || undefined,
+          carType: form.vehicleType,
+          quoteReference: nextQuote.quoteReference,
+          quotedAmount: nextQuote.customerPrice,
+          quoteIssuedAt: nextQuote.issuedAt,
+          selectedDestinations: selectedLabels,
+          remarks: form.notes.trim(),
+          detailedPreferences: {
+            plannerVersion: 2,
+            packageName: selectedPackage?.name,
+            durationDays: Number(form.durationDays),
+            durationNights: Number(form.durationNights),
+            contactMethod: form.contactMethod,
+            guideRequired: form.guideRequired,
+            mealPlan: form.mealPlan,
+            entryTickets: form.entryTickets,
+            city: form.city.trim()
+          }
+        })
       });
-
-      if (enquiryRes.ok) {
-        setEnquirySuccess(true);
-      } else {
-        console.warn('Could not register CRM lead. Proceeding to compile itinerary anyway...');
-      }
-
-      // 2. Fetch AI Custom Itinerary
-      const res = await fetch('/api/ai/plan-structured', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to compile itinerary');
-      setPlanResult(data);
-      setOpenDay(0);
-    } catch (err) {
-      alert(`Error generating plan: ${err.message}`);
-    } finally {
-      setPlannerLoading(false);
+      const data = await safeJson(response);
+      if (!response.ok) throw new Error(data.message || 'The travel desk could not receive your enquiry.');
+      setEnquirySuccess(true);
+      setRequestState('success');
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+      setRequestState('ready');
+      setRequestError(error.message || 'The quote is ready, but the enquiry could not be sent. Try again.');
     }
   };
 
-  // Handle chat submission
-  const handleChatSend = async (e) => {
-    e.preventDefault();
-    if (!chatInput.trim()) return;
+  const requestQuote = async event => {
+    event.preventDefault();
+    if (!validateStep(4)) return;
+    if (quote) {
+      await submitEnquiry(quote);
+      return;
+    }
 
-    const userMsg = { role: 'user', content: chatInput };
-    setChatMessages(prev => [...prev, userMsg]);
+    const controller = new AbortController();
+    mutationController.current = controller;
+    setRequestState('quoting');
+    setRequestError('');
+    setEnquirySuccess(false);
+    try {
+      const response = await fetch('/api/quotations/preview', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildQuotePayload())
+      });
+      const data = await safeJson(response);
+      if (!response.ok || !data.quote) throw new Error(data.message || 'We could not calculate this estimate.');
+      setQuote(data.quote);
+      await submitEnquiry(data.quote);
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+      setRequestState('idle');
+      setRequestError(error.message || 'We could not calculate this estimate. Check the details and try again.');
+    }
+  };
+
+  const handleChatSend = async event => {
+    event.preventDefault();
+    const prompt = chatInput.trim();
+    if (!prompt || chatLoading) return;
+    setChatMessages(previous => [...previous, { role: 'user', content: prompt }]);
     setChatInput('');
     setChatLoading(true);
-
     try {
-      const res = await fetch('/api/ai/plan', {
+      const response = await fetch('/api/ai/plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: userMsg.content })
+        body: JSON.stringify({ prompt })
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Error communicating with assistant');
-      setChatMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
-    } catch (err) {
-      setChatMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}. Please try again.` }]);
+      const data = await safeJson(response);
+      if (!response.ok) throw new Error(data.message || 'The assistant is unavailable right now.');
+      setChatMessages(previous => [...previous, { role: 'assistant', content: data.response || 'I could not find a useful answer. Try asking about a route, pace or travel style.' }]);
+    } catch (error) {
+      setChatMessages(previous => [...previous, { role: 'assistant', content: error.message || 'The assistant is unavailable right now. Please try again.' }]);
     } finally {
       setChatLoading(false);
     }
   };
 
-  // Helper to trigger Itinerary download as structured text file
-  const downloadItineraryText = () => {
-    if (!planResult) return;
+  const downloadPdf = () => downloadQuotationPdf({
+    form,
+    quote,
+    selectedPackage,
+    selectedDestinations: selectedLabels,
+    itinerary
+  });
 
-    let text = `==================================================\n`;
-    text += `   SreePayanam Tours & Travels AI Custom Itinerary\n`;
-    text += `==================================================\n\n`;
-    text += `Title: ${planResult.title}\n`;
-    text += `Destination: ${planResult.destination}\n`;
-    text += `Start Point: ${planResult.startingCity || 'Not Specified'} -> End Point: ${planResult.endingCity || 'Not Specified'}\n`;
-    text += `Duration: ${planResult.durationDays} Days / ${planResult.durationNights} Nights\n`;
-    text += `Price Estimate: ${planResult.estimatedPrice}\n\n`;
-    text += `--------------------------------------------------\n`;
-    text += `Overview:\n${planResult.overview}\n`;
-    text += `--------------------------------------------------\n\n`;
-    text += `DAILY TIMELINE:\n`;
-
-    planResult.itinerary.forEach(day => {
-      text += `Day ${day.day}: ${day.title}\n`;
-      text += `Activities: ${day.activities}\n`;
-      if (day.hotel?.name) {
-        text += `Stay: ${day.hotel.name} (${day.hotel.rating}) - ${day.hotel.desc}\n`;
-      }
-      if (day.meal) {
-        text += `Dining recommendation: ${day.meal}\n`;
-      }
-      if (day.transit) {
-        text += `Transit: ${day.transit}\n`;
-      }
-      text += `\n`;
-    });
-
-    text += `--------------------------------------------------\n`;
-    text += `INCLUSIONS:\n`;
-    planResult.inclusions.forEach(item => text += `- ${item}\n`);
-    text += `\nEXCLUSIONS:\n`;
-    planResult.exclusions.forEach(item => text += `- ${item}\n`);
-    text += `\n==================================================\n`;
-    text += `Generated via SreePayanam AI Assistant. Booked!\n`;
-
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `SreePayanam_Itinerary_${planResult.destination.replace(/\s+/g, '_')}.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
+  const startOver = () => {
+    const firstPackage = DESTINATION_CATALOG[0];
+    setForm(DEFAULT_FORM);
+    setSelectedDestinations(flattenDestinationGroups(firstPackage.groups).filter(place => place.kind === 'recommended').map(place => place.id));
+    setCustomPlaces([]);
+    setCustomPlace('');
+    setCurrentStep(1);
+    setQuote(null);
+    setRequestState('idle');
+    setRequestError('');
+    setEnquirySuccess(false);
+    setFieldErrors({});
+    setValidationError('');
   };
 
-  const formatChatMessage = (text) => {
-    return text.split('\n').map((line, i) => (
-      <span key={i}>
-        {line.replace(/\*\*(.*?)\*\*/g, '$1')}
-        <br/>
-      </span>
-    ));
-  };
-
-  const steps = [
-    { id: 1, name: 'Customer Info', icon: <User size={16} /> },
-    { id: 2, name: 'Trip & Passengers', icon: <MapPin size={16} /> },
-    { id: 3, name: 'Hotel & Meals', icon: <Home size={16} /> },
-    { id: 4, name: 'Transit & Activities', icon: <Plane size={16} /> },
-    { id: 5, name: 'Visa & Budget', icon: <Briefcase size={16} /> }
-  ];
+  const summaryStops = [
+    form.departureCity.trim() || 'Your departure',
+    ...selectedLabels.slice(0, 2),
+    selectedPackage?.destination || 'Curated route'
+  ].filter((value, index, list) => list.indexOf(value) === index);
 
   return (
-    <div style={{ background: '#f8fafc', minHeight: '100vh', paddingTop: 100, paddingBottom: 60 }}>
-      <div className="container" style={{ maxWidth: 1050, margin: '0 auto', padding: '0 20px' }}>
-        
-        {/* Top Header Card */}
-        <div className="glass-card" style={{ padding: '24px 32px', marginBottom: 28, background: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16, border: '1px solid #cbd5e1' }}>
+    <div className="planner-page">
+      <div className="container">
+        <div className="planner-intro">
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-              <div style={{ background: 'var(--primary)', color: 'white', padding: 8, borderRadius: 10, display: 'flex' }}>
-                <Sparkles size={20} />
-              </div>
-              <h1 style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--dark)', margin: 0 }}>AI Travel Planner</h1>
-            </div>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', margin: 0 }}>Create a fully custom, interactive trip itinerary instantly or chat with our travel expert bot.</p>
+            <span className="eyebrow" style={{ color: 'var(--color-coral-dark)' }}>SreePayanam route desk</span>
+            <h1>Make room for the <em>good parts.</em></h1>
           </div>
-
-          {/* Tab Navigation */}
-          <div style={{ display: 'flex', background: '#eff6ff', borderRadius: 24, padding: 4 }}>
-            <button
-              onClick={() => setActiveTab('guided')}
-              style={{
-                border: 'none',
-                borderRadius: 20,
-                padding: '8px 20px',
-                fontWeight: 700,
-                fontSize: '0.88rem',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                background: activeTab === 'guided' ? 'var(--primary)' : 'transparent',
-                color: activeTab === 'guided' ? 'white' : 'var(--primary)'
-              }}
-            >
-              📋 Guided Planner Form
-            </button>
-            <button
-              onClick={() => setActiveTab('chat')}
-              style={{
-                border: 'none',
-                borderRadius: 20,
-                padding: '8px 20px',
-                fontWeight: 700,
-                fontSize: '0.88rem',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                background: activeTab === 'chat' ? 'var(--primary)' : 'transparent',
-                color: activeTab === 'chat' ? 'white' : 'var(--primary)'
-              }}
-            >
-              💬 Conversational Bot
-            </button>
-          </div>
+          <p>Choose a route, mark the places that matter, and get a customer-facing estimate you can save as a PDF.</p>
         </div>
 
-        {/* Tab View Contents */}
-        <AnimatePresence mode="wait">
-          {activeTab === 'guided' ? (
-            <motion.div
-              key="guided"
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.25 }}
-            >
-              {!planResult && !plannerLoading && (
-                <div className="glass-card" style={{ padding: 0, background: 'white', border: '1px solid #cbd5e1', overflow: 'hidden' }}>
-                  {/* Step Progress Tracker */}
-                  <div style={{ display: 'flex', borderBottom: '1px solid #cbd5e1', background: '#f8fafc', padding: '16px 24px', justifyContent: 'space-between', overflowX: 'auto', gap: 16 }}>
-                    {steps.map(s => {
-                      const isActive = s.id === currentStep;
-                      const isCompleted = s.id < currentStep;
-                      return (
-                        <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, opacity: isActive || isCompleted ? 1 : 0.45, flexShrink: 0 }}>
-                          <div style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: '50%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontWeight: 800,
-                            fontSize: '0.82rem',
-                            background: isCompleted ? '#22c55e' : isActive ? 'var(--primary)' : '#e2e8f0',
-                            color: isCompleted || isActive ? 'white' : '#64748b',
-                            transition: 'all 0.3s'
-                          }}>
-                            {isCompleted ? <Check size={16} /> : s.id}
-                          </div>
-                          <span style={{ fontSize: '0.82rem', fontWeight: isActive ? 800 : 600, color: isActive ? 'var(--primary)' : 'var(--text-main)' }}>
-                            {s.name}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Wizard Form Sections */}
-                  <form onSubmit={handleGeneratePlan} style={{ padding: 32 }}>
-                    
-                    {/* Error Alerts */}
-                    {validationError && (
-                      <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#ef4444', padding: '12px 16px', borderRadius: 8, marginBottom: 24, fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <XCircle size={16} />
-                        <strong>Error:</strong> {validationError}
-                      </div>
-                    )}
-
-                    {/* STEP 1: Customer Details */}
-                    {currentStep === 1 && (
-                      <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
-                        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--dark)', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <User size={20} color="var(--primary)" /> 1. Customer Details
-                        </h2>
-                        
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                          <div>
-                            <label style={styles.label}>Full Name *</label>
-                            <input
-                              required
-                              type="text"
-                              className="input-field"
-                              placeholder="Enter your full name"
-                              style={{ width: '100%' }}
-                              value={form.full_name}
-                              onChange={e => setForm(prev => ({ ...prev, full_name: e.target.value }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Mobile Number *</label>
-                            <input
-                              required
-                              type="tel"
-                              className="input-field"
-                              placeholder="Enter mobile number"
-                              style={{ width: '100%' }}
-                              value={form.mobile_number}
-                              onChange={e => setForm(prev => ({ ...prev, mobile_number: e.target.value }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>WhatsApp Number *</label>
-                            <input
-                              required
-                              type="tel"
-                              className="input-field"
-                              placeholder="Enter WhatsApp number"
-                              style={{ width: '100%' }}
-                              value={form.whatsapp_number}
-                              onChange={e => setForm(prev => ({ ...prev, whatsapp_number: e.target.value }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Email Address *</label>
-                            <input
-                              required
-                              type="email"
-                              className="input-field"
-                              placeholder="Enter your email address"
-                              style={{ width: '100%' }}
-                              value={form.email}
-                              onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Location / City</label>
-                            <input
-                              type="text"
-                              className="input-field"
-                              placeholder="Your current city"
-                              style={{ width: '100%' }}
-                              value={form.location}
-                              onChange={e => setForm(prev => ({ ...prev, location: e.target.value }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Preferred Contact Method</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.contact_method}
-                              onChange={e => setForm(prev => ({ ...prev, contact_method: e.target.value }))}
-                            >
-                              <option value="WhatsApp">WhatsApp</option>
-                              <option value="Mobile Call">Mobile Call</option>
-                              <option value="Email">Email</option>
-                            </select>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-
-                    {/* STEP 2: Trip & Passenger Details */}
-                    {currentStep === 2 && (
-                      <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
-                        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--dark)', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <MapPin size={20} color="var(--primary)" /> 2. Trip Details & Passengers
-                        </h2>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 28 }}>
-                          <div>
-                            <label style={styles.label}>Travel Category</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.travel_category}
-                              onChange={e => setForm(prev => ({ ...prev, travel_category: e.target.value }))}
-                            >
-                              <option value="National">National (Within India)</option>
-                              <option value="International">International (Outside India)</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label style={styles.label}>Tour Type / Vacation Vibe</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.tour_type}
-                              onChange={e => setForm(prev => ({ ...prev, tour_type: e.target.value }))}
-                            >
-                              <option value="Family Tours">👨‍👩‍👧‍👦 Family Tours</option>
-                              <option value="Honeymoon Tours">💖 Honeymoon Tours</option>
-                              <option value="Hill Station Tours">🏔️ Hill Station Tours</option>
-                              <option value="Pilgrimage Tours">🙏 Pilgrimage Tours</option>
-                              <option value="Resort Packages">🏨 Resort Packages</option>
-                              <option value="Weekend Tours">🎒 Weekend Tours</option>
-                              <option value="Group Tours">👥 Group Tours</option>
-                              <option value="School / College Tours">🎓 School / College Tours</option>
-                              <option value="Corporate Tours">💼 Corporate Tours</option>
-                              <option value="MICE Tours">🏢 MICE / Corporate Tours</option>
-                              <option value="Medical Tours">🏥 Medical Tours</option>
-                              <option value="Education Tours">📖 Education Tours</option>
-                              <option value="Cultural Tours">🏛️ Cultural Tours</option>
-                              <option value="Luxury Tours">💎 Luxury Tours</option>
-                              <option value="Cruise Packages">🚢 Cruise Packages</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Departure City</label>
-                            <input
-                              type="text"
-                              className="input-field"
-                              placeholder="e.g. Chennai, Bangalore, Delhi"
-                              style={{ width: '100%' }}
-                              value={form.departure_city}
-                              onChange={e => setForm(prev => ({ ...prev, departure_city: e.target.value }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Destination Places *</label>
-                            <input
-                              required
-                              type="text"
-                              className="input-field"
-                              placeholder="e.g. Kerala, Munnar, Dubai, Kashmir"
-                              style={{ width: '100%' }}
-                              value={form.destination_places}
-                              onChange={e => setForm(prev => ({ ...prev, destination_places: e.target.value }))}
-                            />
-                          </div>
-
-                          <div style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <input
-                              type="checkbox"
-                              id="suggest_destination"
-                              checked={form.suggest_destination}
-                              onChange={e => setForm(prev => ({ ...prev, suggest_destination: e.target.checked }))}
-                            />
-                            <label htmlFor="suggest_destination" style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)', cursor: 'pointer' }}>
-                              I am flexible. Suggest travel destination places based on my preferences.
-                            </label>
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Start Date</label>
-                            <input
-                              type="date"
-                              className="input-field"
-                              style={{ width: '100%' }}
-                              value={form.travel_start_date}
-                              onChange={e => setForm(prev => ({ ...prev, travel_start_date: e.target.value }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Return Date</label>
-                            <input
-                              type="date"
-                              className="input-field"
-                              style={{ width: '100%' }}
-                              value={form.return_date}
-                              onChange={e => setForm(prev => ({ ...prev, return_date: e.target.value }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Duration Days</label>
-                            <input
-                              type="number"
-                              min="1"
-                              max="30"
-                              className="input-field"
-                              style={{ width: '100%' }}
-                              value={form.num_days}
-                              onChange={e => setForm(prev => ({ ...prev, num_days: parseInt(e.target.value) || 5 }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Duration Nights</label>
-                            <input
-                              type="number"
-                              min="0"
-                              max="30"
-                              className="input-field"
-                              style={{ width: '100%' }}
-                              value={form.num_nights}
-                              onChange={e => setForm(prev => ({ ...prev, num_nights: parseInt(e.target.value) || 4 }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Date Flexibility</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.date_flexibility}
-                              onChange={e => setForm(prev => ({ ...prev, date_flexibility: e.target.value }))}
-                            >
-                              <option value="Exact Dates">Exact Dates</option>
-                              <option value="Flexible (+/- 3 Days)">Flexible (+/- 3 Days)</option>
-                              <option value="Flexible (+/- 7 Days)">Flexible (+/- 7 Days)</option>
-                              <option value="Month / Season Flexible">Month / Season Flexible</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        {/* CATEGORY SPECIFIC NICHE FIELDS */}
-                        {['MICE Tours', 'Corporate Tours', 'Medical Tours', 'Cruise Packages', 'School / College Tours', 'Education Tours', 'Honeymoon Tours', 'Pilgrimage Tours'].includes(form.tour_type) && (
-                          <div style={{
-                            background: '#f8fafc',
-                            border: '1.5px solid var(--primary)',
-                            borderRadius: 12,
-                            padding: 24,
-                            marginTop: 12,
-                            marginBottom: 24,
-                            boxShadow: '0 4px 15px rgba(0, 0, 0, 0.03)'
-                          }}>
-                            <h3 style={{
-                              fontSize: '1.05rem',
-                              fontWeight: 800,
-                              color: 'var(--primary)',
-                              marginBottom: 18,
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 8,
-                              borderBottom: '1px solid #cbd5e1',
-                              paddingBottom: 8
-                            }}>
-                              ✨ Niche Requirements: {form.tour_type}
-                            </h3>
-                            
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                              {(form.tour_type === 'MICE Tours' || form.tour_type === 'Corporate Tours') && (
-                                <>
-                                  <div>
-                                    <label style={styles.label}>Company / Organization Name *</label>
-                                    <input required type="text" className="input-field" style={{ width: '100%' }} placeholder="Enter company name" value={form.company_name} onChange={e => setForm(prev => ({ ...prev, company_name: e.target.value }))} />
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Event Type *</label>
-                                    <select required className="input-field" style={{ width: '100%', height: 45 }} value={form.event_type} onChange={e => setForm(prev => ({ ...prev, event_type: e.target.value }))}>
-                                      <option value="">Select Event Type</option>
-                                      <option value="Meeting">Meeting</option>
-                                      <option value="Incentive Tour">Incentive Tour</option>
-                                      <option value="Conference">Conference</option>
-                                      <option value="Exhibition">Exhibition</option>
-                                      <option value="Team Building">Team Building</option>
-                                      <option value="Annual Meet">Annual Meet</option>
-                                      <option value="Product Launch">Product Launch</option>
-                                      <option value="Others">Others</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Event Duration (Days) *</label>
-                                    <input required type="number" min="1" className="input-field" style={{ width: '100%' }} value={form.event_duration_days} onChange={e => setForm(prev => ({ ...prev, event_duration_days: e.target.value }))} />
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Venue Preference</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.venue_preference} onChange={e => setForm(prev => ({ ...prev, venue_preference: e.target.value }))}>
-                                      <option value="">Select Venue Preference</option>
-                                      <option value="Hotel Conference Hall">Hotel Conference Hall</option>
-                                      <option value="Convention Center">Convention Center</option>
-                                      <option value="Resort">Resort</option>
-                                      <option value="Outdoor">Outdoor</option>
-                                      <option value="Cruise">Cruise</option>
-                                      <option value="Others">Others</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Room Occupancy</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.room_occupancy} onChange={e => setForm(prev => ({ ...prev, room_occupancy: e.target.value }))}>
-                                      <option value="">Select Room Occupancy</option>
-                                      <option value="Single">Single</option>
-                                      <option value="Double">Double</option>
-                                      <option value="Triple">Triple</option>
-                                      <option value="Twin Sharing">Twin Sharing</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Meeting Room Required?</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.meeting_room_required} onChange={e => setForm(prev => ({ ...prev, meeting_room_required: e.target.value }))}>
-                                      <option value="No">No</option>
-                                      <option value="Yes">Yes</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Audio Visual Required?</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.audio_visual_required} onChange={e => setForm(prev => ({ ...prev, audio_visual_required: e.target.value }))}>
-                                      <option value="No">No</option>
-                                      <option value="Yes">Yes</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Team Building Activities?</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.team_building_activities} onChange={e => setForm(prev => ({ ...prev, team_building_activities: e.target.value }))}>
-                                      <option value="No">No</option>
-                                      <option value="Yes">Yes</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Gala Dinner Required?</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.gala_dinner_required} onChange={e => setForm(prev => ({ ...prev, gala_dinner_required: e.target.value }))}>
-                                      <option value="No">No</option>
-                                      <option value="Yes">Yes</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Approximate Pax *</label>
-                                    <input required type="number" min="1" className="input-field" style={{ width: '100%' }} value={form.approximate_pax} onChange={e => setForm(prev => ({ ...prev, approximate_pax: e.target.value }))} />
-                                  </div>
-                                </>
-                              )}
-
-                              {form.tour_type === 'Medical Tours' && (
-                                <>
-                                  <div>
-                                    <label style={styles.label}>Patient Name *</label>
-                                    <input required type="text" className="input-field" style={{ width: '100%' }} placeholder="Enter patient name" value={form.patient_name} onChange={e => setForm(prev => ({ ...prev, patient_name: e.target.value }))} />
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Age *</label>
-                                    <input required type="number" min="1" className="input-field" style={{ width: '100%' }} value={form.age} onChange={e => setForm(prev => ({ ...prev, age: e.target.value }))} />
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Gender *</label>
-                                    <select required className="input-field" style={{ width: '100%', height: 45 }} value={form.gender} onChange={e => setForm(prev => ({ ...prev, gender: e.target.value }))}>
-                                      <option value="Male">Male</option>
-                                      <option value="Female">Female</option>
-                                      <option value="Other">Other</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Medical Condition *</label>
-                                    <input required type="text" className="input-field" style={{ width: '100%' }} placeholder="e.g. Heart surgery, Dental checkup" value={form.medical_condition} onChange={e => setForm(prev => ({ ...prev, medical_condition: e.target.value }))} />
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Preferred Country *</label>
-                                    <select required className="input-field" style={{ width: '100%', height: 45 }} value={form.preferred_treatment_country} onChange={e => setForm(prev => ({ ...prev, preferred_treatment_country: e.target.value }))}>
-                                      <option value="">Select Country</option>
-                                      <option value="India">India</option>
-                                      <option value="Thailand">Thailand</option>
-                                      <option value="Singapore">Singapore</option>
-                                      <option value="Malaysia">Malaysia</option>
-                                      <option value="Germany">Germany</option>
-                                      <option value="Turkey">Turkey</option>
-                                      <option value="UAE">UAE</option>
-                                      <option value="Others">Others</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Treatment Category *</label>
-                                    <select required className="input-field" style={{ width: '100%', height: 45 }} value={form.treatment_category} onChange={e => setForm(prev => ({ ...prev, treatment_category: e.target.value }))}>
-                                      <option value="">Select Category</option>
-                                      <option value="Cardiology">Cardiology</option>
-                                      <option value="Oncology">Oncology</option>
-                                      <option value="Orthopedics">Orthopedics</option>
-                                      <option value="Neurology">Neurology</option>
-                                      <option value="Dental">Dental</option>
-                                      <option value="Cosmetic">Cosmetic</option>
-                                      <option value="Health Checkup">Health Checkup</option>
-                                      <option value="Others">Others</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Hospital Preference</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.hospital_preference} onChange={e => setForm(prev => ({ ...prev, hospital_preference: e.target.value }))}>
-                                      <option value="">Select Hospital</option>
-                                      <option value="Apollo">Apollo</option>
-                                      <option value="Fortis">Fortis</option>
-                                      <option value="Max">Max</option>
-                                      <option value="Gleneagles">Gleneagles</option>
-                                      <option value="Bumrungrad">Bumrungrad</option>
-                                      <option value="Mount Elizabeth">Mount Elizabeth</option>
-                                      <option value="Others">Others</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Visa Assistance Required?</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.visa_assistance_required} onChange={e => setForm(prev => ({ ...prev, visa_assistance_required: e.target.value }))}>
-                                      <option value="No">No</option>
-                                      <option value="Yes">Yes</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Translator Required?</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.translator_required} onChange={e => setForm(prev => ({ ...prev, translator_required: e.target.value }))}>
-                                      <option value="No">No</option>
-                                      <option value="Yes">Yes</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Accommodation for Attendants?</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.accommodation_for_attendants} onChange={e => setForm(prev => ({ ...prev, accommodation_for_attendants: e.target.value }))}>
-                                      <option value="No">No</option>
-                                      <option value="Yes">Yes</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Wheelchair / Stretcher Assistance?</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.wheelchair_assistance} onChange={e => setForm(prev => ({ ...prev, wheelchair_assistance: e.target.value }))}>
-                                      <option value="No">No</option>
-                                      <option value="Yes">Yes</option>
-                                    </select>
-                                  </div>
-                                  <div style={{ gridColumn: 'span 2' }}>
-                                    <label style={styles.label}>Medical History / Details</label>
-                                    <textarea className="input-field" style={{ width: '100%', padding: '10px' }} rows="3" placeholder="Enter brief details of medical history or requirements" value={form.medical_history_details} onChange={e => setForm(prev => ({ ...prev, medical_history_details: e.target.value }))}></textarea>
-                                  </div>
-                                </>
-                              )}
-
-                              {form.tour_type === 'Cruise Packages' && (
-                                <>
-                                  <div>
-                                    <label style={styles.label}>Cruise Line Preference *</label>
-                                    <select required className="input-field" style={{ width: '100%', height: 45 }} value={form.cruise_line_preference} onChange={e => setForm(prev => ({ ...prev, cruise_line_preference: e.target.value }))}>
-                                      <option value="">Select Cruise Line</option>
-                                      <option value="Royal Caribbean">Royal Caribbean</option>
-                                      <option value="Costa Cruises">Costa Cruises</option>
-                                      <option value="Cordelia Cruises">Cordelia Cruises</option>
-                                      <option value="MSC Cruises">MSC Cruises</option>
-                                      <option value="Norwegian Cruise Line">Norwegian Cruise Line</option>
-                                      <option value="Princess Cruises">Princess Cruises</option>
-                                      <option value="Genting Dream">Genting Dream</option>
-                                      <option value="Singapore Cruises">Singapore Cruises</option>
-                                      <option value="Others">Others</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Cabin Category Preference *</label>
-                                    <select required className="input-field" style={{ width: '100%', height: 45 }} value={form.cabin_category} onChange={e => setForm(prev => ({ ...prev, cabin_category: e.target.value }))}>
-                                      <option value="">Select Cabin Category</option>
-                                      <option value="Interior Cabin">Interior Cabin</option>
-                                      <option value="Oceanview Cabin">Oceanview Cabin</option>
-                                      <option value="Balcony Cabin">Balcony Cabin</option>
-                                      <option value="Suite">Suite</option>
-                                      <option value="Luxury Suite">Luxury Suite</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Destination Cruise *</label>
-                                    <select required className="input-field" style={{ width: '100%', height: 45 }} value={form.destination_cruise} onChange={e => setForm(prev => ({ ...prev, destination_cruise: e.target.value }))}>
-                                      <option value="">Select Destination</option>
-                                      <option value="Singapore-Malaysia">Singapore-Malaysia</option>
-                                      <option value="Europe-Mediterranean">Europe-Mediterranean</option>
-                                      <option value="Caribbean">Caribbean</option>
-                                      <option value="Alaska">Alaska</option>
-                                      <option value="India Domestic">India Domestic</option>
-                                      <option value="Dubai-Gulf">Dubai-Gulf</option>
-                                      <option value="Others">Others</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Duration Nights *</label>
-                                    <input required type="number" min="1" className="input-field" style={{ width: '100%' }} value={form.duration_nights} onChange={e => setForm(prev => ({ ...prev, duration_nights: e.target.value }))} />
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Shore Excursions Required?</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.shore_excursions} onChange={e => setForm(prev => ({ ...prev, shore_excursions: e.target.value }))}>
-                                      <option value="No">No</option>
-                                      <option value="Yes">Yes</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Dining Preference</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.dining_preference} onChange={e => setForm(prev => ({ ...prev, dining_preference: e.target.value }))}>
-                                      <option value="">Select Dining</option>
-                                      <option value="Main Dining Room">Main Dining Room</option>
-                                      <option value="Buffet">Buffet</option>
-                                      <option value="Specialty Dining">Specialty Dining</option>
-                                      <option value="Halal">Halal</option>
-                                      <option value="Vegetarian">Vegetarian</option>
-                                      <option value="Jain">Jain</option>
-                                      <option value="Others">Others</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Onboard Gratuities Prepaid?</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.onboard_gratuities_prepaid} onChange={e => setForm(prev => ({ ...prev, onboard_gratuities_prepaid: e.target.value }))}>
-                                      <option value="No">No</option>
-                                      <option value="Yes">Yes</option>
-                                    </select>
-                                  </div>
-                                </>
-                              )}
-
-                              {(form.tour_type === 'School / College Tours' || form.tour_type === 'Education Tours') && (
-                                <>
-                                  <div>
-                                    <label style={styles.label}>Institution Name *</label>
-                                    <input required type="text" className="input-field" style={{ width: '100%' }} placeholder="Enter school or college name" value={form.institution_name} onChange={e => setForm(prev => ({ ...prev, institution_name: e.target.value }))} />
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Department / Grade / Standard *</label>
-                                    <input required type="text" className="input-field" style={{ width: '100%' }} placeholder="e.g. B.Sc Physics, Grade 10" value={form.department_grade} onChange={e => setForm(prev => ({ ...prev, department_grade: e.target.value }))} />
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Contact Person Designation</label>
-                                    <input type="text" className="input-field" style={{ width: '100%' }} placeholder="e.g. Principal, HOD, Teacher" value={form.contact_person_designation} onChange={e => setForm(prev => ({ ...prev, contact_person_designation: e.target.value }))} />
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Number of Students *</label>
-                                    <input required type="number" min="1" className="input-field" style={{ width: '100%' }} value={form.number_of_students} onChange={e => setForm(prev => ({ ...prev, number_of_students: e.target.value }))} />
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Number of Teachers / Escorts *</label>
-                                    <input required type="number" min="1" className="input-field" style={{ width: '100%' }} value={form.number_of_teachers} onChange={e => setForm(prev => ({ ...prev, number_of_teachers: e.target.value }))} />
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Study Subject / Focus Area</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.study_subject_focus} onChange={e => setForm(prev => ({ ...prev, study_subject_focus: e.target.value }))}>
-                                      <option value="">Select Focus Area</option>
-                                      <option value="Science">Science</option>
-                                      <option value="History">History</option>
-                                      <option value="Geography">Geography</option>
-                                      <option value="Business">Business</option>
-                                      <option value="Culture">Culture</option>
-                                      <option value="Industrial Visit">Industrial Visit</option>
-                                      <option value="Adventure">Adventure</option>
-                                      <option value="Others">Others</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Industrial Visit Required?</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.industrial_visit_required} onChange={e => setForm(prev => ({ ...prev, industrial_visit_required: e.target.value }))}>
-                                      <option value="No">No</option>
-                                      <option value="Yes">Yes</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Guide / Lecture Required?</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.guide_lecture_required} onChange={e => setForm(prev => ({ ...prev, guide_lecture_required: e.target.value }))}>
-                                      <option value="No">No</option>
-                                      <option value="Yes">Yes</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Certificate Required?</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.certificate_of_participation} onChange={e => setForm(prev => ({ ...prev, certificate_of_participation: e.target.value }))}>
-                                      <option value="No">No</option>
-                                      <option value="Yes">Yes</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Supervisor Room Sharing</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.supervisor_accommodation_sharing} onChange={e => setForm(prev => ({ ...prev, supervisor_accommodation_sharing: e.target.value }))}>
-                                      <option value="Twin Sharing">Twin Sharing</option>
-                                      <option value="Single">Single</option>
-                                    </select>
-                                  </div>
-                                </>
-                              )}
-
-                              {form.tour_type === 'Honeymoon Tours' && (
-                                <>
-                                  <div style={{ gridColumn: 'span 2' }}>
-                                    <label style={styles.label}>Couple Names *</label>
-                                    <input required type="text" className="input-field" style={{ width: '100%' }} placeholder="Enter names of the couple" value={form.couple_names} onChange={e => setForm(prev => ({ ...prev, couple_names: e.target.value }))} />
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Marriage Date *</label>
-                                    <input required type="date" className="input-field" style={{ width: '100%' }} value={form.marriage_date} onChange={e => setForm(prev => ({ ...prev, marriage_date: e.target.value }))} />
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Honeymoon Theme / Vibe *</label>
-                                    <select required className="input-field" style={{ width: '100%', height: 45 }} value={form.honeymoon_theme} onChange={e => setForm(prev => ({ ...prev, honeymoon_theme: e.target.value }))}>
-                                      <option value="">Select Theme</option>
-                                      <option value="Beach">Beach</option>
-                                      <option value="Hill Station">Hill Station</option>
-                                      <option value="Adventure">Adventure</option>
-                                      <option value="Luxury">Luxury</option>
-                                      <option value="Wildlife">Wildlife</option>
-                                      <option value="Heritage">Heritage</option>
-                                      <option value="Others">Others</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Room View Preference</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.room_view_preference} onChange={e => setForm(prev => ({ ...prev, room_view_preference: e.target.value }))}>
-                                      <option value="">Select View</option>
-                                      <option value="Sea View">Sea View</option>
-                                      <option value="Mountain View">Mountain View</option>
-                                      <option value="Pool View">Pool View</option>
-                                      <option value="Garden View">Garden View</option>
-                                      <option value="Valley View">Valley View</option>
-                                      <option value="No Preference">No Preference</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Private Pool Villa?</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.private_pool_villa} onChange={e => setForm(prev => ({ ...prev, private_pool_villa: e.target.value }))}>
-                                      <option value="No">No</option>
-                                      <option value="Yes">Yes</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Photography Service Required?</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.photography_service} onChange={e => setForm(prev => ({ ...prev, photography_service: e.target.value }))}>
-                                      <option value="No">No</option>
-                                      <option value="Yes">Yes</option>
-                                    </select>
-                                  </div>
-                                  <div style={{ gridColumn: 'span 2' }}>
-                                    <label style={styles.label}>Complimentary Honeymoon Benefits</label>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginTop: 8 }}>
-                                      {["Bed Decoration", "Candle Light Dinner", "Honeymoon Cake", "Flower Bouquet", "Spa Session", "Fruit Basket", "Wine Bottle"].map(benefit => {
-                                        const checked = (form.complimentary_benifits || []).includes(benefit);
-                                        return (
-                                          <label key={benefit} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem', cursor: 'pointer', color: 'var(--text-main)' }}>
-                                            <input type="checkbox" checked={checked} onChange={() => handleBenefitChange(benefit)} />
-                                            {benefit}
-                                          </label>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                </>
-                              )}
-
-                              {form.tour_type === 'Pilgrimage Tours' && (
-                                <>
-                                  <div>
-                                    <label style={styles.label}>Deity / Temple Name *</label>
-                                    <input required type="text" className="input-field" style={{ width: '100%' }} placeholder="e.g. Lord Venkateswara, Sabarimala Ayyappa" value={form.deity_temple_name} onChange={e => setForm(prev => ({ ...prev, deity_temple_name: e.target.value }))} />
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Primary Destination *</label>
-                                    <select required className="input-field" style={{ width: '100%', height: 45 }} value={form.primary_destination} onChange={e => setForm(prev => ({ ...prev, primary_destination: e.target.value }))}>
-                                      <option value="">Select Destination</option>
-                                      <option value="Chardham">Chardham</option>
-                                      <option value="Varanasi">Varanasi</option>
-                                      <option value="Tirupati">Tirupati</option>
-                                      <option value="Sabarimala">Sabarimala</option>
-                                      <option value="Vaishno Devi">Vaishno Devi</option>
-                                      <option value="Hajj/Umrah">Hajj/Umrah</option>
-                                      <option value="Vatican">Vatican</option>
-                                      <option value="Buddhist Circuit">Buddhist Circuit</option>
-                                      <option value="Others">Others</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Special Darshan Passes Required?</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.special_darshan_passes} onChange={e => setForm(prev => ({ ...prev, special_darshan_passes: e.target.value }))}>
-                                      <option value="No">No</option>
-                                      <option value="Yes">Yes</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Ritual Pooja Arrangements?</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.ritual_pooja_arrangements} onChange={e => setForm(prev => ({ ...prev, ritual_pooja_arrangements: e.target.value }))}>
-                                      <option value="No">No</option>
-                                      <option value="Yes">Yes</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Senior Citizen Assistance?</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.senior_citizen_assistance} onChange={e => setForm(prev => ({ ...prev, senior_citizen_assistance: e.target.value }))}>
-                                      <option value="No">No</option>
-                                      <option value="Yes">Yes</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Vegetarian / Jain Food Preference</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.vegetarian_jain_food} onChange={e => setForm(prev => ({ ...prev, vegetarian_jain_food: e.target.value }))}>
-                                      <option value="Standard">Standard Veg / Non-Veg</option>
-                                      <option value="Pure Vegetarian">Pure Vegetarian</option>
-                                      <option value="Jain Food">Jain Food</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Physical Disability Assistance</label>
-                                    <select className="input-field" style={{ width: '100%', height: 45 }} value={form.physical_disability_assistance} onChange={e => setForm(prev => ({ ...prev, physical_disability_assistance: e.target.value }))}>
-                                      <option value="None">None</option>
-                                      <option value="Wheelchair">Wheelchair</option>
-                                      <option value="Doli/Palanquin">Doli/Palanquin</option>
-                                      <option value="Helicopter">Helicopter</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={styles.label}>Accept Dress Code Guidelines? *</label>
-                                    <select required className="input-field" style={{ width: '100%', height: 45 }} value={form.dress_code_guidelines_accepted} onChange={e => setForm(prev => ({ ...prev, dress_code_guidelines_accepted: e.target.value }))}>
-                                      <option value="No">No</option>
-                                      <option value="Yes">Yes (I Accept)</option>
-                                    </select>
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--dark)', marginBottom: 16, borderBottom: '1px dashed #cbd5e1', paddingBottom: 6 }}>
-                          3. Passenger Breakdown
-                        </h3>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-                          <div>
-                            <label style={styles.label}>Total Passengers *</label>
-                            <input
-                              required
-                              type="number"
-                              min="1"
-                              className="input-field"
-                              style={{ width: '100%' }}
-                              value={form.total_passengers}
-                              onChange={e => setForm(prev => ({ ...prev, total_passengers: parseInt(e.target.value) || 2 }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Male Count</label>
-                            <input
-                              type="number"
-                              min="0"
-                              className="input-field"
-                              style={{ width: '100%' }}
-                              value={form.num_male}
-                              onChange={e => setForm(prev => ({ ...prev, num_male: parseInt(e.target.value) || 0 }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Female Count</label>
-                            <input
-                              type="number"
-                              min="0"
-                              className="input-field"
-                              style={{ width: '100%' }}
-                              value={form.num_female}
-                              onChange={e => setForm(prev => ({ ...prev, num_female: parseInt(e.target.value) || 0 }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Senior Citizens (60+)</label>
-                            <input
-                              type="number"
-                              min="0"
-                              className="input-field"
-                              style={{ width: '100%' }}
-                              value={form.num_seniors}
-                              onChange={e => setForm(prev => ({ ...prev, num_seniors: parseInt(e.target.value) || 0 }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Children (2-12 Years)</label>
-                            <input
-                              type="number"
-                              min="0"
-                              className="input-field"
-                              style={{ width: '100%' }}
-                              value={form.num_children}
-                              onChange={e => setForm(prev => ({ ...prev, num_children: parseInt(e.target.value) || 0 }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Children Ages</label>
-                            <input
-                              type="text"
-                              className="input-field"
-                              placeholder="e.g. 5, 8"
-                              style={{ width: '100%' }}
-                              value={form.children_ages}
-                              onChange={e => setForm(prev => ({ ...prev, children_ages: e.target.value }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Infants (0-2 Years)</label>
-                            <input
-                              type="number"
-                              min="0"
-                              className="input-field"
-                              style={{ width: '100%' }}
-                              value={form.num_infants}
-                              onChange={e => setForm(prev => ({ ...prev, num_infants: parseInt(e.target.value) || 0 }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Infant Ages</label>
-                            <input
-                              type="text"
-                              className="input-field"
-                              placeholder="e.g. 1"
-                              style={{ width: '100%' }}
-                              value={form.infant_ages}
-                              onChange={e => setForm(prev => ({ ...prev, infant_ages: e.target.value }))}
-                            />
-                          </div>
-
-                          <div style={{ gridColumn: 'span 4' }}>
-                            <label style={styles.label}>Special Assistance Requirements</label>
-                            <input
-                              type="text"
-                              className="input-field"
-                              placeholder="e.g. Wheelchair assistance, ground floor rooms, medical support info"
-                              style={{ width: '100%' }}
-                              value={form.special_assistance}
-                              onChange={e => setForm(prev => ({ ...prev, special_assistance: e.target.value }))}
-                            />
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-
-                    {/* STEP 3: Hotel & Meals */}
-                    {currentStep === 3 && (
-                      <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
-                        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--dark)', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <Home size={20} color="var(--primary)" /> 4. Hotel Requirement
-                        </h2>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 28 }}>
-                          <div>
-                            <label style={styles.label}>Accommodation Required?</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.hotel_required}
-                              onChange={e => setForm(prev => ({ ...prev, hotel_required: e.target.value }))}
-                            >
-                              <option value="Yes">Yes, include stays</option>
-                              <option value="No">No, I will book my own stays</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Hotel Category Level</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.hotel_category}
-                              disabled={form.hotel_required === 'No'}
-                              onChange={e => setForm(prev => ({ ...prev, hotel_category: e.target.value }))}
-                            >
-                              <option value="Budget">Budget Homestays / 2-Star Hotels</option>
-                              <option value="Standard">Standard / 3-Star Hotels</option>
-                              <option value="Premium">Premium / 4-Star Hotels</option>
-                              <option value="Luxury">Luxury / 5-Star Resorts</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Room Type</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.room_type}
-                              disabled={form.hotel_required === 'No'}
-                              onChange={e => setForm(prev => ({ ...prev, room_type: e.target.value }))}
-                            >
-                              <option value="Single Room">Single Room</option>
-                              <option value="Double">Double / Twin Room</option>
-                              <option value="Triple sharing">Triple sharing Room</option>
-                              <option value="Family Suite">Family Suite</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Number of Rooms</label>
-                            <input
-                              type="number"
-                              min="1"
-                              className="input-field"
-                              style={{ width: '100%' }}
-                              value={form.num_rooms}
-                              disabled={form.hotel_required === 'No'}
-                              onChange={e => setForm(prev => ({ ...prev, num_rooms: parseInt(e.target.value) || 1 }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Extra Bed / Mattress Needed?</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.extra_bed}
-                              disabled={form.hotel_required === 'No'}
-                              onChange={e => setForm(prev => ({ ...prev, extra_bed: e.target.value }))}
-                            >
-                              <option value="No">No</option>
-                              <option value="Yes">Yes</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Child With Extra Bed Count</label>
-                            <input
-                              type="number"
-                              min="0"
-                              className="input-field"
-                              style={{ width: '100%' }}
-                              value={form.child_with_bed}
-                              disabled={form.hotel_required === 'No'}
-                              onChange={e => setForm(prev => ({ ...prev, child_with_bed: parseInt(e.target.value) || 0 }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Child Without Bed Count</label>
-                            <input
-                              type="number"
-                              min="0"
-                              className="input-field"
-                              style={{ width: '100%' }}
-                              value={form.child_without_bed}
-                              disabled={form.hotel_required === 'No'}
-                              onChange={e => setForm(prev => ({ ...prev, child_without_bed: parseInt(e.target.value) || 0 }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Preferred Location Vibe</label>
-                            <input
-                              type="text"
-                              className="input-field"
-                              placeholder="e.g. Near beach, city center, forest view"
-                              style={{ width: '100%' }}
-                              value={form.preferred_location}
-                              disabled={form.hotel_required === 'No'}
-                              onChange={e => setForm(prev => ({ ...prev, preferred_location: e.target.value }))}
-                            />
-                          </div>
-
-                          <div style={{ display: 'flex', gap: 20, gridColumn: 'span 2' }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)', cursor: 'pointer' }}>
-                              <input
-                                type="checkbox"
-                                checked={form.lift_required}
-                                disabled={form.hotel_required === 'No'}
-                                onChange={e => setForm(prev => ({ ...prev, lift_required: e.target.checked }))}
-                              />
-                              Lift access required in hotels
-                            </label>
-                            
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)', cursor: 'pointer' }}>
-                              <input
-                                type="checkbox"
-                                checked={form.wheelchair_friendly}
-                                disabled={form.hotel_required === 'No'}
-                                onChange={e => setForm(prev => ({ ...prev, wheelchair_friendly: e.target.checked }))}
-                              />
-                              Wheelchair friendly rooms
-                            </label>
-                          </div>
-                        </div>
-
-                        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--dark)', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <Utensils size={20} color="var(--primary)" /> 5. Meal Plan
-                        </h2>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                          <div>
-                            <label style={styles.label}>Meals Required?</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.meal_required}
-                              onChange={e => setForm(prev => ({ ...prev, meal_required: e.target.value }))}
-                            >
-                              <option value="Yes">Yes, include meal plan</option>
-                              <option value="No">No, I will dine independently</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Meal Plan Option</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.meal_plan}
-                              disabled={form.meal_required === 'No'}
-                              onChange={e => setForm(prev => ({ ...prev, meal_plan: e.target.value }))}
-                            >
-                              <option value="EP (Room Only)">EP (Room Only)</option>
-                              <option value="CP (Breakfast Only)">CP (Breakfast Only)</option>
-                              <option value="MAP (Breakfast + Lunch/Dinner)">MAP (Breakfast + Lunch/Dinner)</option>
-                              <option value="AP (Breakfast + Lunch + Dinner)">AP (Breakfast + Lunch + Dinner)</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Food Preference</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.food_preference}
-                              disabled={form.meal_required === 'No'}
-                              onChange={e => setForm(prev => ({ ...prev, food_preference: e.target.value }))}
-                            >
-                              <option value="Veg">Vegetarian Only</option>
-                              <option value="Non-Veg">Non-Vegetarian</option>
-                              <option value="Jain Food">Jain Food</option>
-                              <option value="Halal Food">Halal Food</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Dietary restrictions / Special meals</label>
-                            <input
-                              type="text"
-                              className="input-field"
-                              placeholder="e.g. Gluten-free, diabetic meals, allergies"
-                              style={{ width: '100%' }}
-                              value={form.special_meal}
-                              disabled={form.meal_required === 'No'}
-                              onChange={e => setForm(prev => ({ ...prev, special_meal: e.target.value }))}
-                            />
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-
-                    {/* STEP 4: Transit & Sightseeing */}
-                    {currentStep === 4 && (
-                      <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
-                        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--dark)', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <Plane size={20} color="var(--primary)" /> 6. Transport & Ticket Requirements
-                        </h2>
-
-                        <div style={{ background: '#f8fafc', padding: 20, borderRadius: 12, border: '1px solid #e2e8f0', display: 'flex', flexWrap: 'wrap', gap: 24, marginBottom: 24 }}>
-                          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-main)', cursor: 'pointer' }}>
-                            <input
-                              type="checkbox"
-                              checked={form.flight_ticket}
-                              onChange={e => setForm(prev => ({ ...prev, flight_ticket: e.target.checked }))}
-                            />
-                            ✈️ Flight Tickets Needed
-                          </label>
-
-                          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-main)', cursor: 'pointer' }}>
-                            <input
-                              type="checkbox"
-                              checked={form.train_ticket}
-                              onChange={e => setForm(prev => ({ ...prev, train_ticket: e.target.checked }))}
-                            />
-                            🚂 Train Tickets Needed
-                          </label>
-
-                          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-main)', cursor: 'pointer' }}>
-                            <input
-                              type="checkbox"
-                              checked={form.bus_ticket}
-                              onChange={e => setForm(prev => ({ ...prev, bus_ticket: e.target.checked }))}
-                            />
-                            🚌 Bus Tickets Needed
-                          </label>
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 28 }}>
-                          <div>
-                            <label style={styles.label}>Local Transport vehicle</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.local_transport}
-                              onChange={e => setForm(prev => ({ ...prev, local_transport: e.target.value }))}
-                            >
-                              <option value="Sedan">Sedan Car (4 Seater)</option>
-                              <option value="SUV">SUV Car (Innova / Ertiga)</option>
-                              <option value="Tempo Traveller">Tempo Traveller (12-17 Seater)</option>
-                              <option value="Mini Coach">Mini Coach (20+ Seater)</option>
-                              <option value="None">None (No local car needed)</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Vehicle Preference Class</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.vehicle_category}
-                              disabled={form.local_transport === 'None'}
-                              onChange={e => setForm(prev => ({ ...prev, vehicle_category: e.target.value }))}
-                            >
-                              <option value="Budget">Budget / Standard vehicle</option>
-                              <option value="Luxury">Premium / Luxury vehicle</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>AC Preference</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.ac_preference}
-                              disabled={form.local_transport === 'None'}
-                              onChange={e => setForm(prev => ({ ...prev, ac_preference: e.target.value }))}
-                            >
-                              <option value="AC">Air Conditioned (AC)</option>
-                              <option value="Non-AC">Non Air Conditioned (Non-AC)</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Transport Option Type</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.transport_type}
-                              disabled={form.local_transport === 'None'}
-                              onChange={e => setForm(prev => ({ ...prev, transport_type: e.target.value }))}
-                            >
-                              <option value="Private">Private Dedicated Cab</option>
-                              <option value="Sharing">Shared coach tour</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Pickup Location</label>
-                            <input
-                              type="text"
-                              className="input-field"
-                              placeholder="Airport, station or hotel name"
-                              style={{ width: '100%' }}
-                              value={form.pickup_location}
-                              onChange={e => setForm(prev => ({ ...prev, pickup_location: e.target.value }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Drop Location</label>
-                            <input
-                              type="text"
-                              className="input-field"
-                              placeholder="Airport, station or hotel name"
-                              style={{ width: '100%' }}
-                              value={form.drop_location}
-                              onChange={e => setForm(prev => ({ ...prev, drop_location: e.target.value }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Luggage Details</label>
-                            <input
-                              type="text"
-                              className="input-field"
-                              placeholder="e.g. 3 large bags, 2 cabin bags"
-                              style={{ width: '100%' }}
-                              value={form.luggage_details}
-                              onChange={e => setForm(prev => ({ ...prev, luggage_details: e.target.value }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Driver Language Preference</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.driver_language}
-                              onChange={e => setForm(prev => ({ ...prev, driver_language: e.target.value }))}
-                            >
-                              <option value="English">English</option>
-                              <option value="Hindi">Hindi</option>
-                              <option value="Malayalam">Malayalam</option>
-                              <option value="Tamil">Tamil</option>
-                              <option value="Kannada">Kannada</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--dark)', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <Bot size={20} color="var(--primary)" /> 7. Sightseeing & Activities
-                        </h2>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                          <div style={{ gridColumn: 'span 2' }}>
-                            <label style={styles.label}>Specific Sightseeing Places to Cover</label>
-                            <textarea
-                              className="input-field"
-                              rows="3"
-                              placeholder="e.g. Burj Khalifa in Dubai, houseboat ride in Alleppey, Taj Mahal in Agra..."
-                              style={{ width: '100%', padding: 12, borderRadius: 10 }}
-                              value={form.places_to_cover}
-                              onChange={e => setForm(prev => ({ ...prev, places_to_cover: e.target.value }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Travel Pace</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.travel_pace}
-                              onChange={e => setForm(prev => ({ ...prev, travel_pace: e.target.value }))}
-                            >
-                              <option value="Slow & Relaxed">Slow & Relaxed (Plenty of leisure time)</option>
-                              <option value="Moderate">Moderate (Standard sightseeing pace)</option>
-                              <option value="Fast & Active">Fast & Active (Cover maximum places)</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Interest Type</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.interest_type}
-                              onChange={e => setForm(prev => ({ ...prev, interest_type: e.target.value }))}
-                            >
-                              <option value="Nature">🌿 Nature & Scenic Scenery</option>
-                              <option value="Adventure">🧗 Thrill & Adventure Sports</option>
-                              <option value="Heritage">🏛️ Heritage & Cultural Sites</option>
-                              <option value="Religious">🙏 Temple & Religious Pilgrimage</option>
-                              <option value="Leisure">🏖️ Beach & Resort Leisure</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Local Guide Required?</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.guide_required}
-                              onChange={e => setForm(prev => ({ ...prev, guide_required: e.target.value }))}
-                            >
-                              <option value="No">No guide needed</option>
-                              <option value="Yes">Yes, require local guide at monuments</option>
-                            </select>
-                          </div>
-
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, justifyContent: 'center' }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)', cursor: 'pointer' }}>
-                              <input
-                                type="checkbox"
-                                checked={form.entry_tickets}
-                                onChange={e => setForm(prev => ({ ...prev, entry_tickets: e.target.checked }))}
-                              />
-                              Include Monument Entrance Tickets
-                            </label>
-
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)', cursor: 'pointer' }}>
-                              <input
-                                type="checkbox"
-                                checked={form.special_darshan}
-                                onChange={e => setForm(prev => ({ ...prev, special_darshan: e.target.checked }))}
-                              />
-                              Include Special Temple Darshan
-                            </label>
-
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)', cursor: 'pointer' }}>
-                              <input
-                                type="checkbox"
-                                checked={form.ritual_pooja}
-                                onChange={e => setForm(prev => ({ ...prev, ritual_pooja: e.target.checked }))}
-                              />
-                              Include Ritual Pooja / Archana bookings
-                            </label>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-
-                    {/* STEP 5: Passport, Budget & Specials */}
-                    {currentStep === 5 && (
-                      <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
-                        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--dark)', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <Shield size={20} color="var(--primary)" /> 8. Passport, Visa & Insurance
-                        </h2>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 28 }}>
-                          <div>
-                            <label style={styles.label}>Do you have a valid Passport?</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.passport_available}
-                              onChange={e => setForm(prev => ({ ...prev, passport_available: e.target.value }))}
-                            >
-                              <option value="Yes">Yes</option>
-                              <option value="No">No</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Passport Validity Expiry Date</label>
-                            <input
-                              type="date"
-                              className="input-field"
-                              style={{ width: '100%' }}
-                              value={form.passport_validity}
-                              disabled={form.passport_available === 'No'}
-                              onChange={e => setForm(prev => ({ ...prev, passport_validity: e.target.value }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Visa Assistance Required?</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.visa_assistance}
-                              onChange={e => setForm(prev => ({ ...prev, visa_assistance: e.target.value }))}
-                            >
-                              <option value="No">No, I have my visa</option>
-                              <option value="Yes">Yes, require visa services</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Travel Insurance Required?</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.travel_insurance}
-                              onChange={e => setForm(prev => ({ ...prev, travel_insurance: e.target.value }))}
-                            >
-                              <option value="No">No</option>
-                              <option value="Yes">Yes</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Insurance Type Preference</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.insurance_type}
-                              disabled={form.travel_insurance === 'No'}
-                              onChange={e => setForm(prev => ({ ...prev, insurance_type: e.target.value }))}
-                            >
-                              <option value="Standard">Standard Coverage</option>
-                              <option value="Premium">Premium Coverage (High Claim Limits)</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Nationality</label>
-                            <input
-                              type="text"
-                              className="input-field"
-                              style={{ width: '100%' }}
-                              value={form.nationality}
-                              onChange={e => setForm(prev => ({ ...prev, nationality: e.target.value }))}
-                            />
-                          </div>
-                        </div>
-
-                        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--dark)', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <Briefcase size={20} color="var(--primary)" /> 9. Budget & Pricing Preference
-                        </h2>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 28 }}>
-                          <div>
-                            <label style={styles.label}>Budget Level Preference</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.budget_type}
-                              onChange={e => setForm(prev => ({ ...prev, budget_type: e.target.value }))}
-                            >
-                              <option value="Budget">Budget Friendly (Maximum savings)</option>
-                              <option value="Standard">Standard / Comfortable</option>
-                              <option value="Premium">Premium / Elite comfort</option>
-                              <option value="Luxury">Ultra Luxury (5-star Resorts / Private Pool villas)</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Approximate Budget Value</label>
-                            <input
-                              type="number"
-                              className="input-field"
-                              placeholder="e.g. 50000"
-                              style={{ width: '100%' }}
-                              value={form.approx_budget}
-                              onChange={e => setForm(prev => ({ ...prev, approx_budget: e.target.value }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Currency</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.currency}
-                              onChange={e => setForm(prev => ({ ...prev, currency: e.target.value }))}
-                            >
-                              <option value="INR">INR (Indian Rupee)</option>
-                              <option value="USD">USD (US Dollar)</option>
-                              <option value="AED">AED (UAE Dirham)</option>
-                              <option value="EUR">EUR (Euro)</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Budget Costing Type</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.price_preference}
-                              onChange={e => setForm(prev => ({ ...prev, price_preference: e.target.value }))}
-                            >
-                              <option value="Per Person">Per Person costing</option>
-                              <option value="Total Group">Total Group costing</option>
-                            </select>
-                          </div>
-
-                          <div style={{ gridColumn: 'span 2' }}>
-                            <label style={styles.label}>Specific Pricing Inclusions Preference</label>
-                            <input
-                              type="text"
-                              className="input-field"
-                              placeholder="e.g. Budget must include dinner but exclude flights"
-                              style={{ width: '100%' }}
-                              value={form.inclusions_preference}
-                              onChange={e => setForm(prev => ({ ...prev, inclusions_preference: e.target.value }))}
-                            />
-                          </div>
-                        </div>
-
-                        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--dark)', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <Sparkles size={20} color="var(--primary)" /> 10. Special Arrangements & Requests
-                        </h2>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                          <div>
-                            <label style={styles.label}>Special Celebration Arrangements</label>
-                            <input
-                              type="text"
-                              className="input-field"
-                              placeholder="e.g. Candlelight dinner, Honeymoon cake, Bed decoration"
-                              style={{ width: '100%' }}
-                              value={form.special_arrangement}
-                              onChange={e => setForm(prev => ({ ...prev, special_arrangement: e.target.value }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Communication Language</label>
-                            <select
-                              className="input-field"
-                              style={{ width: '100%', height: 45 }}
-                              value={form.language_preference}
-                              onChange={e => setForm(prev => ({ ...prev, language_preference: e.target.value }))}
-                            >
-                              <option value="English">English</option>
-                              <option value="Hindi">Hindi</option>
-                              <option value="Malayalam">Malayalam</option>
-                              <option value="Tamil">Tamil</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Emergency Mobile / Contact Name</label>
-                            <input
-                              type="tel"
-                              className="input-field"
-                              placeholder="Emergency contact details"
-                              style={{ width: '100%' }}
-                              value={form.emergency_contact}
-                              onChange={e => setForm(prev => ({ ...prev, emergency_contact: e.target.value }))}
-                            />
-                          </div>
-
-                          <div>
-                            <label style={styles.label}>Any Other Specific Requests</label>
-                            <input
-                              type="text"
-                              className="input-field"
-                              placeholder="e.g. late checkouts, specific room numbers"
-                              style={{ width: '100%' }}
-                              value={form.other_request}
-                              onChange={e => setForm(prev => ({ ...prev, other_request: e.target.value }))}
-                            />
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-
-                    {/* Step Action Buttons */}
-                    <div style={{ marginTop: 40, paddingTop: 24, borderTop: '1px solid #cbd5e1', display: 'flex', justifyContent: 'space-between' }}>
-                      {currentStep > 1 ? (
-                        <button
-                          type="button"
-                          onClick={handlePrevStep}
-                          style={{
-                            padding: '10px 24px',
-                            fontWeight: 700,
-                            borderRadius: 8,
-                            border: '1px solid #cbd5e1',
-                            background: 'white',
-                            color: 'var(--text-main)',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6
-                          }}
-                        >
-                          <ChevronLeft size={16} /> Back
-                        </button>
-                      ) : (
-                        <div />
-                      )}
-
-                      {currentStep < 5 ? (
-                        <button
-                          type="button"
-                          onClick={handleNextStep}
-                          className="btn btn-primary"
-                          style={{ padding: '10px 28px', fontWeight: 800, borderRadius: 8, display: 'flex', alignItems: 'center', gap: 6 }}
-                        >
-                          Continue <ArrowRight size={16} />
-                        </button>
-                      ) : (
-                        <button
-                          type="submit"
-                          className="btn btn-secondary"
-                          style={{ padding: '12px 36px', fontWeight: 800, fontSize: '0.98rem', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 4px 10px rgba(59,130,246,0.3)' }}
-                        >
-                          <Sparkles size={18} /> Compile Customized Itinerary & Submit Enquiry
-                        </button>
-                      )}
-                    </div>
-
-                  </form>
-                </div>
-              )}
-
-              {/* Loader */}
-              {plannerLoading && (
-                <div className="glass-card" style={{ padding: 48, background: 'white', border: '1px solid #cbd5e1', textAlign: 'center' }}>
-                  <div style={{ display: 'inline-flex', position: 'relative', width: 80, height: 80, justifyContent: 'center', alignItems: 'center', marginBottom: 24 }}>
-                    <motion.div
-                      style={{
-                        position: 'absolute',
-                        border: '4px solid var(--primary)',
-                        borderRadius: '50%',
-                        width: '100%',
-                        height: '100%',
-                        borderTopColor: 'transparent'
-                      }}
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
-                    />
-                    <Sparkles size={32} color="var(--primary)" />
-                  </div>
-                  <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--dark)', marginBottom: 12 }}>
-                    SreePayanam AI Planner is working...
-                  </h3>
-                  <motion.div
-                    key={loadingStep}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    style={{ color: 'var(--text-muted)', fontSize: '0.95rem', fontWeight: 500 }}
-                  >
-                    {loadingPhrases[loadingStep]}
-                  </motion.div>
-                </div>
-              )}
-
-              {/* Custom Itinerary Result Dashboard */}
-              {planResult && !plannerLoading && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: 28, alignItems: 'start' }}>
-                  
-                  {/* Left Column: Itinerary Overview & Timeline */}
+        <div className="planner-tabs" role="tablist" aria-label="Planner modes">
+          <button type="button" role="tab" aria-selected={activeTab === 'planner'} className={`planner-tab${activeTab === 'planner' ? ' active' : ''}`} onClick={() => setActiveTab('planner')}>
+            <Sparkles size={15} aria-hidden="true" /> Build a route
+          </button>
+          <button type="button" role="tab" aria-selected={activeTab === 'chat'} className={`planner-tab${activeTab === 'chat' ? ' active' : ''}`} onClick={() => setActiveTab('chat')}>
+            <MessageCircle size={15} aria-hidden="true" /> Ask the assistant
+          </button>
+        </div>
+
+        {activeTab === 'chat' ? (
+          <motion.section className="chat-panel" role="tabpanel" aria-label="Ask the travel assistant" initial={reduceMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }}>
+            <div className="chat-log" ref={chatListRef} aria-live="polite">
+              {chatMessages.map((message, index) => <div key={`${message.role}-${index}`} className={`chat-message${message.role === 'user' ? ' user' : ''}`}>{message.content}</div>)}
+              {chatLoading && <div className="chat-message" role="status">Thinking through the route...</div>}
+            </div>
+            <form className="chat-form" onSubmit={handleChatSend} noValidate>
+              <label className="sr-only" htmlFor="chat-input">Ask the travel assistant</label>
+              <input id="chat-input" className="planner-field" value={chatInput} onChange={event => setChatInput(event.target.value)} placeholder="Ask about a route, pace or destination..." />
+              <button type="submit" className="btn btn-primary" disabled={chatLoading || !chatInput.trim()} aria-busy={chatLoading} aria-label="Send message"><Send size={17} aria-hidden="true" /></button>
+            </form>
+          </motion.section>
+        ) : (
+          <>
+            {quote && (
+              <motion.section className="planner-card quote-result" aria-labelledby="quote-heading" initial={reduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+                <div className="quote-result-top">
                   <div>
-                    {/* Overview summary */}
-                    <div className="glass-card" style={{ padding: 28, background: 'white', border: '1px solid #cbd5e1', marginBottom: 24 }}>
-                      <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--dark)', marginBottom: 8 }}>{planResult.title}</h2>
-                      <p style={{ display: 'flex', gap: 16, flexWrap: 'wrap', color: 'var(--text-muted)', fontSize: '0.88rem', marginBottom: 16 }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><MapPin size={14} /> {planResult.destination}</span>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={14} /> {planResult.durationDays}D / {planResult.durationNights}N</span>
-                        {planResult.startingCity && <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>✈️ {planResult.startingCity} → {planResult.endingCity}</span>}
-                      </p>
-                      <p style={{ fontSize: '0.98rem', color: 'var(--text-main)', lineHeight: 1.8, margin: 0 }}>{planResult.overview}</p>
-                    </div>
-
-                    {/* Timeline stepper */}
-                    <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--dark)', marginBottom: 16 }}>Interactive Daily Itinerary</h3>
-                    
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24 }}>
-                      {planResult.itinerary.map((day, i) => (
-                        <div key={i} className="glass-card" style={{ background: 'white', border: '1px solid #cbd5e1', overflow: 'hidden' }}>
-                          <button
-                            onClick={() => setOpenDay(openDay === i ? -1 : i)}
-                            style={{
-                              width: '100%',
-                              padding: '20px 24px',
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              background: openDay === i ? 'var(--primary)' : 'white',
-                              border: 'none',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s',
-                              textAlign: 'left'
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                              <span style={{
-                                background: openDay === i ? 'rgba(255,255,255,0.25)' : '#eff6ff',
-                                color: openDay === i ? 'white' : 'var(--primary)',
-                                padding: '4px 12px',
-                                borderRadius: 20,
-                                fontWeight: 800,
-                                fontSize: '0.88rem'
-                              }}>
-                                Day {day.day}
-                              </span>
-                              <span style={{ fontWeight: 800, color: openDay === i ? 'white' : 'var(--dark)', fontSize: '1rem' }}>
-                                {day.title}
-                              </span>
-                            </div>
-                            {openDay === i ? (
-                              <ChevronUp size={20} color="white" />
-                            ) : (
-                              <ChevronDown size={20} color="var(--text-muted)" />
-                            )}
-                          </button>
-
-                          <AnimatePresence>
-                            {openDay === i && (
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                style={{ overflow: 'hidden' }}
-                              >
-                                <div style={{ padding: '24px 28px', borderTop: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: 16 }}>
-                                  <p style={{ color: 'var(--text-main)', fontSize: '0.98rem', lineHeight: 1.8, margin: 0 }}>
-                                    {day.activities}
-                                  </p>
-
-                                  {/* Subcards Grid */}
-                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, marginTop: 10 }}>
-                                    {/* Accommodation */}
-                                    {day.hotel && (
-                                      <div style={{ background: '#f8fafc', padding: 16, borderRadius: 10, border: '1px solid #e2e8f0' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: '0.85rem', color: 'var(--primary)', marginBottom: 6 }}>
-                                          <Home size={14} /> Accommodation stay
-                                        </div>
-                                        <div style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--dark)' }}>{day.hotel.name}</div>
-                                        <div style={{ fontSize: '0.78rem', color: '#d97706', fontWeight: 700, margin: '2px 0 6px' }}>⭐ {day.hotel.rating}</div>
-                                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>{day.hotel.desc}</div>
-                                      </div>
-                                    )}
-
-                                    {/* Dining */}
-                                    {day.meal && (
-                                      <div style={{ background: '#f8fafc', padding: 16, borderRadius: 10, border: '1px solid #e2e8f0' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: '0.85rem', color: 'var(--primary)', marginBottom: 6 }}>
-                                          <Utensils size={14} /> Dining Option
-                                        </div>
-                                        <div style={{ fontSize: '0.82rem', color: 'var(--text-main)', lineHeight: 1.5 }}>{day.meal}</div>
-                                      </div>
-                                    )}
-
-                                    {/* Transit */}
-                                    {day.transit && (
-                                      <div style={{ background: '#f8fafc', padding: 16, borderRadius: 10, border: '1px solid #e2e8f0' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: '0.85rem', color: 'var(--primary)', marginBottom: 6 }}>
-                                          <Plane size={14} /> Transit Log
-                                        </div>
-                                        <div style={{ fontSize: '0.82rem', color: 'var(--text-main)', lineHeight: 1.5 }}>{day.transit}</div>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Inclusions and Exclusions side-by-side */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                      <div className="glass-card" style={{ padding: 24, background: 'white', border: '1px solid #cbd5e1' }}>
-                        <h4 style={{ color: '#16a34a', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                          <CheckCircle size={18} /> Inclusions
-                        </h4>
-                        {planResult.inclusions.map((inc, index) => (
-                          <div key={index} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8, fontSize: '0.88rem', color: 'var(--text-main)' }}>
-                            <CheckCircle size={14} color="#16a34a" style={{ marginTop: 2, flexShrink: 0 }} />
-                            <span>{inc}</span>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="glass-card" style={{ padding: 24, background: 'white', border: '1px solid #cbd5e1' }}>
-                        <h4 style={{ color: '#ef4444', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                          <XCircle size={18} /> Exclusions
-                        </h4>
-                        {planResult.exclusions.map((exc, index) => (
-                          <div key={index} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8, fontSize: '0.88rem', color: 'var(--text-main)' }}>
-                            <XCircle size={14} color="#ef4444" style={{ marginTop: 2, flexShrink: 0 }} />
-                            <span>{exc}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                    <span className="eyebrow" style={{ color: 'var(--color-coral-dark)' }}>Your route note</span>
+                    <h2 id="quote-heading">The plan is taking shape.</h2>
+                    <p className="quote-reference">Reference {quote.quoteReference}</p>
                   </div>
-
-                  {/* Right Column: Actions & Price summary */}
-                  <div style={{ position: 'sticky', top: 110 }}>
-                    
-                    {/* Status Alert: Enquiry Submitted */}
-                    {enquirySuccess && (
-                      <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: 20, borderRadius: 12, marginBottom: 20, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                        <CheckCircle size={22} color="#16a34a" style={{ flexShrink: 0 }} />
-                        <div>
-                          <div style={{ fontWeight: 800, color: '#14532d', fontSize: '0.92rem', marginBottom: 2 }}>Inquiry Submitted!</div>
-                          <div style={{ fontSize: '0.82rem', color: '#166534', lineHeight: 1.4 }}>
-                            Our experts have received these details. We will contact you at <strong>{form.mobile_number}</strong> shortly.
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="glass-card" style={{ padding: 28, background: 'white', border: '1px solid #cbd5e1', marginBottom: 20 }}>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 700, marginBottom: 4 }}>ESTIMATED PRICE RANGE</div>
-                      <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--secondary)', marginBottom: 20 }}>{planResult.estimatedPrice}</div>
-
-                      {/* Direct WhatsApp Call to Action */}
-                      <a
-                        href={`https://wa.me/919443217654?text=${encodeURIComponent(`Hi SreePayanam! I just compiled a custom AI Travel Itinerary to ${form.destination_places} for ${form.total_passengers} travelers. I'd like to book/discuss details. Details: Name - ${form.full_name}, Phone - ${form.mobile_number}`)}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="btn btn-secondary"
-                        style={{ width: '100%', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontWeight: 800, fontSize: '0.95rem', textDecoration: 'none', marginBottom: 12 }}
-                      >
-                        <MessageSquare size={18} /> Discuss on WhatsApp
-                      </a>
-
-                      <button
-                        onClick={downloadItineraryText}
-                        className="btn"
-                        style={{ width: '100%', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontWeight: 700, background: '#f8fafc', border: '1px solid #cbd5e1', color: 'var(--text-main)', cursor: 'pointer', marginBottom: 12 }}
-                      >
-                        <Download size={16} /> Download Itinerary
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setPlanResult(null);
-                          setCurrentStep(1);
-                        }}
-                        className="btn"
-                        style={{ width: '100%', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontWeight: 700, background: 'transparent', border: '1px dashed #ef4444', color: '#ef4444', cursor: 'pointer' }}
-                      >
-                        <RefreshCw size={16} /> Plan Another Trip
-                      </button>
-                    </div>
-
-                    {/* Quality statement */}
-                    <div style={{ background: '#eff6ff', borderRadius: 12, padding: 16, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                      <Info size={18} color="var(--primary)" style={{ flexShrink: 0, marginTop: 2 }} />
-                      <div style={{ fontSize: '0.8rem', color: 'var(--primary)', lineHeight: 1.45 }}>
-                        This is an AI custom proposal. Our travel booking coordinators will review these details and verify live flight seats/hotel rooms to provide an official quote.
-                      </div>
-                    </div>
-                  </div>
-
+                  <div className="quote-price">{formatINR(quote.customerPrice)}<small>customer estimate</small></div>
                 </div>
-              )}
-            </motion.div>
-          ) : (
-            <motion.div
-              key="chat"
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.25 }}
-            >
-              {/* Chat View */}
-              <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', height: '65vh', overflow: 'hidden', background: 'white', border: '1px solid #cbd5e1' }}>
-                <div ref={chatListRef} style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: 16, background: '#f8fafc' }}>
-                  {chatMessages.map((msg, index) => (
-                    <div
-                      key={index}
-                      style={{
-                        display: 'flex',
-                        gap: 12,
-                        alignItems: 'flex-end',
-                        justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                        maxWidth: '85%',
-                        alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start'
-                      }}
-                    >
-                      {msg.role !== 'user' && (
-                        <div style={{ background: 'var(--secondary)', width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          <Bot size={18} color="white" />
-                        </div>
-                      )}
-                      
-                      <div style={{
-                        padding: '12px 18px',
-                        fontSize: '0.92rem',
-                        lineHeight: 1.6,
-                        borderRadius: msg.role === 'user' ? '16px 16px 0 16px' : '16px 16px 16px 0',
-                        background: msg.role === 'user' ? 'var(--primary)' : 'white',
-                        color: msg.role === 'user' ? 'white' : 'var(--text-main)',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
-                        border: msg.role === 'user' ? 'none' : '1px solid #e2e8f0'
-                      }}>
-                        {formatChatMessage(msg.content)}
-                      </div>
-
-                      {msg.role === 'user' && (
-                        <div style={{ background: 'var(--dark)', width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          <User size={18} color="white" />
-                        </div>
-                      )}
+                {requestError && <div className="form-feedback error" role="alert" style={{ marginTop: '1rem' }}><CircleHelp size={17} aria-hidden="true" />{requestError}</div>}
+                {enquirySuccess && <div className="form-feedback success" role="status" style={{ marginTop: '1rem' }}><CheckCircle2 size={17} aria-hidden="true" />Enquiry sent. Keep this reference when you speak with the travel desk.</div>}
+                <div className="quote-grid">
+                  <div className="quote-panel">
+                    <h3>Customer-facing estimate</h3>
+                    <ul className="quote-breakdown">
+                      {(quote.breakdown || []).map(item => <li key={item.label}><span>{item.label}</span><strong>{formatINR(item.amount)}</strong></li>)}
+                      <li><span>{quote.tax?.label || 'Estimated taxes'}</span><strong>{formatINR(quote.tax?.amount)}</strong></li>
+                    </ul>
+                    <p style={{ marginTop: '0.8rem', color: 'var(--color-muted)', fontSize: '0.75rem' }}>{quote.disclaimer}</p>
+                  </div>
+                  <div className="quote-panel">
+                    <h3>Proposed day plan</h3>
+                    <div className="quote-itinerary">
+                      {itinerary.slice(0, 6).map(day => <div className="quote-day" key={day.day}><span className="quote-day-number">D{day.day}</span><div><h4>{day.title}</h4><p>{day.places}</p></div></div>)}
                     </div>
+                  </div>
+                </div>
+                <div className="quote-result-actions">
+                  {requestState === 'ready' && <button type="button" className="btn btn-primary" onClick={() => submitEnquiry(quote)} disabled={requestState === 'sending'} aria-busy={requestState === 'sending'}><RefreshCw size={16} aria-hidden="true" /> Send enquiry again</button>}
+                  <button type="button" className="btn btn-secondary" onClick={downloadPdf}><Download size={16} aria-hidden="true" /> Download quotation PDF</button>
+                  <button type="button" className="btn btn-outline" onClick={() => { setQuote(null); setEnquirySuccess(false); setRequestError(''); setRequestState('idle'); }}>Edit route</button>
+                  <button type="button" className="btn btn-ghost" onClick={startOver}>Start a new route</button>
+                </div>
+              </motion.section>
+            )}
+
+            <div className="planner-shell" style={{ marginTop: quote ? '1.15rem' : 0 }}>
+              <section className="planner-card" aria-labelledby="planner-form-heading">
+                <div className="planner-stepper" aria-label={`Planner step ${currentStep} of ${STEPS.length}`}>
+                  {STEPS.map(step => (
+                    <button type="button" key={step.id} className={`planner-step${currentStep === step.id ? ' current' : ''}${currentStep > step.id ? ' done' : ''}`} onClick={() => step.id < currentStep && goToStep(step.id)} disabled={step.id > currentStep} aria-current={currentStep === step.id ? 'step' : undefined}>
+                      <span className="step-number">{currentStep > step.id ? <Check size={14} aria-hidden="true" /> : step.id}</span>
+                      <span className="step-copy"><strong>{step.name}</strong><small>{step.detail}</small></span>
+                    </button>
                   ))}
-
-                  {chatLoading && (
-                    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', maxWidth: '85%' }}>
-                      <div style={{ background: 'var(--secondary)', width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <Bot size={18} color="white" />
-                      </div>
-                      <div style={{ padding: '12px 18px', borderRadius: '16px 16px 16px 0', background: 'white', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
-                        <motion.div animate={{ opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1.5 }} style={{ fontSize: '0.88rem', color: 'var(--text-muted)' }}>
-                          Thinking & searching...
-                        </motion.div>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
-                {/* Input Area */}
-                <form onSubmit={handleChatSend} style={{ display: 'flex', padding: 20, gap: 12, borderTop: '1px solid #e2e8f0' }}>
-                  <input
-                    type="text"
-                    className="input-field"
-                    style={{ flex: 1, borderRadius: 24, padding: '12px 20px' }}
-                    value={chatInput}
-                    onChange={e => setChatInput(e.target.value)}
-                    placeholder="Ask about tour routes, package options, sightseeing customisations..."
-                    disabled={chatLoading}
-                  />
-                  <button
-                    type="submit"
-                    className="btn btn-primary"
-                    style={{ width: 48, height: 48, borderRadius: '50%', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                    disabled={chatLoading || !chatInput.trim()}
-                  >
-                    <Send size={18} />
-                  </button>
-                </form>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                <form className="planner-body" onSubmit={requestQuote} noValidate>
+                  <h2 id="planner-form-heading" className="sr-only">Build a SreePayanam travel route</h2>
+                  {validationError && <div className="form-feedback error" role="alert" style={{ marginBottom: '1rem' }}><CircleHelp size={17} aria-hidden="true" />{validationError}</div>}
+                  {requestError && !quote && <div className="form-feedback error" role="alert" style={{ marginBottom: '1rem' }}><CircleHelp size={17} aria-hidden="true" />{requestError}</div>}
 
+                  <AnimatePresence mode="wait" initial={false}>
+                    <motion.div key={currentStep} initial={reduceMotion ? false : { opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={reduceMotion ? false : { opacity: 0, x: -10 }} transition={{ duration: reduceMotion ? 0 : 0.18 }}>
+                      {currentStep === 1 && (
+                        <div>
+                          <div className="planner-section-title"><h2>Start with a route</h2><p>Packages are a starting point — every route can be shaped around your group.</p></div>
+                          <Field id="packageId" label="Choose a tour package" required error={fieldErrors.packageId} help={catalogLoading ? 'Loading published packages…' : catalogStatus || 'The place list will update with your choice.'}>
+                            <select id="packageId" className="planner-select" value={form.packageId} onChange={handlePackageChange} {...getAria('packageId', fieldErrors.packageId)}>
+                              {packageOptions.map(pkg => <option key={pkg.id} value={pkg.id}>{pkg.name} — {pkg.destination}</option>)}
+                            </select>
+                          </Field>
+                          <div className="package-select-card" style={{ marginTop: '1rem' }}>
+                            <div><h3>{selectedPackage?.name}</h3><p>{selectedPackage?.description}</p></div>
+                            <span className="summary-metric" style={{ color: 'var(--color-ink)', background: 'var(--color-turmeric)', border: 0 }}><span style={{ color: 'rgba(23,38,48,0.62)' }}>Routebook timing</span><strong style={{ color: 'var(--color-ink)' }}>{selectedPackage?.durationDays}D / {selectedPackage?.durationNights}N</strong></span>
+                          </div>
+                          <div className="planner-field-grid" style={{ marginTop: '1.15rem' }}>
+                            <Field id="departureCity" label="Where will you start?" help="Optional — we will use the package route if left blank.">
+                              <input id="departureCity" className="planner-field" value={form.departureCity} onChange={event => updateField('departureCity', event.target.value)} placeholder="e.g. Chennai" autoComplete="address-level2" />
+                            </Field>
+                            <Field id="travelStartDate" label="Travel start date">
+                              <input id="travelStartDate" className="planner-field" type="date" value={form.travelStartDate} onChange={event => updateField('travelStartDate', event.target.value)} {...getAria('travelStartDate', fieldErrors.travelStartDate)} />
+                            </Field>
+                            <Field id="returnDate" label="Return date" error={fieldErrors.returnDate}>
+                              <input id="returnDate" className="planner-field" type="date" value={form.returnDate} onChange={event => updateField('returnDate', event.target.value)} {...getAria('returnDate', fieldErrors.returnDate)} />
+                            </Field>
+                            <Field id="durationDays" label="Travel days" required error={fieldErrors.durationDays}>
+                              <input id="durationDays" className="planner-field" type="number" min="1" max="60" inputMode="numeric" value={form.durationDays} onChange={event => updateField('durationDays', event.target.value)} {...getAria('durationDays', fieldErrors.durationDays)} />
+                            </Field>
+                            <Field id="durationNights" label="Hotel nights" error={fieldErrors.durationNights}>
+                              <input id="durationNights" className="planner-field" type="number" min="0" max="59" inputMode="numeric" value={form.durationNights} onChange={event => updateField('durationNights', event.target.value)} {...getAria('durationNights', fieldErrors.durationNights)} />
+                            </Field>
+                          </div>
+                        </div>
+                      )}
+
+                      {currentStep === 2 && (
+                        <div id="destinationPicker" tabIndex="-1" aria-invalid={fieldErrors.destinationPicker ? 'true' : undefined} aria-describedby={fieldErrors.destinationPicker ? 'destinationPicker-error' : undefined}>
+                          <div className="planner-section-title"><h2>Mark the places</h2><p>Start with the recommended stops, then add nearby attractions or your own idea.</p></div>
+                          <div className="destination-toolbar">
+                            <div className="destination-count"><span>{selectedDestinations.length}</span> places selected</div>
+                            <div className="destination-actions"><button type="button" className="text-action" onClick={selectRecommended}>Select recommended</button><button type="button" className="text-action" onClick={clearDestinations}>Clear selection</button></div>
+                          </div>
+                          {fieldErrors.destinationPicker && <div id="destinationPicker-error" className="field-error" role="alert" style={{ marginBottom: '0.7rem' }}>{fieldErrors.destinationPicker}</div>}
+                          <div className="destination-groups">
+                            {(selectedPackage?.groups || []).map(group => {
+                              const places = flattenDestinationGroups([group]);
+                              return <section className="destination-group" key={group.id} aria-labelledby={`group-${group.id}`}><div className="destination-group-header"><h3 id={`group-${group.id}`}>{group.label}</h3><span>{DESTINATION_KIND_LABELS[group.kind] || 'Curated places'}</span></div><div className="destination-list">{places.map(place => <label className={`destination-option${selectedDestinations.includes(place.id) ? ' selected' : ''}`} key={place.id}><input type="checkbox" checked={selectedDestinations.includes(place.id)} onChange={() => toggleDestination(place.id)} /><span>{place.label}</span>{place.kind === 'recommended' && <small>route</small>}</label>)}</div></section>;
+                            })}
+                            {customPlaces.length > 0 && <section className="destination-group" aria-labelledby="group-custom"><div className="destination-group-header"><h3 id="group-custom">Your additions</h3><span>Added by you</span></div><div className="destination-list">{customPlaces.map(place => <label className={`destination-option${selectedDestinations.includes(place.id) ? ' selected' : ''}`} key={place.id}><input type="checkbox" checked={selectedDestinations.includes(place.id)} onChange={() => toggleDestination(place.id)} /><span>{place.label}</span><small>custom</small></label>)}</div></section>}
+                          </div>
+                          <div className="planner-field-grid" style={{ marginTop: '1rem' }}>
+                            <Field id="customPlace" label="Add another place" help="Optional — include a landmark, beach, temple or local stop.">
+                              <input id="customPlace" className="planner-field" value={customPlace} onChange={event => setCustomPlace(event.target.value)} placeholder="e.g. Pichavaram mangroves" />
+                            </Field>
+                            <div style={{ alignSelf: 'end' }}><button className="btn btn-outline" type="button" onClick={addCustomPlace}><MapPin size={16} aria-hidden="true" /> Add place</button></div>
+                          </div>
+                        </div>
+                      )}
+
+                      {currentStep === 3 && (
+                        <div>
+                          <div className="planner-section-title"><h2>Set the comfort level</h2><p>These choices power the live planning estimate. The final commercial quote is calculated on the server.</p></div>
+                          <div className="planner-field-grid">
+                            <Field id="adultCount" label="Adults" required error={fieldErrors.adultCount}><input id="adultCount" className="planner-field" type="number" min="1" max="50" inputMode="numeric" value={form.adultCount} onChange={event => updateField('adultCount', event.target.value)} {...getAria('adultCount', fieldErrors.adultCount)} /></Field>
+                            <Field id="childWithBedCount" label="Children with bed"><input id="childWithBedCount" className="planner-field" type="number" min="0" max="30" inputMode="numeric" value={form.childWithBedCount} onChange={event => updateField('childWithBedCount', event.target.value)} /></Field>
+                            <Field id="childNoBedCount" label="Children without bed"><input id="childNoBedCount" className="planner-field" type="number" min="0" max="30" inputMode="numeric" value={form.childNoBedCount} onChange={event => updateField('childNoBedCount', event.target.value)} /></Field>
+                            <Field id="infantCount" label="Infants"><input id="infantCount" className="planner-field" type="number" min="0" max="20" inputMode="numeric" value={form.infantCount} onChange={event => updateField('infantCount', event.target.value)} /></Field>
+                          </div>
+                          <div className="planner-field-grid" style={{ marginTop: '1rem' }}>
+                            <Field id="hotelCategory" label="Hotel comfort"><select id="hotelCategory" className="planner-select" value={form.hotelCategory} onChange={event => updateField('hotelCategory', event.target.value)}><option>Budget</option><option>3 Star</option><option>4 Star</option><option>5 Star</option></select></Field>
+                            <Field id="hotelRooms" label="Rooms"><input id="hotelRooms" className="planner-field" type="number" min="0" max="30" inputMode="numeric" placeholder="Auto-size from adults" value={form.hotelRooms} onChange={event => updateField('hotelRooms', event.target.value)} /></Field>
+                            <Field id="mealPlan" label="Meal preference"><select id="mealPlan" className="planner-select" value={form.mealPlan} onChange={event => updateField('mealPlan', event.target.value)}><option value="EP">EP — room only</option><option value="CP">CP — breakfast</option><option value="MAP">MAP — breakfast + dinner</option><option value="AP">AP — all meals</option></select></Field>
+                            <Field id="vehicleType" label="Local transport"><select id="vehicleType" className="planner-select" value={form.vehicleType} onChange={event => updateField('vehicleType', event.target.value)}><option>Sedan</option><option>Ertiga</option><option>Innova</option><option>Tempo Traveller</option><option>Mini Coach</option><option>Coach</option></select></Field>
+                          </div>
+                          <div style={{ marginTop: '1rem' }}><span className="field-label">Add-ons for the estimate</span><div className="choice-row"><label className={`choice-card${form.guideRequired === 'Yes' ? ' selected' : ''}`}><input type="radio" name="guideRequired" checked={form.guideRequired === 'Yes'} onChange={() => updateField('guideRequired', 'Yes')} /><strong><Hotel size={16} aria-hidden="true" /> Local guide</strong><span>Include guide support in the estimate.</span></label><label className={`choice-card${form.guideRequired === 'No' ? ' selected' : ''}`}><input type="radio" name="guideRequired" checked={form.guideRequired === 'No'} onChange={() => updateField('guideRequired', 'No')} /><strong><MapPin size={16} aria-hidden="true" /> Self-guided</strong><span>Keep the route flexible.</span></label><label className={`choice-card${form.entryTickets === 'Yes' ? ' selected' : ''}`}><input type="checkbox" checked={form.entryTickets === 'Yes'} onChange={event => updateField('entryTickets', event.target.checked ? 'Yes' : 'No')} /><strong><FileText size={16} aria-hidden="true" /> Entry tickets</strong><span>Include a standard activity allowance.</span></label></div></div>
+                        </div>
+                      )}
+
+                      {currentStep === 4 && (
+                        <div>
+                          <div className="planner-section-title"><h2>Where should we send it?</h2><p>We use these details to prepare the enquiry and keep the quote reference connected to your route.</p></div>
+                          <div className="planner-field-grid">
+                            <Field id="fullName" label="Full name" required error={fieldErrors.fullName}><input id="fullName" className="planner-field" autoComplete="name" value={form.fullName} onChange={event => updateField('fullName', event.target.value)} {...getAria('fullName', fieldErrors.fullName)} /></Field>
+                            <Field id="mobileNumber" label="Mobile number" required error={fieldErrors.mobileNumber}><input id="mobileNumber" className="planner-field" type="tel" inputMode="tel" autoComplete="tel" value={form.mobileNumber} onChange={event => updateField('mobileNumber', event.target.value)} {...getAria('mobileNumber', fieldErrors.mobileNumber)} /></Field>
+                            <Field id="email" label="Email address" required error={fieldErrors.email}><input id="email" className="planner-field" type="email" inputMode="email" autoComplete="email" value={form.email} onChange={event => updateField('email', event.target.value)} {...getAria('email', fieldErrors.email)} /></Field>
+                            <Field id="city" label="Your city"><input id="city" className="planner-field" autoComplete="address-level2" value={form.city} onChange={event => updateField('city', event.target.value)} /></Field>
+                            <Field id="contactMethod" label="Preferred reply"><select id="contactMethod" className="planner-select" value={form.contactMethod} onChange={event => updateField('contactMethod', event.target.value)}><option>WhatsApp</option><option>Phone call</option><option>Email</option></select></Field>
+                          <Field id="notes" label="Anything we should know?" className="span-2" help="Optional — accessibility, food, timing or special arrangements."><textarea id="notes" className="planner-textarea resize-none" rows="4" value={form.notes} onChange={event => updateField('notes', event.target.value)} /></Field>
+                          </div>
+                          <label className="destination-option" style={{ marginTop: '1rem', alignItems: 'flex-start' }}><input id="consent" type="checkbox" checked={form.consent} onChange={event => updateField('consent', event.target.checked)} {...getAria('consent', fieldErrors.consent)} /><span><strong>Use my details to prepare this travel enquiry.</strong><br /><small>We will use your name, contact details and route choices only to respond about this request.</small>{fieldErrors.consent && <em id="consent-error" className="field-error" style={{ fontStyle: 'normal' }}>{fieldErrors.consent}</em>}</span></label>
+                        </div>
+                      )}
+                    </motion.div>
+                  </AnimatePresence>
+
+                  <div className="planner-actions">
+                    <button type="button" className="btn btn-ghost" onClick={() => currentStep === 1 ? window.history.back() : goToStep(currentStep - 1)} disabled={requestState === 'quoting' || requestState === 'sending'}><ArrowLeft size={16} aria-hidden="true" /> {currentStep === 1 ? 'Leave planner' : 'Back'}</button>
+                    {currentStep < 4 ? <button type="button" className="btn btn-primary" onClick={() => goToStep(currentStep + 1)}>Continue <ArrowRight size={16} aria-hidden="true" /></button> : <button type="submit" className="btn btn-primary" disabled={requestState === 'quoting' || requestState === 'sending' || requestState === 'success'} aria-busy={requestState === 'quoting' || requestState === 'sending'}>{requestState === 'quoting' ? 'Calculating estimate...' : requestState === 'sending' ? 'Sending enquiry...' : requestState === 'success' ? 'Enquiry sent' : quote ? 'Send enquiry again' : 'Generate quotation'} <ArrowRight size={16} aria-hidden="true" /></button>}
+                  </div>
+                </form>
+              </section>
+
+              <aside className="planner-summary" aria-label="Live route summary">
+                <div className="planner-summary-inner">
+                  <span className="summary-kicker">Route note / live draft</span>
+                  <h2>{selectedPackage?.name || 'Your SreePayanam route'}</h2>
+                  <div className="summary-route">{summaryStops.slice(0, 4).map((stop, index) => <div className="summary-stop" key={`${stop}-${index}`}><strong>{stop}</strong>{index === 0 ? 'Departure' : index === summaryStops.length - 1 ? 'Package region' : 'Selected stop'}</div>)}</div>
+                  <div className="summary-metrics"><div className="summary-metric"><span>Travellers</span><strong>{Math.max(1, totalTravellers)}</strong></div><div className="summary-metric"><span>Trip length</span><strong>{form.durationDays}D / {form.durationNights}N</strong></div><div className="summary-metric"><span>Places</span><strong>{selectedDestinations.length}</strong></div><div className="summary-metric"><span>Stay</span><strong>{form.hotelCategory}</strong></div></div>
+                  <div className="estimate-box"><p>{quote ? 'Server-confirmed customer estimate' : 'Live planning estimate'}</p><strong>{formatINR(visibleTotal)}</strong><small>Includes a 3% planning buffer and 5% estimated tax. Final availability and commercial confirmation come from the travel desk.</small></div>
+                  <p className="summary-note"><ShieldCheck size={14} aria-hidden="true" /> Your PDF keeps supplier cost and internal pricing out of the customer view.</p>
+                </div>
+              </aside>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
-};
-
-const styles = {
-  label: {
-    display: 'block',
-    fontSize: '0.78rem',
-    fontWeight: 800,
-    color: '#475569',
-    textTransform: 'uppercase',
-    letterSpacing: '0.6px',
-    marginBottom: '6px'
-  }
 };
 
 export default AiAssistant;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Plane, Hotel, Train, Car, User, Phone, Mail, Calendar, MapPin, 
@@ -187,6 +187,11 @@ const Bookings = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const normalizedPhone = customer.phone.replace(/[^\d+]/g, '');
+    if (!customer.name.trim() || normalizedPhone.replace(/\D/g, '').length < 10 || !/^\S+@\S+\.\S+$/.test(customer.email.trim())) {
+      setError('Please enter your name, a valid mobile number, and a valid email address.');
+      return;
+    }
     setLoading(true);
     setError('');
     setSuccess(false);
@@ -426,6 +431,7 @@ const Bookings = () => {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 onSubmit={handleSubmit}
+                noValidate
                 style={{ display: 'flex', flexDirection: 'column', gap: 24 }}
               >
                 <div style={{ display: 'flex', flexDirection: 'row', gap: 30, flexWrap: 'wrap', alignItems: 'stretch' }}>
@@ -746,7 +752,7 @@ const Bookings = () => {
                       <label style={lbl}>📝 Special Requirements / Instructions</label>
                       <textarea 
                         name="remarks" 
-                        className="input-field" 
+                        className="input-field resize-none"
                         rows="3" 
                         placeholder="Enter details like budget limit, multi-city flights, preferred hotels, specific train times, etc..."
                         value={customer.remarks}

@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, Clock, Tag, Search, SlidersHorizontal, ArrowUpDown, RefreshCw, X, Sparkles } from 'lucide-react';
+import { MapPin, Clock, Search, SlidersHorizontal, ArrowUpDown, RefreshCw } from 'lucide-react';
 
 const FALLBACK_IMG = 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=600&q=80';
 
@@ -29,24 +29,26 @@ const TOUR_TYPE_INFO = {
 
 const Packages = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
-
   // State
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   // Search & Filter State
-  const [searchQuery, setSearchQuery] = useState(searchParams.get('dest') || '');
-  const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || 'All'); // 'All' | 'National' | 'International'
-  const [selectedType, setSelectedType] = useState(searchParams.get('type') || '');
   const [maxPrice, setMaxPrice] = useState(150000);
   const [sortBy, setSortBy] = useState('recommended'); // 'recommended' | 'priceLow' | 'priceHigh' | 'durationShort' | 'durationLong'
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
+  const searchQuery = searchParams.get('dest') || '';
+  const selectedCategory = searchParams.get('category') || 'All';
+  const typeParam = searchParams.get('type') || '';
+  const selectedType = typeParam
+    ? Object.keys(TOUR_TYPE_INFO).find(
+      key => key.toLowerCase().includes(typeParam.toLowerCase()) || typeParam.toLowerCase().includes(key.toLowerCase())
+    ) || typeParam
+    : '';
 
   // Load active packages
   useEffect(() => {
-    setLoading(true);
     fetch('/api/packages')
       .then(res => {
         if (!res.ok) throw new Error('Failed to fetch tour packages.');
@@ -61,26 +63,6 @@ const Packages = () => {
         setLoading(false);
       });
   }, []);
-
-  // Sync state from query parameters on load/change
-  useEffect(() => {
-    const typeParam = searchParams.get('type');
-    const destParam = searchParams.get('dest');
-    const catParam = searchParams.get('category');
-
-    if (typeParam) {
-      // Find matching type (robust matching e.g. "Pilgrimage" matches "Pilgrimage Tours")
-      const matched = Object.keys(TOUR_TYPE_INFO).find(
-        key => key.toLowerCase().includes(typeParam.toLowerCase()) || typeParam.toLowerCase().includes(key.toLowerCase())
-      );
-      setSelectedType(matched || typeParam);
-    } else {
-      setSelectedType('');
-    }
-
-    if (destParam) setSearchQuery(destParam);
-    if (catParam) setSelectedCategory(catParam);
-  }, [searchParams]);
 
   // Update query params when filters change (for deep linking)
   const updateQueryParams = (newFilters) => {
@@ -102,9 +84,6 @@ const Packages = () => {
 
   // Reset all filters
   const resetFilters = () => {
-    setSearchQuery('');
-    setSelectedCategory('All');
-    setSelectedType('');
     setMaxPrice(150000);
     setSortBy('recommended');
     setSearchParams({});
@@ -235,7 +214,6 @@ const Packages = () => {
                   placeholder="Destination or title..." 
                   value={searchQuery}
                   onChange={e => {
-                    setSearchQuery(e.target.value);
                     updateQueryParams({ dest: e.target.value });
                   }}
                   style={{ paddingLeft: 40, height: 44, fontSize: '0.9rem' }}
@@ -254,7 +232,6 @@ const Packages = () => {
                     <button 
                       key={cat}
                       onClick={() => {
-                        setSelectedCategory(cat);
                         updateQueryParams({ category: cat === 'All' ? null : cat });
                       }}
                       style={{
@@ -304,7 +281,6 @@ const Packages = () => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 300, overflowY: 'auto', paddingRight: 6 }}>
                 <button 
                   onClick={() => {
-                    setSelectedType('');
                     updateQueryParams({ type: null });
                   }}
                   style={{
@@ -341,7 +317,6 @@ const Packages = () => {
                     <button 
                       key={type}
                       onClick={() => {
-                        setSelectedType(type);
                         updateQueryParams({ type });
                       }}
                       style={{
@@ -385,6 +360,7 @@ const Packages = () => {
 
           {/* 2. RESULTS CONTAINER */}
           <main>
+            {error && <div className="form-status is-error" role="alert" style={{ marginBottom: 16 }}>{error}</div>}
             {/* Sorting & Stats Top Bar */}
             <div style={{ 
               display: 'flex', 

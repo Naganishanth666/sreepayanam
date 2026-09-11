@@ -1,7 +1,28 @@
 const express = require('express');
+const crypto = require('crypto');
 const router = express.Router();
 const Package = require('../models/Package');
 const { checkAdmin } = require('../middleware/auth');
+
+const safeEqual = (left, right) => {
+  if (typeof left !== 'string' || typeof right !== 'string' || !left || !right) return false;
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
+};
+
+const isAdminRequest = req => safeEqual(req.headers['x-admin-password'], process.env.ADMIN_PASSWORD);
+
+const toPublicPackage = packageDocument => {
+  const result = packageDocument?.toObject ? packageDocument.toObject() : { ...packageDocument };
+  // Supplier rates, landed cost, markup and internal notes must never be sent
+  // to the public planner or customer-facing package pages.
+  delete result.baseCost;
+  delete result.profitMarginPercent;
+  delete result.priceBreakdown;
+  delete result.costingBreakdown;
+  return result;
+};
 
 // Helper to run costing calculation if costing fields are provided
 function processCosting(body) {
@@ -47,8 +68,7 @@ function processCosting(body) {
 // GET all packages (Public - filters drafts, Admin - returns all)
 router.get('/', async (req, res) => {
   try {
-    const adminPassword = req.headers['x-admin-password'];
-    const isAdmin = (adminPassword && (adminPassword === '1211kv95' || adminPassword === process.env.ADMIN_PASSWORD));
+    const isAdmin = isAdminRequest(req);
     
     let query = { isActive: true };
     if (!isAdmin) {
@@ -56,17 +76,17 @@ router.get('/', async (req, res) => {
     }
     
     const packages = await Package.find(query).sort({ createdAt: -1 });
-    res.json(packages);
+    res.json(isAdmin ? packages : packages.map(toPublicPackage));
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('[Packages] List failed:', error.message);
+    res.status(500).json({ message: 'Could not load packages.' });
   }
 });
 
 // GET single package (Public - denies draft access, Admin - returns it)
 router.get('/:id', async (req, res) => {
   try {
-    const adminPassword = req.headers['x-admin-password'];
-    const isAdmin = (adminPassword && (adminPassword === '1211kv95' || adminPassword === process.env.ADMIN_PASSWORD));
+    const isAdmin = isAdminRequest(req);
 
     const pkg = await Package.findOne({ packageId: req.params.id });
     if (!pkg) return res.status(404).json({ message: 'Package not found' });
@@ -75,9 +95,10 @@ router.get('/:id', async (req, res) => {
       return res.status(403).json({ message: 'Access denied. Package is in draft status.' });
     }
     
-    res.json(pkg);
+    res.json(isAdmin ? pkg : toPublicPackage(pkg));
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('[Packages] Detail failed:', error.message);
+    res.status(500).json({ message: 'Could not load the package.' });
   }
 });
 
@@ -110,7 +131,8 @@ router.post('/', checkAdmin, async (req, res) => {
     const newPackage = await pkg.save();
     res.status(201).json(newPackage);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error('[Packages] Create failed:', error.message);
+    res.status(400).json({ message: 'Package could not be saved. Check the package details.' });
   }
 });
 
@@ -133,12 +155,13 @@ router.put('/:id', checkAdmin, async (req, res) => {
     const pkg = await Package.findOneAndUpdate(
       { packageId: req.params.id },
       { ...data, updatedAt: new Date() },
-      { new: true }
+      { new: true, runValidators: true }
     );
     if (!pkg) return res.status(404).json({ message: 'Package not found' });
     res.json(pkg);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error('[Packages] Update failed:', error.message);
+    res.status(400).json({ message: 'Package could not be updated. Check the package details.' });
   }
 });
 
@@ -150,7 +173,8 @@ router.delete('/:id', checkAdmin, async (req, res) => {
     await pkg.deleteOne();
     res.json({ message: 'Package deleted successfully' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('[Packages] Delete failed:', error.message);
+    res.status(500).json({ message: 'Package could not be deleted.' });
   }
 });
 

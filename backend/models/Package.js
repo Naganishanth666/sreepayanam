@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 
 const packageSchema = new mongoose.Schema({
   title: { type: String, required: true },
@@ -46,7 +47,7 @@ const packageSchema = new mongoose.Schema({
   cancellationPolicy: { type: String },
   
   baseCost: { type: Number }, // Raw wholesale cost price to SreePayanam
-  profitMarginPercent: { type: Number, default: 10 }, // Target margin markup percent
+  profitMarginPercent: { type: Number, default: 30 }, // Target markup percent used by the costing engine
   
   originalPrice: { type: Number, required: true },
   offerPrice: { type: Number },
@@ -103,7 +104,7 @@ const packageSchema = new mongoose.Schema({
     bufferPercent: { type: Number, default: 3 },
     bufferAmount: { type: Number, default: 0 },
     landedCost: { type: Number, default: 0 },
-    markupPercent: { type: Number, default: 25 },
+    markupPercent: { type: Number, default: 30 },
     markupAmount: { type: Number, default: 0 },
     sellingPrice: { type: Number, default: 0 },
     taxPercent: { type: Number, default: 5 },
@@ -137,7 +138,7 @@ const packageSchema = new mongoose.Schema({
 packageSchema.pre('validate', function() {
   if (!this.packageId) {
     const dateStr = new Date().toISOString().slice(0, 7).replace('-', '');
-    const randomChars = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const randomChars = crypto.randomBytes(3).toString('hex').slice(0, 4).toUpperCase();
     this.packageId = `SP-PKG-${dateStr}-${randomChars}`;
   }
 });
@@ -152,13 +153,13 @@ packageSchema.pre('save', function() {
     if (this.baseCost && this.offerPrice) {
       this.profitMarginPercent = Math.round(((this.offerPrice - this.baseCost) / this.baseCost) * 100);
     } else if (this.baseCost) {
-      const margin = this.profitMarginPercent || 10;
+      const margin = this.profitMarginPercent || 30;
       this.offerPrice = Math.round(this.baseCost * (1 + margin / 100));
     } else if (this.offerPrice) {
-      const margin = this.profitMarginPercent || 10;
+      const margin = this.profitMarginPercent || 30;
       this.baseCost = Math.round(this.offerPrice / (1 + margin / 100));
     } else if (this.originalPrice) {
-      const margin = this.profitMarginPercent || 10;
+      const margin = this.profitMarginPercent || 30;
       this.offerPrice = this.originalPrice;
       this.baseCost = Math.round(this.offerPrice / (1 + margin / 100));
     }

@@ -1,6 +1,6 @@
-import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
+import { ForbiddenPage } from '../pages/AccessPages';
 
 /**
  * ProtectedRoute wraps any route that requires authentication.
@@ -44,7 +44,7 @@ const ProtectedRoute = ({ children, allowedRoles = null, redirectTo = '/login' }
 
   if (allowedRoles && !allowedRoles.includes(user?.role)) {
     // Logged in but wrong role
-    return <Navigate to="/" replace />;
+    return <ForbiddenPage />;
   }
 
   return children;

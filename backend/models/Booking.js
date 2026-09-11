@@ -1,10 +1,11 @@
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 
 const paymentLogSchema = new mongoose.Schema({
   paymentId: { 
     type: String, 
     required: true,
-    default: () => 'TXN-' + Math.random().toString(36).substring(2, 10).toUpperCase()
+    default: () => 'TXN-' + crypto.randomBytes(5).toString('hex').toUpperCase()
   },
   amount: { type: Number, required: true },
   paymentMethod: { 

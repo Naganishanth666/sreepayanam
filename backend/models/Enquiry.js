@@ -121,6 +121,10 @@ const enquirySchema = new mongoose.Schema({
   
   // Optional reference to a specific package
   packageId: { type: String, default: null },
+  quoteReference: { type: String, unique: true, sparse: true, index: true },
+  quotedAmount: { type: Number, min: 0 },
+  quoteIssuedAt: { type: Date },
+  selectedDestinations: [{ type: String, maxlength: 160 }],
   
   detailedPreferences: { type: mongoose.Schema.Types.Mixed },
   

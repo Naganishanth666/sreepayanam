@@ -24,7 +24,7 @@ async function updateMargins() {
       const calculatedOfferPrice = Math.round(calculatedBaseCost * 1.10);
 
       pkg.baseCost = calculatedBaseCost;
-      pkg.profitMarginPercent = 10;
+      pkg.profitMarginPercent = 30;
       pkg.offerPrice = calculatedOfferPrice; // Ensure strict alignment
 
       await pkg.save();

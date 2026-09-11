@@ -1,4 +1,3 @@
-import React from 'react';
 
 const NicheTravelFields = ({ tourType, values, onChange }) => {
   if (!tourType) return null;
@@ -340,7 +339,7 @@ const NicheTravelFields = ({ tourType, values, onChange }) => {
             <div style={{ ...fieldStyle, gridColumn: 'span 2' }}>
               <label style={lblStyle}>Medical History / Details</label>
               <textarea
-                className="input-field"
+                className="input-field resize-none"
                 rows="2"
                 style={{ padding: '8px' }}
                 placeholder="Enter brief details of medical history or requirements"

@@ -1,0 +1,8 @@
+{
+  "projectType": "hybrid",
+  "canonicalMap": "UX-CONTRACT.md",
+  "ownership": {
+    "Select/Listbox": "native",
+    "Date": "native"
+  }
+}

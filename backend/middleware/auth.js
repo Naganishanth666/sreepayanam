@@ -1,4 +1,15 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+
+const getJwtSecret = () => process.env.JWT_SECRET || '';
+
+const safeEqual = (left, right) => {
+  if (typeof left !== 'string' || typeof right !== 'string' || !left || !right) return false;
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  if (leftBuffer.length !== rightBuffer.length) return false;
+  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
+};
 
 // Middleware: Verify JWT token and attach user to request
 const auth = (req, res, next) => {
@@ -9,8 +20,12 @@ const auth = (req, res, next) => {
     return res.status(401).json({ message: 'No authentication token, access denied.' });
   }
 
+  if (!getJwtSecret()) {
+    return res.status(503).json({ message: 'Authentication is not configured on the server.' });
+  }
+
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'sreepayanam_secret_key');
+    const decoded = jwt.verify(token, getJwtSecret());
     req.user = decoded.user;
     next();
   } catch (err) {
@@ -42,9 +57,14 @@ const requireAgent = (req, res, next) => {
 
 // Middleware: Accept Admin password (legacy) OR valid Admin JWT — supports both flows
 const checkAdmin = (req, res, next) => {
-  // Try legacy password first (so AdminPage still works with password)
+  if (!process.env.ADMIN_PASSWORD || !getJwtSecret()) {
+    return res.status(503).json({ message: 'Admin authentication is not configured on the server.' });
+  }
+
+  // Compatibility path for the existing admin console. The password is only
+  // accepted from the deployment environment; there is no bundled fallback.
   const adminPassword = req.headers['x-admin-password'];
-  if (adminPassword && (adminPassword === '1211kv95' || adminPassword === process.env.ADMIN_PASSWORD)) {
+  if (safeEqual(adminPassword, process.env.ADMIN_PASSWORD)) {
     return next();
   }
 
@@ -52,7 +72,7 @@ const checkAdmin = (req, res, next) => {
   const token = req.header('Authorization')?.replace('Bearer ', '') || req.header('x-auth-token');
   if (token) {
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'sreepayanam_secret_key');
+      const decoded = jwt.verify(token, getJwtSecret());
       if (decoded.user && decoded.user.role === 'Admin') {
         req.user = decoded.user;
         return next();

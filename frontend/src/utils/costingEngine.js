@@ -95,15 +95,9 @@ export function calculateCosting(params) {
     : durationDays;
   
   const vehicleCalculationMode = params.vehicleCalculationMode || 'Daily';
-  let transportCost = 0;
-  if (vehicleCalculationMode === 'Daily') {
-    transportCost = vehicleDailyRate * vehicleDays;
-  } else {
-    const vehicleKm = Number(params.vehicleKm) || 0;
-    const vehicleRatePerKm = Number(params.vehicleRatePerKm) || 15;
-    const vehicleNightCharges = Number(params.vehicleNightCharges) || 0;
-    transportCost = (vehicleKm * vehicleRatePerKm) + vehicleNightCharges;
-  }
+  const transportCost = vehicleCalculationMode === 'Daily'
+    ? vehicleDailyRate * vehicleDays
+    : (Number(params.vehicleKm) || 0) * (Number(params.vehicleRatePerKm) || 15) + (Number(params.vehicleNightCharges) || 0);
 
   const mealPlan = params.mealPlan || 'MAP';
   let mealKey = 'MAP';
@@ -172,7 +166,7 @@ export function calculateCosting(params) {
 
   const markupPercent = params.markupPercent !== undefined && params.markupPercent !== null && params.markupPercent !== ''
     ? Number(params.markupPercent)
-    : 25;
+    : 30;
   const markupAmount = Math.round(landedCost * (markupPercent / 100));
   const sellingPrice = landedCost + markupAmount;
 
@@ -186,14 +180,11 @@ export function calculateCosting(params) {
     ? Number(params.discountPercent)
     : 0;
   
-  let discountAmount = 0;
-  if (discountType === 'Percentage') {
-    discountAmount = Math.round(sellingPrice * (discountPercent / 100));
-  } else {
-    discountAmount = params.discountAmount !== undefined && params.discountAmount !== null && params.discountAmount !== ''
+  const discountAmount = discountType === 'Percentage'
+    ? Math.round(sellingPrice * (discountPercent / 100))
+    : params.discountAmount !== undefined && params.discountAmount !== null && params.discountAmount !== ''
       ? Number(params.discountAmount)
       : 0;
-  }
 
   const customerPrice = sellingPrice + taxAmount - discountAmount;
 

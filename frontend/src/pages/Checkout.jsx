@@ -1,21 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   User, Phone, Mail, Calendar, Users, ShieldCheck, Copy, Check, 
-  CreditCard, Smartphone, Building, RefreshCw, AlertCircle, ArrowLeft,
-  ChevronRight, Download, MessageSquare, Heart, Sparkles, CheckCircle2,
-  Lock, ArrowRight, HelpCircle
+  Smartphone,
+  ChevronRight, Download, MessageSquare, CheckCircle2,
+  Lock, ArrowRight
 } from 'lucide-react';
 
 const Checkout = () => {
   const [searchParams] = useSearchParams();
   const packageId = searchParams.get('packageId');
-  const navigate = useNavigate();
-
   // Booking details states
   const [pkg, setPkg] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => Boolean(packageId));
+  const [packageError, setPackageError] = useState('');
   const [activeStep, setActiveStep] = useState(1); // 1: Info, 2: Review, 3: Payment, 4: Receipt
   const [bookingRef, setBookingRef] = useState('');
   
@@ -31,33 +30,14 @@ const Checkout = () => {
     remarks: '',
   });
 
-  // Payment states
-  const [paymentMethod, setPaymentMethod] = useState('UPI'); // UPI, Card, NetBanking, BankTransfer
+  // Payment states. Only methods backed by a real reconciliation workflow are exposed.
+  const [paymentMethod, setPaymentMethod] = useState('UPI');
   const [utrNumber, setUtrNumber] = useState('');
   const [copiedUpi, setCopiedUpi] = useState(false);
   const [copiedAmt, setCopiedAmt] = useState(false);
   const [submittingPayment, setSubmittingPayment] = useState(false);
   const [paymentError, setPaymentError] = useState('');
-
-  // Interactive Card Payment fields
-  const [cardData, setCardData] = useState({
-    number: '',
-    name: '',
-    expiry: '',
-    cvv: '',
-  });
-  const [cardFlipped, setCardFlipped] = useState(false);
-  const [showOtpModal, setShowOtpModal] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
-  const [otpTimer, setOtpTimer] = useState(60);
-  const [cardError, setCardError] = useState('');
-
-  // Netbanking State
-  const [selectedBank, setSelectedBank] = useState('');
-  const [showBankLogin, setShowBankLogin] = useState(false);
-  const [bankUsername, setBankUsername] = useState('');
-  const [bankPassword, setBankPassword] = useState('');
-  const [bankError, setBankError] = useState('');
+  const [formError, setFormError] = useState('');
 
   // Bank Transfer Reference
   const [bankRefNumber, setBankRefNumber] = useState('');
@@ -65,30 +45,24 @@ const Checkout = () => {
   useEffect(() => {
     if (packageId) {
       fetch(`/api/packages/${packageId}`)
-        .then(r => r.json())
+        .then(r => {
+          if (!r.ok) throw new Error('Package could not be loaded.');
+          return r.json();
+        })
         .then(data => {
           setPkg(data);
           setLoading(false);
         })
-        .catch(() => setLoading(false));
-    } else {
-      setLoading(false);
+        .catch(error => {
+          setPackageError(error.message || 'Package could not be loaded.');
+          setLoading(false);
+        });
     }
   }, [packageId]);
 
-  // Card OTP Resend timer
-  useEffect(() => {
-    let interval;
-    if (showOtpModal && otpTimer > 0) {
-      interval = setInterval(() => {
-        setOtpTimer(t => t - 1);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [showOtpModal, otpTimer]);
-
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    setFormError('');
     setFormData(prev => {
       const updated = { ...prev, [name]: value };
       if (name === 'passengers') {
@@ -96,44 +70,6 @@ const Checkout = () => {
       }
       return updated;
     });
-  };
-
-  const handleCardChange = (e) => {
-    const { name, value } = e.target;
-    // Format card input nicely
-    if (name === 'number') {
-      const formatted = value.replace(/\s?/g, '').replace(/(\d{4})/g, '$1 ').trim().substring(0, 19);
-      setCardData(prev => ({ ...prev, [name]: formatted }));
-    } else if (name === 'expiry') {
-      const formatted = value.replace(/\//g, '').replace(/(\d{2})/g, '$1/').trim();
-      const final = formatted.endsWith('/') ? formatted.slice(0, -1) : formatted;
-      setCardData(prev => ({ ...prev, [name]: final.substring(0, 5) }));
-    } else if (name === 'cvv') {
-      setCardData(prev => ({ ...prev, [name]: value.replace(/\D/g, '').substring(0, 4) }));
-    } else {
-      setCardData(prev => ({ ...prev, [name]: value }));
-    }
-  };
-
-  const validateCardDetails = () => {
-    if (cardData.number.replace(/\s/g, '').length < 16) {
-      setCardError('Please enter a valid 16-digit card number.');
-      return false;
-    }
-    if (!/^\d{2}\/\d{2}$/.test(cardData.expiry)) {
-      setCardError('Expiry must be in MM/YY format.');
-      return false;
-    }
-    if (cardData.cvv.length < 3) {
-      setCardError('CVV must be 3 or 4 digits.');
-      return false;
-    }
-    if (!cardData.name.trim()) {
-      setCardError('Cardholder name is required.');
-      return false;
-    }
-    setCardError('');
-    return true;
   };
 
   // Pricing calculations
@@ -147,8 +83,17 @@ const Checkout = () => {
   const upiUri = `upi://pay?pa=${upiId}&pn=SreePayanam%20Tours%20and%20Travels&tn=BookingRef&am=${totalAmount}&cu=INR`;
   const upiQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=10&data=${encodeURIComponent(upiUri)}`;
 
-  const copyToClipboard = (text, type) => {
-    navigator.clipboard.writeText(text);
+  const copyToClipboard = async (text, type) => {
+    if (!navigator.clipboard?.writeText) {
+      setPaymentError('Copy is unavailable in this browser. Please select the value and copy it manually.');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      setPaymentError('Copy is unavailable in this browser. Please select the value and copy it manually.');
+      return;
+    }
     if (type === 'upi') {
       setCopiedUpi(true);
       setTimeout(() => setCopiedUpi(false), 2000);
@@ -161,9 +106,13 @@ const Checkout = () => {
   // 1. Submit Booking with Initial Checkout Data
   const handleCheckoutSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.name || !formData.email || !formData.phone || !formData.travelDate) {
+    const emailOkay = /^\S+@\S+\.\S+$/.test(formData.email.trim());
+    const phoneOkay = /^\+?[0-9 ()-]{8,20}$/.test(formData.phone.trim());
+    if (!formData.name.trim() || !emailOkay || !phoneOkay || !formData.travelDate) {
+      setFormError('Please enter a name, valid email, valid phone number and departure date.');
       return;
     }
+    setFormError('');
     setActiveStep(2); // Proceed to review summary
   };
 
@@ -217,36 +166,6 @@ const Checkout = () => {
     processFinalPayment(utrNumber);
   };
 
-  const handleCardPayClick = () => {
-    if (!validateCardDetails()) return;
-    setOtpTimer(60);
-    setShowOtpModal(true);
-  };
-
-  const handleOtpVerify = () => {
-    if (!/^\d{6}$/.test(otpCode)) {
-      setCardError('Please enter a valid 6-digit OTP code.');
-      return;
-    }
-    setCardError('');
-    setShowOtpModal(false);
-    // Card payments generate a mock card txn ID
-    const cardTxnId = 'CARD-TXN-' + Math.random().toString(36).substring(2, 10).toUpperCase();
-    processFinalPayment(cardTxnId);
-  };
-
-  const handleBankLoginSubmit = (e) => {
-    e.preventDefault();
-    if (!bankUsername || !bankPassword) {
-      setBankError('Username and Password are required.');
-      return;
-    }
-    setBankError('');
-    setShowBankLogin(false);
-    const netbankingTxnId = 'NETBNK-' + Math.random().toString(36).substring(2, 10).toUpperCase();
-    processFinalPayment(netbankingTxnId);
-  };
-
   const handleBankTransferSubmit = (e) => {
     e.preventDefault();
     if (!bankRefNumber.trim()) {
@@ -258,26 +177,42 @@ const Checkout = () => {
   };
 
   const getWhatsAppReceiptLink = () => {
-    const text = `Hello SreePayanam! ✈️\n\nI just paid and confirmed an instant booking online!\n` +
+    const text = `Hello SreePayanam! ✈️\n\nI just submitted a payment claim for my booking.\n` +
       `👤 *Lead Traveler:* ${formData.name}\n` +
       `📞 *Phone:* ${formData.phone}\n` +
       `🎟️ *Booking ID:* ${bookingRef}\n` +
       `📦 *Package Selected:* ${pkg?.title || 'Custom package'}\n` +
       `📅 *Travel Date:* ${new Date(formData.travelDate).toLocaleDateString('en-IN')}\n` +
       `👥 *Passengers:* ${formData.passengers}\n` +
-      `💰 *Total Paid:* ₹${totalAmount.toLocaleString()} via ${paymentMethod}\n` +
-      `🔍 *Payment Claim Reference:* ${utrNumber || bankRefNumber || 'Simulated Verification'}\n\n` +
+      `💰 *Amount Claimed:* ₹${totalAmount.toLocaleString()} via ${paymentMethod}\n` +
+      `🔍 *Payment Claim Reference:* ${utrNumber || bankRefNumber || 'Pending verification'}\n\n` +
       `Please verify our receipt claim and issue tickets/vouchers as soon as possible. Thank you!`;
     return `https://wa.me/919443217654?text=${encodeURIComponent(text)}`;
   };
 
-  if (loading) return (
+  if (packageId && loading) return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#f1f5f9' }}>
       <div style={{ textAlign: 'center' }}>
         <div style={{ width: 48, height: 48, border: '4px solid var(--primary)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
         <p style={{ color: 'var(--text-muted)' }}>Preparing secure checkout environment...</p>
       </div>
     </div>
+  );
+
+  if (!packageId || (packageId && !pkg)) return (
+    <main className="page-container">
+      <div className="container">
+        <div className="glass-card access-card">
+          <span className="eyebrow">Checkout needs a package</span>
+          <h1>{packageError || 'Choose a published package before checkout.'}</h1>
+          <p>For a custom route, use the trip planner to receive a server-calculated estimate and downloadable quotation.</p>
+          <div className="access-card-actions">
+            <Link className="btn btn-primary" to="/packages">Browse packages</Link>
+            <Link className="btn btn-ghost" to="/ai-assistant">Open trip planner</Link>
+          </div>
+        </div>
+      </div>
+    </main>
   );
 
   return (
@@ -288,11 +223,11 @@ const Checkout = () => {
         <div style={{ position: 'absolute', inset: 0, opacity: 0.08, backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '20px 20px' }}></div>
         <div className="container" style={{ maxWidth: 800 }}>
           <span style={{ background: 'rgba(59,130,246,0.25)', border: '1px solid rgba(255,255,255,0.2)', padding: '6px 16px', borderRadius: 30, fontSize: '0.8rem', fontWeight: 800, textTransform: 'uppercase', color: '#93c5fd', letterSpacing: 0.5 }}>
-            🛡️ PCI-DSS Compliant Secure Gateway
+            🛡️ Secure enquiry checkout
           </span>
           <h1 style={{ fontSize: 'clamp(1.8rem, 3.5vw, 2.6rem)', fontWeight: 900, marginTop: 10, marginBottom: 8 }}>Secure Travel Checkout</h1>
           <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.98rem', maxWidth: 500, margin: '0 auto' }}>
-            Book "{pkg?.title || 'Custom Tour Service'}" instantly using verified encrypted payment channels.
+            Review "{pkg?.title || 'Custom Tour Service'}" and submit a payment reference for our team to verify.
           </p>
         </div>
       </div>
@@ -346,7 +281,8 @@ const Checkout = () => {
                   <h2 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: 20, color: 'var(--dark)', display: 'flex', alignItems: 'center', gap: 8 }}>
                     👤 Lead Traveler Information
                   </h2>
-                  <form onSubmit={handleCheckoutSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  {formError && <div role="alert" style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', padding: '10px 12px', borderRadius: 8, marginBottom: 16, fontSize: '0.84rem' }}>{formError}</div>}
+                  <form onSubmit={handleCheckoutSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                       <div style={fld}>
                         <label style={lbl}><User size={14} style={{ marginRight: 6 }} /> Full Name *</label>
@@ -392,7 +328,7 @@ const Checkout = () => {
 
                     <div style={fld}>
                       <label style={lbl}>📝 Special Boarding / Dietary Requirements</label>
-                      <textarea name="remarks" className="input-field" rows="3" placeholder="Preferred flight times, meal constraints, room type upgrade requests..." value={formData.remarks} onChange={handleInputChange} />
+                      <textarea name="remarks" className="input-field resize-none" rows="3" placeholder="Preferred flight times, meal constraints, room type upgrade requests..." value={formData.remarks} onChange={handleInputChange} />
                     </div>
 
                     <button type="submit" className="btn btn-primary" style={{ padding: '14px', width: '100%', fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10 }}>
@@ -445,9 +381,9 @@ const Checkout = () => {
               {activeStep === 3 && (
                 <motion.div key="step3" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="glass-card" style={{ padding: 32, backgroundColor: 'white' }}>
                   <h2 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: 6, color: 'var(--dark)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Lock size={18} color="var(--primary)" /> Secure Multi-channel Payments
+                    <Lock size={18} color="var(--primary)" /> Secure payment handoff
                   </h2>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: 24 }}>Select one of the verified encrypted payment methods to complete booking reservation.</p>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: 24 }}>Use the verified UPI details or submit a bank-transfer reference. Card and net-banking gateway links will appear after provider setup.</p>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 3fr', gap: 20, alignItems: 'stretch' }}>
                     
@@ -455,8 +391,6 @@ const Checkout = () => {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                       {[
                         { id: 'UPI', label: 'BHIM UPI', icon: Smartphone, color: '#ec4899' },
-                        { id: 'Card', label: 'Cards (Visa/Mst)', icon: CreditCard, color: '#3b82f6' },
-                        { id: 'NetBanking', label: 'Net Banking', icon: Building, color: '#10b981' },
                         { id: 'BankTransfer', label: 'Bank NEFT/IMPS', icon: Copy, color: '#8b5cf6' }
                       ].map(t => {
                         const Icon = t.icon;
@@ -465,7 +399,8 @@ const Checkout = () => {
                           <button
                             key={t.id}
                             type="button"
-                            onClick={() => { setPaymentMethod(t.id); setPaymentError(''); }}
+                            onClick={() => { if (!t.disabled) { setPaymentMethod(t.id); setPaymentError(''); } }}
+                            disabled={t.disabled}
                             style={{
                               display: 'flex',
                               alignItems: 'center',
@@ -475,11 +410,12 @@ const Checkout = () => {
                               border: isSel ? `2px solid ${t.color}` : '1.5px solid #e2e8f0',
                               background: isSel ? `${t.color}0a` : 'white',
                               color: isSel ? 'var(--dark)' : '#64748b',
-                              cursor: 'pointer',
+                               cursor: t.disabled ? 'not-allowed' : 'pointer',
                               fontWeight: 700,
                               fontSize: '0.88rem',
                               transition: 'all 0.25s',
-                              textAlign: 'left'
+                               textAlign: 'left',
+                               opacity: t.disabled ? 0.58 : 1
                             }}
                           >
                             <Icon size={18} color={isSel ? t.color : '#64748b'} />
@@ -498,7 +434,7 @@ const Checkout = () => {
                           <div style={{ background: '#fdf2f8', border: '1.5px solid #db2777', padding: '10px 14px', borderRadius: 10, width: '100%', display: 'flex', gap: 10, alignItems: 'center' }}>
                             <ShieldCheck size={24} color="#db2777" style={{ flexShrink: 0 }} />
                             <div style={{ fontSize: '0.78rem', color: '#9d174d', lineHeight: 1.4 }}>
-                              <strong>Locked VPA Security Shield:</strong> This QR code and UPI link will transfer funds strictly to SreePayanam verified owner account: <strong>{upiId}</strong>. Hijacking is impossible.
+                              <strong>Verify before paying:</strong> Confirm the recipient shown in your UPI app is SreePayanam and matches <strong>{upiId}</strong>. Do not proceed if the VPA differs.
                             </div>
                           </div>
 
@@ -527,7 +463,7 @@ const Checkout = () => {
                           <div style={{ width: '100%', height: '1.5px', background: '#cbd5e1' }} />
 
                           {/* Submit UPI Transaction Reference */}
-                          <form onSubmit={handleUpiSubmit} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                          <form onSubmit={handleUpiSubmit} noValidate style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}>
                             <div style={fld}>
                               <label style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--dark)' }}>
                                 📋 Enter 12-digit UPI UTR / Reference No. *
@@ -567,181 +503,6 @@ const Checkout = () => {
                         </div>
                       )}
 
-                      {/* 3B. CREDIT/DEBIT INTERACTIVE FLIP CARD */}
-                      {paymentMethod === 'Card' && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                          
-                          {/* Animated Card Component */}
-                          <div style={{ 
-                            perspective: 1000, 
-                            width: '100%', 
-                            height: 180, 
-                            position: 'relative',
-                            cursor: 'pointer',
-                            marginBottom: 10
-                          }} onClick={() => setCardFlipped(!cardFlipped)}>
-                            <motion.div 
-                              style={{ 
-                                width: '100%', 
-                                height: '100%', 
-                                position: 'absolute', 
-                                transformStyle: 'preserve-3d',
-                                transform: cardFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)'
-                              }}
-                              transition={{ duration: 0.6 }}
-                            >
-                              {/* Card Front */}
-                              <div style={{
-                                width: '100%', height: '100%', position: 'absolute', backfaceVisibility: 'hidden',
-                                background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)',
-                                borderRadius: 16, padding: 20, color: 'white', display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-                                boxShadow: '0 8px 20px rgba(30,58,138,0.2)'
-                              }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                  <div>
-                                    <div style={{ fontSize: '0.62rem', opacity: 0.8, letterSpacing: 1 }}>CREDIT CARD</div>
-                                    <div style={{ fontWeight: 800, fontSize: '0.98rem', marginTop: 2, letterSpacing: 0.5 }}>SreePayanam Pay</div>
-                                  </div>
-                                  <ShieldCheck size={24} color="rgba(255,255,255,0.7)" />
-                                </div>
-                                <div style={{ fontSize: '1.35rem', letterSpacing: 2, fontWeight: 700, fontFamily: 'monospace', margin: '14px 0 6px' }}>
-                                  {cardData.number || '•••• •••• •••• ••••'}
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                  <div>
-                                    <div style={{ fontSize: '0.55rem', opacity: 0.7 }}>CARDHOLDER NAME</div>
-                                    <div style={{ fontSize: '0.82rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                                      {cardData.name || 'Aditya Nair'}
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <div style={{ fontSize: '0.55rem', opacity: 0.7 }}>EXPIRES</div>
-                                    <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>{cardData.expiry || 'MM/YY'}</div>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Card Back */}
-                              <div style={{
-                                width: '100%', height: '100%', position: 'absolute', backfaceVisibility: 'hidden',
-                                transform: 'rotateY(180deg)',
-                                background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-                                borderRadius: 16, color: 'white', display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-                                boxShadow: '0 8px 20px rgba(15,23,42,0.3)'
-                              }}>
-                                <div style={{ height: 35, background: '#000', width: '100%', marginTop: 15 }} />
-                                <div style={{ padding: '0 20px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                  <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10 }}>
-                                    <div style={{ fontSize: '0.55rem', opacity: 0.7 }}>CVV</div>
-                                    <div style={{ background: 'white', color: '#1e293b', padding: '4px 10px', borderRadius: 4, fontFamily: 'monospace', fontWeight: 800, fontSize: '0.85rem' }}>
-                                      {cardData.cvv || '•••'}
-                                    </div>
-                                  </div>
-                                  <p style={{ fontSize: '0.55rem', opacity: 0.5, lineHeight: 1.3, margin: 0 }}>
-                                    This mock-up secure card terminal complies fully with PCI standards. Unauthorized copies, modifications, or recording are strictly blocked.
-                                  </p>
-                                </div>
-                              </div>
-                            </motion.div>
-                          </div>
-
-                          {/* Card input forms */}
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                            <div style={fld}>
-                              <label style={{ fontSize: '0.78rem', fontWeight: 700 }}>Card Number</label>
-                              <input type="text" name="number" className="input-field" placeholder="4111 2222 3333 4444" value={cardData.number} onChange={handleCardChange} style={{ background: 'white' }} onFocus={() => setCardFlipped(false)} />
-                            </div>
-
-                            <div style={fld}>
-                              <label style={{ fontSize: '0.78rem', fontWeight: 700 }}>Cardholder Name</label>
-                              <input type="text" name="name" className="input-field" placeholder="Aditya Nair" value={cardData.name} onChange={handleCardChange} style={{ background: 'white' }} onFocus={() => setCardFlipped(false)} />
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                              <div style={fld}>
-                                <label style={{ fontSize: '0.78rem', fontWeight: 700 }}>Expiration Date</label>
-                                <input type="text" name="expiry" className="input-field" placeholder="MM/YY" value={cardData.expiry} onChange={handleCardChange} style={{ background: 'white' }} onFocus={() => setCardFlipped(false)} />
-                              </div>
-                              <div style={fld}>
-                                <label style={{ fontSize: '0.78rem', fontWeight: 700 }}>CVV / CVC Code</label>
-                                <input type="password" name="cvv" className="input-field" placeholder="123" value={cardData.cvv} onChange={handleCardChange} style={{ background: 'white' }} onFocus={() => setCardFlipped(true)} />
-                              </div>
-                            </div>
-
-                            {cardError && <div style={{ color: '#ef4444', fontSize: '0.82rem', fontWeight: 600 }}>⚠️ {cardError}</div>}
-                            {paymentError && <div style={{ color: '#ef4444', fontSize: '0.82rem', fontWeight: 600 }}>⚠️ {paymentError}</div>}
-
-                            <button
-                              type="button"
-                              className="btn btn-primary"
-                              style={{ width: '100%', padding: '12px', fontWeight: 800, marginTop: 10 }}
-                              onClick={handleCardPayClick}
-                              disabled={submittingPayment}
-                            >
-                              Authorize Card Payment (₹{totalAmount.toLocaleString()})
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* 3C. NET BANKING DIRECT API */}
-                      {paymentMethod === 'NetBanking' && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                          <p style={{ fontSize: '0.8rem', fontWeight: 700, margin: 0 }}>Select your Registered Bank:</p>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                            {[
-                              { code: 'SBI', name: 'State Bank of India' },
-                              { code: 'HDFC', name: 'HDFC Bank Ltd' },
-                              { code: 'ICICI', name: 'ICICI Bank' },
-                              { code: 'AXIS', name: 'Axis Bank' },
-                              { code: 'KOTAK', name: 'Kotak Mahindra Bank' },
-                              { code: 'YES', name: 'YES Bank' }
-                            ].map(b => (
-                              <button
-                                key={b.code}
-                                type="button"
-                                onClick={() => { setSelectedBank(b.name); setPaymentError(''); }}
-                                style={{
-                                  background: selectedBank === b.name ? 'var(--primary)' : 'white',
-                                  color: selectedBank === b.name ? 'white' : 'var(--dark)',
-                                  border: '1px solid #cbd5e1',
-                                  borderRadius: 8,
-                                  padding: '10px 14px',
-                                  cursor: 'pointer',
-                                  fontSize: '0.82rem',
-                                  fontWeight: 700,
-                                  transition: 'all 0.2s',
-                                  textAlign: 'left'
-                                }}
-                              >
-                                {b.name}
-                              </button>
-                            ))}
-                          </div>
-
-                          {selectedBank && (
-                            <div style={{ background: 'white', border: '1.5px dashed var(--primary)', padding: 14, borderRadius: 10, marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                              <div style={{ fontSize: '0.82rem' }}>Selected: <strong>{selectedBank}</strong></div>
-                              <button
-                                type="button"
-                                className="btn btn-primary"
-                                style={{ padding: '10px', fontSize: '0.88rem' }}
-                                onClick={() => {
-                                  setBankUsername('');
-                                  setBankPassword('');
-                                  setBankError('');
-                                  setShowBankLogin(true);
-                                }}
-                              >
-                                Secure Login to Netbanking Terminal
-                              </button>
-                            </div>
-                          )}
-                          
-                          {paymentError && <div style={{ color: '#ef4444', fontSize: '0.82rem', fontWeight: 600 }}>⚠️ {paymentError}</div>}
-                        </div>
-                      )}
-
                       {/* 3D. BANK DIRECT TRANSFER (NEFT/IMPS) */}
                       {paymentMethod === 'BankTransfer' && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -757,7 +518,7 @@ const Checkout = () => {
                             <div>📍 <strong>Branch:</strong> Chennai Main Head Office</div>
                           </div>
 
-                          <form onSubmit={handleBankTransferSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                          <form onSubmit={handleBankTransferSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                             <div style={fld}>
                               <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>
                                 NEFT / IMPS Reference Ref No. *
@@ -865,7 +626,7 @@ const Checkout = () => {
                     {/* Bottom Ticket Receipt */}
                     <div style={{ padding: 24, textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>PAYMENT COMPLETED</span>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>PAYMENT CLAIM LOGGED</span>
                         <div style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--secondary)' }}>
                           ₹{totalAmount.toLocaleString()}
                         </div>
@@ -979,7 +740,7 @@ const Checkout = () => {
                 <div style={{ background: '#f8fafc', padding: 14, borderRadius: 10, display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: '0.75rem', color: 'var(--text-muted)', border: '1px solid #cbd5e1' }}>
                   <ShieldCheck size={20} color="var(--primary)" style={{ flexShrink: 0, marginTop: 1 }} />
                   <div>
-                    <strong>100% Cryptographic Lock:</strong> Payments are securely processed. SreePayanam uses AES-256 bits encryption to secure card OTP tunnels and locks UPI routing to official handles.
+                    <strong>Manual verification:</strong> Your payment reference is sent over the site’s secure connection and remains pending until the SreePayanam operations desk verifies it.
                   </div>
                 </div>
 
@@ -989,109 +750,6 @@ const Checkout = () => {
 
         </div>
       </div>
-
-      {/* MOCK SECURE BANK CARD OTP MODAL */}
-      <AnimatePresence>
-        {showOtpModal && (
-          <div style={{
-            position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 16
-          }}>
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              style={{ background: 'white', borderRadius: 16, padding: 28, maxWidth: 380, width: '100%', boxShadow: 'var(--shadow-lg)', textAlign: 'center', border: '1.5px solid #cbd5e1' }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, borderBottom: '1px solid #cbd5e1', paddingBottom: 10 }}>
-                <span style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--dark)' }}>🏦 SreePayanam Bank Gateway</span>
-                <span style={{ background: '#fef3c7', color: '#d97706', fontSize: '0.72rem', padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>2FA Secure</span>
-              </div>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-main)', lineHeight: 1.5, marginBottom: 14 }}>
-                Enter the 6-digit One Time Password (OTP) sent to the phone number associated with your card.
-              </p>
-              
-              <div style={{ background: '#f8fafc', padding: 10, borderRadius: 8, fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 16 }}>
-                💡 <em>SIMULATION OTP: Enters <strong>123456</strong> to successfully verify.</em>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
-                <input 
-                  type="text" 
-                  className="input-field" 
-                  placeholder="------" 
-                  value={otpCode}
-                  onChange={e => setOtpCode(e.target.value.replace(/\D/g, '').substring(0,6))}
-                  style={{ textAlign: 'center', fontSize: '1.4rem', letterSpacing: 6, fontWeight: 800, maxWidth: 180 }}
-                />
-
-                {cardError && <div style={{ color: '#ef4444', fontSize: '0.78rem', fontWeight: 600 }}>⚠️ {cardError}</div>}
-
-                <button type="button" className="btn btn-secondary" style={{ width: '100%', padding: '10px', fontSize: '0.9rem', fontWeight: 800 }} onClick={handleOtpVerify}>
-                  Submit OTP Code
-                </button>
-
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  {otpTimer > 0 ? (
-                    <span>Resend OTP in <strong>{otpTimer}s</strong></span>
-                  ) : (
-                    <button type="button" style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: 700, cursor: 'pointer' }} onClick={() => setOtpTimer(60)}>
-                      Resend SMS OTP Code
-                    </button>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* MOCK SECURE NETBANKING LOGIN MODAL */}
-      <AnimatePresence>
-        {showBankLogin && (
-          <div style={{
-            position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 16
-          }}>
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              style={{ background: 'white', borderRadius: 16, padding: 28, maxWidth: 380, width: '100%', boxShadow: 'var(--shadow-lg)', border: '1.5px solid #cbd5e1' }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, borderBottom: '1px solid #cbd5e1', paddingBottom: 10 }}>
-                <span style={{ fontWeight: 800, fontSize: '0.88rem', color: 'var(--dark)' }}>🔒 {selectedBank} Netbanking</span>
-                <span style={{ background: '#dcfce7', color: '#16a34a', fontSize: '0.72rem', padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>SSL Encrypted</span>
-              </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.4, marginBottom: 16 }}>
-                Provide your online banking credentials to authorize payment transaction of <strong>₹{totalAmount.toLocaleString()}</strong>.
-              </p>
-
-              <form onSubmit={handleBankLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div style={fld}>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 700 }}>Customer ID / Username</label>
-                  <input type="text" required className="input-field" placeholder="User ID" value={bankUsername} onChange={e => setBankUsername(e.target.value)} />
-                </div>
-                <div style={fld}>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 700 }}>Netbanking Password</label>
-                  <input type="password" required className="input-field" placeholder="Password" value={bankPassword} onChange={e => setBankPassword(e.target.value)} />
-                </div>
-
-                <div style={{ background: '#f8fafc', padding: 8, borderRadius: 6, fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                  💡 <em>Enter any mock credentials to proceed. No real details are saved.</em>
-                </div>
-
-                {bankError && <div style={{ color: '#ef4444', fontSize: '0.78rem', fontWeight: 600 }}>⚠️ {bankError}</div>}
-
-                <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
-                  <button type="button" className="btn" style={{ background: '#f1f5f9', color: '#475569', flex: 1, padding: 8, fontSize: '0.82rem' }} onClick={() => setShowBankLogin(false)}>
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 2, padding: 8, fontSize: '0.85rem', fontWeight: 800 }}>
-                    Authenticate Pay
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       <style>{`
         @keyframes spin {

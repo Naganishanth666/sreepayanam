@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useRef, useState } from 'react';
 
 const ContactUs = () => {
   const [formData, setFormData] = useState({
@@ -11,6 +11,8 @@ const ContactUs = () => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+  const firstErrorRef = useRef(null);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -19,6 +21,19 @@ const ContactUs = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const nextErrors = {};
+    if (!formData.name.trim()) nextErrors.name = 'Please enter your name.';
+    if (!/^\S+@\S+\.\S+$/.test(formData.email.trim())) nextErrors.email = 'Enter a valid email address.';
+    if (!/^[+\d][\d\s-]{7,19}$/.test(formData.phone.trim())) nextErrors.phone = 'Enter a valid phone number.';
+    if (!formData.type) nextErrors.type = 'Choose what you need help with.';
+    if (formData.message.trim().length < 10) nextErrors.message = 'Add a few details so we can plan a useful reply.';
+    setFieldErrors(nextErrors);
+    if (Object.keys(nextErrors).length) {
+      firstErrorRef.current = document.getElementById(Object.keys(nextErrors)[0]);
+      firstErrorRef.current?.focus();
+      return;
+    }
+
     setLoading(true);
     setSuccess(false);
     setError('');
@@ -41,6 +56,7 @@ const ContactUs = () => {
 
       setSuccess(true);
       setFormData({ name: '', email: '', phone: '', type: '', message: '' });
+      setFieldErrors({});
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.');
     } finally {
@@ -49,88 +65,77 @@ const ContactUs = () => {
   };
 
   return (
-    <div className="page-container" style={{ padding: '120px 20px' }}>
-      <div className="container" style={{ maxWidth: '600px' }}>
-        <div className="glass-card" style={{ padding: '40px' }}>
-          <h1 style={{ textAlign: 'center', marginBottom: '30px', color: 'var(--dark)' }}>Contact Us</h1>
+    <main className="page-container contact-page">
+      <div className="container contact-layout">
+        <section className="contact-copy">
+          <span className="eyebrow">Talk to the travel desk</span>
+          <h1>Tell us where the route should lead.</h1>
+          <p>Share a destination, a date, or simply the kind of trip you have in mind. A SreePayanam planner will shape the next step with you.</p>
+          <div className="contact-methods">
+            <div className="contact-method"><span className="contact-method-icon">01</span><div><strong>Quick planning</strong><span>Package ideas, stays, vehicles, and sightseeing in one conversation.</span></div></div>
+            <div className="contact-method"><span className="contact-method-icon">02</span><div><strong>Human follow-up</strong><span>We use your details only to respond to this enquiry.</span></div></div>
+            <div className="contact-method"><span className="contact-method-icon">03</span><div><strong>Quote-ready details</strong><span>Include dates and preferences for a more useful first reply.</span></div></div>
+          </div>
+        </section>
+
+        <section className="glass-card contact-card">
+          <div className="section-kicker">Start a conversation</div>
+          <h2>Send an enquiry</h2>
+          <p className="contact-card-intro">Most replies arrive during the working day.</p>
           
           {success && (
-            <div style={{ background: '#f0fdf4', color: '#16a34a', padding: '12px 16px', borderRadius: 8, marginBottom: 20, fontSize: '0.9rem', textAlign: 'center', fontWeight: 600 }}>
-              🎉 Enquiry submitted successfully! Our travel experts will contact you shortly.
+            <div className="status-message status-success" role="status">
+              Enquiry received. Our travel desk will contact you shortly.
             </div>
           )}
 
           {error && (
-            <div style={{ background: '#fef2f2', color: '#ef4444', padding: '12px 16px', borderRadius: 8, marginBottom: 20, fontSize: '0.9rem', textAlign: 'center', fontWeight: 600 }}>
-              ❌ {error}
+            <div className="status-message status-error" role="alert">
+              {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <input 
-              type="text" 
-              name="name"
-              placeholder="Your Name" 
-              className="input-field" 
-              value={formData.name}
-              onChange={handleChange}
-              required 
-            />
-            <input 
-              type="email" 
-              name="email"
-              placeholder="Email Address" 
-              className="input-field" 
-              value={formData.email}
-              onChange={handleChange}
-              required 
-            />
-            <input 
-              type="tel" 
-              name="phone"
-              placeholder="Mobile Number" 
-              className="input-field" 
-              value={formData.phone}
-              onChange={handleChange}
-              required 
-            />
-            
-            <select 
-              name="type"
-              className="input-field" 
-              value={formData.type}
-              onChange={handleChange}
-              required
-            >
-              <option value="">Select Enquiry Type</option>
-              <option value="Tour Package Enquiry">Tour Package</option>
-              <option value="Visa Services">Visa Services</option>
-              <option value="Hotel Booking">Hotel Booking</option>
-              <option value="General Enquiry">General Enquiry</option>
-            </select>
-            
-            <textarea 
-              name="message"
-              placeholder="Your Message or Requirements" 
-              className="input-field" 
-              rows="4" 
-              value={formData.message}
-              onChange={handleChange}
-              required
-            ></textarea>
-            
-            <button 
-              type="submit" 
-              className="btn btn-primary" 
-              style={{ marginTop: '10px' }}
-              disabled={loading}
-            >
-              {loading ? 'Submitting...' : 'Submit Enquiry'}
+          <form onSubmit={handleSubmit} noValidate className="contact-form">
+            <div className="contact-form-grid">
+              <div className="field-wrap">
+                <label htmlFor="name">Your name</label>
+                <input id="name" type="text" name="name" autoComplete="name" placeholder="e.g. Priya Nair" className="input-field" value={formData.name} onChange={handleChange} aria-invalid={Boolean(fieldErrors.name)} aria-describedby={fieldErrors.name ? 'name-error' : undefined} />
+                {fieldErrors.name && <span id="name-error" className="field-error">{fieldErrors.name}</span>}
+              </div>
+              <div className="field-wrap">
+                <label htmlFor="email">Email address</label>
+                <input id="email" type="email" name="email" autoComplete="email" placeholder="you@example.com" className="input-field" value={formData.email} onChange={handleChange} aria-invalid={Boolean(fieldErrors.email)} aria-describedby={fieldErrors.email ? 'email-error' : undefined} />
+                {fieldErrors.email && <span id="email-error" className="field-error">{fieldErrors.email}</span>}
+              </div>
+              <div className="field-wrap">
+                <label htmlFor="phone">Mobile number</label>
+                <input id="phone" type="tel" name="phone" inputMode="tel" autoComplete="tel" placeholder="+91 98765 43210" className="input-field" value={formData.phone} onChange={handleChange} aria-invalid={Boolean(fieldErrors.phone)} aria-describedby={fieldErrors.phone ? 'phone-error' : undefined} />
+                {fieldErrors.phone && <span id="phone-error" className="field-error">{fieldErrors.phone}</span>}
+              </div>
+              <div className="field-wrap">
+                <label htmlFor="type">What can we plan?</label>
+                <select id="type" name="type" className="input-field" value={formData.type} onChange={handleChange} aria-invalid={Boolean(fieldErrors.type)} aria-describedby={fieldErrors.type ? 'type-error' : undefined}>
+                  <option value="">Choose one</option>
+                  <option value="Tour Package Enquiry">Tour package</option>
+                  <option value="Visa Services">Visa services</option>
+                  <option value="Hotel Booking">Hotel booking</option>
+                  <option value="General Enquiry">Something else</option>
+                </select>
+                {fieldErrors.type && <span id="type-error" className="field-error">{fieldErrors.type}</span>}
+              </div>
+            </div>
+            <div className="field-wrap">
+              <label htmlFor="message">Your requirements</label>
+              <textarea id="message" name="message" placeholder="Tell us about destinations, dates, group size, or anything important to you." className="input-field contact-textarea resize-none" rows="5" value={formData.message} onChange={handleChange} aria-invalid={Boolean(fieldErrors.message)} aria-describedby={fieldErrors.message ? 'message-error' : undefined} />
+              {fieldErrors.message && <span id="message-error" className="field-error">{fieldErrors.message}</span>}
+            </div>
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              {loading ? 'Sending enquiry…' : 'Send enquiry'}
             </button>
           </form>
-        </div>
+        </section>
       </div>
-    </div>
+    </main>
   );
 };
 

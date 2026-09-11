@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { LogIn, UserPlus, Mail, Lock, User, Phone, MapPin, Briefcase, Sparkles, Eye, EyeOff } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 
 const TOUR_CATEGORIES = [
   'Family Tours', 'Honeymoon Tours', 'Pilgrimage Tours', 'Adventure Tours',
@@ -102,7 +102,7 @@ const Login = () => {
             preferredTravelCategory: form.preferredTravelCategory
           })
         };
-        const data = await register(payload);
+        await register(payload);
         if (role === 'Agent') {
           setSuccess('✅ Agent account created! Awaiting admin approval before you can log in.');
           setIsLogin(true);
@@ -227,7 +227,7 @@ const Login = () => {
             </motion.div>
           )}
 
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <form onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {/* Register-only: Full Name */}
             {!isLogin && (
               <InputField icon={User} name="fullName" placeholder="Full Name *"

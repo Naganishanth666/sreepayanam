@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-  MapPin, Clock, Users, Star, CheckCircle, XCircle,
-  ChevronDown, ChevronUp, Share2, Download, Phone,
-  Calendar, Tag, Home, Utensils, ArrowLeft, MessageCircle,
-  Plane, Car, Lock
+  MapPin, Clock, Users, CheckCircle, XCircle,
+  ChevronDown, ChevronUp, Share2, Phone,
+  Tag, Home, Utensils, ArrowLeft, MessageCircle,
+  Plane, Lock
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { renderRichText } from '../utils/textFormatter';
 import {
   MANDATORY_GENERAL_TERMS,
@@ -100,6 +100,7 @@ const PackageDetails = () => {
   };
   
   const [submitted, setSubmitted] = useState(false);
+  const [enquiryError, setEnquiryError] = useState('');
 
   useEffect(() => {
     fetch(`/api/packages/${id}`)
@@ -110,8 +111,13 @@ const PackageDetails = () => {
 
   const handleEnquiry = async (e) => {
     e.preventDefault();
+    setEnquiryError('');
+    if (!enquiry.name.trim() || enquiry.phone.replace(/\D/g, '').length < 10 || (enquiry.email && !/^\S+@\S+\.\S+$/.test(enquiry.email.trim()))) {
+      setEnquiryError('Please enter your name, a valid mobile number, and a valid email address if provided.');
+      return;
+    }
     try {
-      await fetch('/api/enquiries', {
+      const res = await fetch('/api/enquiries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -192,8 +198,12 @@ const PackageDetails = () => {
           dressCodeGuidelinesAccepted: enquiry.dressCodeGuidelinesAccepted
         }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'We could not submit your enquiry. Please try again.');
       setSubmitted(true);
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      setEnquiryError(err.message || 'We could not submit your enquiry. Please try again.');
+    }
   };
 
   const waMessage = pkg ? encodeURIComponent(`Hi! I'm interested in "${pkg.title}" package. Please share details.`) : '';
@@ -631,7 +641,8 @@ const PackageDetails = () => {
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Our team will call you shortly.</p>
                   </div>
                 ) : (
-                  <form onSubmit={handleEnquiry} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <form onSubmit={handleEnquiry} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {enquiryError && <div className="form-status is-error" role="alert">{enquiryError}</div>}
                     <input required className="input-field" placeholder="Your Name *" value={enquiry.name} onChange={e => setEnquiry(f => ({ ...f, name: e.target.value }))} />
                     <input required className="input-field" placeholder="Phone Number *" type="tel" value={enquiry.phone} onChange={e => setEnquiry(f => ({ ...f, phone: e.target.value }))} />
                     <input className="input-field" placeholder="Email Address" type="email" value={enquiry.email} onChange={e => setEnquiry(f => ({ ...f, email: e.target.value }))} />
@@ -767,7 +778,7 @@ const PackageDetails = () => {
                               <option value="No">Wheelchair/Stretcher? No</option>
                               <option value="Yes">Wheelchair/Stretcher? Yes</option>
                             </select>
-                            <textarea className="input-field" style={{ padding: '8px', width: '100%' }} rows="2" placeholder="Brief Medical History Details" value={enquiry.medicalHistoryDetails} onChange={e => setEnquiry(f => ({ ...f, medicalHistoryDetails: e.target.value }))}></textarea>
+                            <textarea className="input-field resize-none" style={{ padding: '8px', width: '100%' }} rows="2" placeholder="Brief Medical History Details" value={enquiry.medicalHistoryDetails} onChange={e => setEnquiry(f => ({ ...f, medicalHistoryDetails: e.target.value }))}></textarea>
                           </>
                         )}
 

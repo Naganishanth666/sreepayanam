@@ -1,37 +1,60 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { AuthContext } from './AuthContextValue';
 
-const AuthContext = createContext(null);
+const safeStorage = {
+  get(key) {
+    try {
+      return window.localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  set(key, value) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch {
+      // Session state still lives in memory when storage is unavailable.
+    }
+  },
+  remove(key) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch {
+      // Ignore storage cleanup failures.
+    }
+  }
+};
+
+const readStoredSession = () => {
+  const savedToken = safeStorage.get('sp_token');
+  const savedUser = safeStorage.get('sp_user');
+  if (!savedToken || !savedUser) return { token: null, user: null };
+
+  try {
+    const parsedUser = JSON.parse(savedUser);
+    if (!parsedUser || typeof parsedUser !== 'object') throw new Error('Invalid stored session');
+    return { token: savedToken, user: parsedUser };
+  } catch {
+    safeStorage.remove('sp_token');
+    safeStorage.remove('sp_user');
+    return { token: null, user: null };
+  }
+};
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);       // { id, fullName, email, role, ... }
-  const [token, setToken] = useState(null);
-  const [loading, setLoading] = useState(true); // true while restoring session
-
-  // Restore session from localStorage on mount
-  useEffect(() => {
-    const savedToken = localStorage.getItem('sp_token');
-    const savedUser  = localStorage.getItem('sp_user');
-    if (savedToken && savedUser) {
-      try {
-        setToken(savedToken);
-        setUser(JSON.parse(savedUser));
-      } catch {
-        localStorage.removeItem('sp_token');
-        localStorage.removeItem('sp_user');
-      }
-    }
-    setLoading(false);
-  }, []);
+  const [session] = useState(readStoredSession);
+  const [user, setUser] = useState(session.user);       // { id, fullName, email, role, ... }
+  const [token, setToken] = useState(session.token);
+  const [loading] = useState(false);
 
   // Persist whenever token/user changes
   useEffect(() => {
     if (token && user) {
-      localStorage.setItem('sp_token', token);
-      localStorage.setItem('sp_user', JSON.stringify(user));
+      safeStorage.set('sp_token', token);
+      safeStorage.set('sp_user', JSON.stringify(user));
     } else {
-      localStorage.removeItem('sp_token');
-      localStorage.removeItem('sp_user');
+      safeStorage.remove('sp_token');
+      safeStorage.remove('sp_user');
     }
   }, [token, user]);
 
@@ -93,12 +116,3 @@ export const AuthProvider = ({ children }) => {
     </AuthContext.Provider>
   );
 };
-
-// Custom hook
-export const useAuth = () => {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
-  return ctx;
-};
-
-export default AuthContext;

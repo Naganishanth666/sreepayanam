@@ -1,4 +1,3 @@
-import React from 'react';
 import { motion } from 'framer-motion';
 import { 
   Globe, 
@@ -10,9 +9,6 @@ import {
   Target, 
   Eye, 
   ArrowRight,
-  ShieldCheck,
-  MapPin,
-  Calendar,
   Award
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
