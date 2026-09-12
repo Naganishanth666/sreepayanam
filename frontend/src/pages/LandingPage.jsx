@@ -7,7 +7,7 @@ import {
 import { Link } from 'react-router-dom';
 import { DESTINATION_CATALOG, toCatalogPackage } from '../data/destinationCatalog';
 import { HERO_PACKAGE_TYPES, HERO_SLIDES } from '../data/heroSlides';
-import logoImg from '../assets/logo.png';
+import logoImg from '../assets/sreepayanam-official-logo.png';
 
 const initialQuoteForm = {
   destination: '',
@@ -406,8 +406,8 @@ const LandingPage = () => {
       <footer className="site-footer">
         <div className="container footer-inner">
           <div className="footer-brand">
-            <img src={logoImg} alt="SreePayanam Tours and Travels" width="165" height="50" />
-            <p>Plan smart. Travel better. Create memories.</p>
+            <img src={logoImg} alt="SreePayanam AI Travel Ecosystem" width="260" height="76" />
+            <p>Travel smarter. Journey better.</p>
           </div>
           <div>
             <div className="footer-links">
@@ -416,7 +416,7 @@ const LandingPage = () => {
               <Link to="/contact">Contact</Link>
               <Link to="/ai-assistant">Planner</Link>
             </div>
-            <p className="footer-note" style={{ marginTop: '1.1rem', textAlign: 'right' }}>© {new Date().getFullYear()} SreePayanam Tours &amp; Travels</p>
+            <p className="footer-note" style={{ marginTop: '1.1rem', textAlign: 'right' }}>© {new Date().getFullYear()} Sreepayanam InterNational Pvt. Ltd.</p>
           </div>
         </div>
       </footer>

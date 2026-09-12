@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { Clock3, Phone } from 'lucide-react';
 
 const ContactUs = () => {
   const [formData, setFormData] = useState({
@@ -75,6 +76,14 @@ const ContactUs = () => {
             <div className="contact-method"><span className="contact-method-icon">01</span><div><strong>Quick planning</strong><span>Package ideas, stays, vehicles, and sightseeing in one conversation.</span></div></div>
             <div className="contact-method"><span className="contact-method-icon">02</span><div><strong>Human follow-up</strong><span>We use your details only to respond to this enquiry.</span></div></div>
             <div className="contact-method"><span className="contact-method-icon">03</span><div><strong>Quote-ready details</strong><span>Include dates and preferences for a more useful first reply.</span></div></div>
+            <a className="contact-method contact-method-direct" href="tel:+919280077182">
+              <span className="contact-method-icon" aria-hidden="true"><Phone size={16} /></span>
+              <div><strong>Office phone</strong><span>+91 92800 77182</span></div>
+            </a>
+            <div className="contact-method">
+              <span className="contact-method-icon" aria-hidden="true"><Clock3 size={16} /></span>
+              <div><strong>Office hours</strong><span>10:00 am–6:00 pm · Monday to Saturday</span></div>
+            </div>
           </div>
         </section>
 

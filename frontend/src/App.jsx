@@ -18,22 +18,22 @@ import Checkout from './pages/Checkout';
 import { NotFoundPage } from './pages/AccessPages';
 
 const routeTitles = {
-  '/': 'SreePayanam | Thoughtful routes, well travelled',
-  '/about': 'About SreePayanam | Travel desk with a human eye',
-  '/packages': 'Packages | SreePayanam Tours & Travels',
-  '/contact': 'Contact | SreePayanam Tours & Travels',
-  '/ai-assistant': 'Trip planner | SreePayanam Tours & Travels',
-  '/login': 'Log in | SreePayanam Tours & Travels',
-  '/bookings': 'Book services | SreePayanam Tours & Travels',
-  '/checkout': 'Checkout | SreePayanam Tours & Travels',
-  '/admin': 'Admin dashboard | SreePayanam Tours & Travels'
+  '/': 'SreePayanam | Travel Smarter. Journey Better.',
+  '/about': 'About | SreePayanam',
+  '/packages': 'Packages | SreePayanam',
+  '/contact': 'Contact | SreePayanam',
+  '/ai-assistant': 'Trip planner | SreePayanam',
+  '/login': 'Log in | SreePayanam',
+  '/bookings': 'Book services | SreePayanam',
+  '/checkout': 'Checkout | SreePayanam',
+  '/admin': 'Admin dashboard | SreePayanam'
 };
 
 const PageTitle = () => {
   const location = useLocation();
 
   useEffect(() => {
-    const baseTitle = routeTitles[location.pathname] || (location.pathname.startsWith('/package/') ? 'Package details | SreePayanam Tours & Travels' : 'Page not found | SreePayanam Tours & Travels');
+    const baseTitle = routeTitles[location.pathname] || (location.pathname.startsWith('/package/') ? 'Package details | SreePayanam' : 'Page not found | SreePayanam');
     document.title = baseTitle;
   }, [location.pathname]);
 

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronDown, LogOut, Menu, Settings, Sparkles, UserRound, X } from 'lucide-react';
 import { useAuth } from '../context/useAuth';
-import logoImg from '../assets/logo.png';
+import logoImg from '../assets/sreepayanam-official-logo.png';
 
 const packageLinks = [
   { label: 'National tours', path: '/packages?category=National' },
@@ -32,8 +32,8 @@ const Navbar = () => {
   return (
     <header className="site-nav">
       <nav className="container nav-shell" aria-label="Main navigation">
-        <Link className="nav-brand" to="/" aria-label="SreePayanam home" onClick={() => setMobileOpen(false)}>
-          <img src={logoImg} width="174" height="52" alt="SreePayanam Tours and Travels" />
+        <Link className="nav-brand" to="/" aria-label="SreePayanam AI Travel Ecosystem home" onClick={() => setMobileOpen(false)}>
+          <img src={logoImg} width="226" height="56" alt="SreePayanam AI Travel Ecosystem home" />
         </Link>
 
         <button
