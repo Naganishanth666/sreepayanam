@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 180" role="img">
+  <title>Sreepayanam InterNational Pvt. Ltd.</title>
+  <desc>A peacock teal route mark beside the Sreepayanam wordmark.</desc>
+  <rect x="10" y="10" width="160" height="160" rx="46" fill="#0D7C78"/>
+  <path d="M43 120C54 101 61 73 83 57C105 42 131 54 131 77C131 99 106 114 85 101C72 93 73 72 87 61" fill="none" stroke="#172630" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="131" cy="77" r="9" fill="#172630"/>
+  <text x="205" y="88" fill="#172630" font-family="Georgia, 'Times New Roman', serif" font-size="61" font-weight="700" letter-spacing="-1.2">Sreepayanam</text>
+  <text x="209" y="128" fill="#0D7C78" font-family="'Avenir Next', 'Segoe UI', Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="3.2">InterNational Pvt. Ltd.</text>
+</svg>

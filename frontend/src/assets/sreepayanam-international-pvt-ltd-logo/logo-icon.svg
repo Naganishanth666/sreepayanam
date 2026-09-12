@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" role="img">
+  <title>Sreepayanam route mark</title>
+  <desc>A peacock teal route mark with an ink path and destination point.</desc>
+  <rect x="10" y="10" width="160" height="160" rx="46" fill="#0D7C78"/>
+  <path d="M43 120C54 101 61 73 83 57C105 42 131 54 131 77C131 99 106 114 85 101C72 93 73 72 87 61" fill="none" stroke="#172630" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="131" cy="77" r="9" fill="#172630"/>
+</svg>
