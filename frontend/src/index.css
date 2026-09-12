@@ -1,3 +1,11 @@
+@font-face {
+  font-family: 'Roboto';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./assets/fonts/roboto-latin.woff2') format('woff2');
+}
+
 :root {
   --color-ink: #0b3d91;
   --color-ink-soft: #183a68;
@@ -22,9 +30,9 @@
   --radius-md: 0.9rem;
   --radius-lg: 1.1rem;
   --radius-xl: 1.6rem;
-  --font-display: Georgia, 'Times New Roman', serif;
-  --font-body: 'Avenir Next', 'Segoe UI', sans-serif;
-  --font-utility: 'Segoe UI', sans-serif;
+  --font-display: 'Roboto', Arial, sans-serif;
+  --font-body: 'Roboto', Arial, sans-serif;
+  --font-utility: 'Roboto', Arial, sans-serif;
 
   /* Legacy aliases kept for existing routes during the visual migration. */
   --primary: var(--color-peacock);
@@ -63,7 +71,6 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-body,
 button,
 input,
 select,

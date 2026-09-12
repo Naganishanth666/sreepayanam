@@ -17,15 +17,15 @@ colors:
   focus: "#D4AF37"
 typography:
   display:
-    fontFamily: "Georgia, 'Times New Roman', serif"
+    fontFamily: "'Roboto', Arial, sans-serif"
     fontSize: "6.9rem"
     lineHeight: "0.95"
   sans:
-    fontFamily: "'Avenir Next', 'Segoe UI', sans-serif"
+    fontFamily: "'Roboto', Arial, sans-serif"
     fontSize: "1rem"
     lineHeight: "1.55"
   utility:
-    fontFamily: "'Segoe UI', sans-serif"
+    fontFamily: "'Roboto', Arial, sans-serif"
     fontSize: "0.75rem"
     lineHeight: "1.2"
 rounded:
@@ -72,7 +72,7 @@ Primary blue is the structural color for headings, navigation, primary actions a
 
 ## Typography
 
-Georgia is used sparingly as a display face because its high-contrast strokes echo a printed itinerary and differentiate the brand from standard SaaS screens. Avenir Next/Segoe UI carries controls, labels, numbers and longer copy. Utility labels use a compact sans treatment with deliberate tracking. Sentence case is the default; all-caps is limited to short eyebrows and document metadata. Prices and references use tabular-looking system numerals where available. Runtime hero headings use the responsive range `clamp(3.1rem, 7vw, 6.9rem)`; the frontmatter value records the maximum scale in the design token format.
+Roboto is the shared display, body and utility face: a readable sans-serif with enough weight range for route headlines, controls, labels and longer copy. It is bundled locally so typography remains stable under the site's CSP and when external font hosts are unavailable. Sentence case is the default; all-caps is limited to short eyebrows and document metadata. Prices and references use tabular-looking system numerals where available. Runtime hero headings use the responsive range `clamp(3.1rem, 7vw, 6.9rem)`; the frontmatter value records the maximum scale in the design token format. The supplied logo wordmark remains unchanged as brand artwork.
 
 ## Layout
 
