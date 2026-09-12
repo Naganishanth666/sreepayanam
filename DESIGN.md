@@ -59,7 +59,7 @@ SreePayanam is designed like a well-kept South Indian travel field journal: rout
 - **Locale(s) and language policy:** English UI and copy; INR is the default customer-facing currency. Use clear, non-legalistic English and avoid inventing package policies.
 - **Usage scene:** Primarily mobile and small laptop use, often while comparing routes or messaging a travel desk. Touch targets must be generous and progress must remain obvious.
 - **Register:** Hybrid. `/`, `/about`, `/packages`, `/contact` are brand surfaces; `/ai-assistant`, `/checkout`, `/bookings` and `/admin` are product surfaces with stronger state and recovery rules.
-- **Memorable signature:** A coral route ribbon with stops that changes as the traveller chooses a package and destinations.
+- **Memorable signature:** A twelve-frame route reel on the home hero, pairing each package type with a destination image and a practical route note.
 - **Restraint:** Form labels, prices, errors, dates and customer data remain calm, high-contrast and unsurprising.
 - **Anti-references:** Generic blue SaaS dashboards, neon “AI” gradients, and anonymous hotel-booking grids. The brand should feel grounded in the journeys it coordinates.
 - **Token ownership/runtime mapping:** Existing runtime CSS is the canonical source for this repository. `DESIGN.md` mirrors the accepted values; `frontend/src/index.css` maps the semantic variables and `frontend/src/App.css` consumes them. If tokens move to a generator later, update both the owner and this mapping in the same changeset.
@@ -78,7 +78,7 @@ The public site uses a wide editorial grid with generous paper margins, occasion
 
 ## Elevation & Depth
 
-Hierarchy comes from tonal layers, hairline borders and one restrained shadow for floating summaries. Static content is mostly flat. The hero route canvas uses layered gradients and a subtle grid, not an image carousel, so the primary message is stable and does not depend on a remote asset. Modals and sticky summaries may float above the paper surface, but content cards should not look like separate plastic tiles.
+Hierarchy comes from tonal layers, hairline borders and one restrained shadow for floating summaries. Static content is mostly flat. The home hero uses a twelve-image route reel: a dark reading overlay keeps the message legible while the active place image supplies the emotional anchor. Modals and sticky summaries may float above the paper surface, but content cards should not look like separate plastic tiles.
 
 ## Shapes
 
@@ -108,7 +108,7 @@ Lucide icons, 1.7px stroke, 16–22px in controls and 24–30px in feature marks
 
 ### Motion
 
-Motion has one job: make the route reveal feel like a journey. The planner uses a restrained 220ms cross-fade/slide when moving steps and a small stop activation when destinations change. No auto-rotating hero carousel remains. `prefers-reduced-motion: reduce` disables transforms and staggered delays.
+Motion has one job: make the route reveal feel like a journey. The home hero advances through package styles with a slow image cross-fade, pauses on hover or keyboard focus, and exposes previous/next, play/pause and direct slide controls. The planner uses a restrained 220ms cross-fade/slide when moving steps and a small stop activation when destinations change. `prefers-reduced-motion: reduce` disables automatic advancement and transforms while leaving manual controls available.
 
 ### Content and data visualization
 

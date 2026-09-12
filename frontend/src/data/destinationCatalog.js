@@ -405,6 +405,7 @@ export const toCatalogPackage = (pkg) => {
     durationDays: Number(pkg.durationDays) || 1,
     durationNights: Number(pkg.durationNights) || Math.max(Number(pkg.durationDays || 1) - 1, 0),
     description: pkg.overview || 'A published SreePayanam package.',
+    imageUrl: typeof pkg.imageUrl === 'string' ? pkg.imageUrl : '',
     groups,
     remote: true,
     packageId: pkg.packageId

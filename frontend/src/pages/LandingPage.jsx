@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
-  ArrowRight, Check, Compass, FileText, Heart, Hotel, MessageCircle,
-  ShieldCheck, Sparkles, Users
+  ArrowRight, Check, ChevronLeft, ChevronRight, Compass, FileText, Heart,
+  Hotel, MapPin, MessageCircle, Pause, Play, ShieldCheck, Sparkles, Users
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { DESTINATION_CATALOG, toCatalogPackage } from '../data/destinationCatalog';
+import { HERO_PACKAGE_TYPES, HERO_SLIDES } from '../data/heroSlides';
 import logoImg from '../assets/logo.png';
 
 const initialQuoteForm = {
@@ -26,7 +27,14 @@ const LandingPage = () => {
   const [quoteError, setQuoteError] = useState('');
   const [quoteSuccess, setQuoteSuccess] = useState(false);
   const [quoteLoading, setQuoteLoading] = useState(false);
+  const [activeSlide, setActiveSlide] = useState(0);
+  const [userPaused, setUserPaused] = useState(false);
+  const [pointerInside, setPointerInside] = useState(false);
+  const [focusInside, setFocusInside] = useState(false);
   const nameRef = useRef(null);
+
+  const currentSlide = HERO_SLIDES[activeSlide] || HERO_SLIDES[0];
+  const carouselPaused = userPaused || pointerInside || focusInside;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -48,6 +56,26 @@ const LandingPage = () => {
     if (packages.length > 0) return packages.slice(0, 3).map(toCatalogPackage);
     return DESTINATION_CATALOG.slice(0, 3);
   }, [packages]);
+
+  const fallbackImageFor = tourType => (
+    HERO_SLIDES.find(slide => slide.type === tourType)?.image || HERO_SLIDES[0].image
+  );
+
+  useEffect(() => {
+    if (reduceMotion || carouselPaused) return undefined;
+    const timer = window.setInterval(() => {
+      setActiveSlide(previous => (previous + 1) % HERO_SLIDES.length);
+    }, 5600);
+    return () => window.clearInterval(timer);
+  }, [carouselPaused, reduceMotion]);
+
+  const moveSlide = direction => {
+    setActiveSlide(previous => (previous + direction + HERO_SLIDES.length) % HERO_SLIDES.length);
+  };
+
+  const handleCarouselBlur = event => {
+    if (!event.currentTarget.contains(event.relatedTarget)) setFocusInside(false);
+  };
 
   const handleQuoteChange = event => {
     const { name, value } = event.target;
@@ -102,43 +130,114 @@ const LandingPage = () => {
   return (
     <div className="landing-page">
       <main>
-        <section className="landing-hero" aria-labelledby="home-heading">
+        <section
+          className="landing-hero hero-carousel"
+          aria-labelledby="home-heading"
+          aria-label="SreePayanam package styles"
+          aria-roledescription="carousel"
+          role="region"
+          onMouseEnter={() => setPointerInside(true)}
+          onMouseLeave={() => setPointerInside(false)}
+          onFocus={() => setFocusInside(true)}
+          onBlur={handleCarouselBlur}
+        >
+          <div className="hero-slide-media" aria-hidden="true">
+            {HERO_SLIDES.map((slide, index) => {
+              const isNeighbour = index === activeSlide ||
+                index === (activeSlide + 1) % HERO_SLIDES.length ||
+                index === (activeSlide - 1 + HERO_SLIDES.length) % HERO_SLIDES.length;
+              if (!isNeighbour) return null;
+              return (
+                <img
+                  key={slide.type}
+                  className={`hero-slide-image ${activeSlide === index ? 'is-active' : ''}`}
+                  src={slide.image}
+                  alt=""
+                  loading={activeSlide === index ? 'eager' : 'lazy'}
+                  decoding="async"
+                />
+              );
+            })}
+          </div>
           <div className="container hero-layout">
             <motion.div
+              className="hero-copy-stage"
               initial={reduceMotion ? false : { opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: reduceMotion ? 0 : 0.35 }}
             >
-              <span className="eyebrow">Travel notes / South India</span>
-              <h1 id="home-heading" className="hero-title">Go where the <em>story</em> starts.</h1>
-              <p className="hero-copy">SreePayanam turns your next trip into a route worth remembering — thoughtful places, comfortable movement, and a travel desk that stays with you.</p>
+              <div className="hero-kicker-line">
+                <span className="eyebrow">12 ways to travel</span>
+                <span className="hero-counter">{String(activeSlide + 1).padStart(2, '0')} / {String(HERO_SLIDES.length).padStart(2, '0')}</span>
+              </div>
+              <span className="sr-only" aria-live="polite">Showing {currentSlide.type}: {currentSlide.place}</span>
+              <h1 id="home-heading" className="hero-title">Travel <em>the story</em>, your way.</h1>
+              <p className="hero-copy">{currentSlide.routeNote}</p>
+              <div className="hero-route-meta">
+                <span><MapPin size={16} aria-hidden="true" />{currentSlide.place}</span>
+                <strong>{currentSlide.type}</strong>
+              </div>
               <div className="hero-actions">
                 <Link className="btn btn-secondary" to="/ai-assistant">Build my route <ArrowRight size={17} aria-hidden="true" /></Link>
                 <Link className="btn btn-outline" to="/packages">Browse packages</Link>
               </div>
+              <div className="hero-carousel-controls" aria-label="Package style controls">
+                <button className="carousel-arrow" type="button" onClick={() => moveSlide(-1)} aria-label="Show previous package style">
+                  <ChevronLeft size={18} aria-hidden="true" />
+                </button>
+                <button
+                  className="carousel-pause"
+                  type="button"
+                  onClick={() => setUserPaused(previous => !previous)}
+                  aria-pressed={userPaused}
+                  aria-label={userPaused ? 'Play package style slides' : 'Pause package style slides'}
+                >
+                  {userPaused ? <Play size={14} aria-hidden="true" /> : <Pause size={14} aria-hidden="true" />}
+                  {userPaused ? 'Play slides' : 'Pause slides'}
+                </button>
+                <button className="carousel-arrow" type="button" onClick={() => moveSlide(1)} aria-label="Show next package style">
+                  <ChevronRight size={18} aria-hidden="true" />
+                </button>
+                <div className="hero-dots" aria-label="Choose a package style">
+                  {HERO_SLIDES.map((slide, index) => (
+                    <button
+                      key={slide.type}
+                      className={`hero-dot ${activeSlide === index ? 'is-active' : ''}`}
+                      type="button"
+                      onClick={() => setActiveSlide(index)}
+                      aria-label={`Show ${slide.type}`}
+                      aria-current={activeSlide === index ? 'true' : undefined}
+                    />
+                  ))}
+                </div>
+              </div>
             </motion.div>
 
             <motion.aside
-              className="route-preview"
-              aria-label="Sample SreePayanam route"
+              className="route-preview hero-story-card"
+              aria-label={`${currentSlide.type} route preview`}
               initial={reduceMotion ? false : { opacity: 0, y: 22 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: reduceMotion ? 0 : 0.45, delay: reduceMotion ? 0 : 0.1 }}
             >
-              <span className="eyebrow">A route in progress</span>
-              <h2>From first thought to the last sunset.</h2>
-              <div className="route-line" aria-hidden="true" />
-              {[
-                ['Start', 'Chennai'],
-                ['Pause', 'Madurai'],
-                ['Return', 'Kanyakumari']
-              ].map(([label, place]) => (
-                <div className="route-stop" key={label}>
-                  <span className="route-stop-dot" aria-hidden="true" />
-                  <div><p>{label}</p><strong>{place}</strong></div>
+              <div className="hero-story-photo">
+                <img src={currentSlide.image} alt={`${currentSlide.place} for ${currentSlide.type}`} decoding="async" />
+                <span>{currentSlide.type}</span>
+              </div>
+              <div className="hero-story-body">
+                <span className="eyebrow">Route note {String(activeSlide + 1).padStart(2, '0')}</span>
+                <h2>{currentSlide.place}</h2>
+                <div className="hero-story-route">
+                  <div className="route-line" aria-hidden="true" />
+                  {currentSlide.stops.map((place, index) => (
+                    <div className="route-stop" key={place}>
+                      <span className="route-stop-dot" aria-hidden="true" />
+                      <div><p>{index === 0 ? 'Start' : index === currentSlide.stops.length - 1 ? 'Return' : 'Pause'}</p><strong>{place}</strong></div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-              <div className="route-preview-note"><span>One desk. Every detail.</span><strong>2026</strong></div>
+                <div className="route-preview-note"><span>One desk. Every detail.</span><strong>12 styles</strong></div>
+              </div>
             </motion.aside>
           </div>
         </section>
@@ -200,10 +299,12 @@ const LandingPage = () => {
               ) : featuredPackages.map((pkg, index) => {
                 const isRemote = Boolean(pkg.remote && pkg.packageId);
                 const link = isRemote ? `/package/${pkg.packageId}` : '/ai-assistant';
+                const packageImage = pkg.imageUrl || fallbackImageFor(pkg.tourType);
                 return (
                   <motion.article className="package-card" key={pkg.id} whileHover={reduceMotion ? undefined : { y: -4 }}>
                     <Link to={link} aria-label={`Plan ${pkg.name}`}>
                       <div className="package-art" data-tone={index === 1 ? 'coral' : index === 2 ? 'gold' : 'teal'}>
+                        <img className="package-art-image" src={packageImage} alt="" loading="lazy" decoding="async" />
                         <small>{pkg.tourType || 'Curated route'}</small>
                         <h3>{pkg.name}</h3>
                       </div>
@@ -273,11 +374,7 @@ const LandingPage = () => {
                 <div className="span-2">
                   <label className="field-label" htmlFor="quick-quote-preference">Travel style</label>
                   <select id="quick-quote-preference" name="preference" className="planner-select" value={quoteForm.preference} onChange={handleQuoteChange}>
-                    <option>Family Tours</option>
-                    <option>Pilgrimage Tours</option>
-                    <option>Honeymoon Tours</option>
-                    <option>Group Tours</option>
-                    <option>Corporate Tours</option>
+                    {HERO_PACKAGE_TYPES.map(type => <option key={type}>{type}</option>)}
                   </select>
                 </div>
               </div>

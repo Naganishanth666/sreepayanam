@@ -15,6 +15,7 @@ This contract covers the public planner/quotation workflow and the shared public
 ## Canonical owners
 
 - Navigation: `frontend/src/components/Navbar.jsx` and `.site-nav` styles.
+- Home hero: `frontend/src/pages/LandingPage.jsx`, `frontend/src/data/heroSlides.js` and `.hero-carousel` styles. It is a twelve-slide package-style carousel with pause-on-hover/focus and manual controls.
 - Form fields and validation: each product form owns the same `noValidate` + inline error + summary pattern; the new planner is the canonical customer quote flow.
 - Select/date controls: native controls are intentional for standard browser-owned popup behavior. The destination list is a checkbox group, not a native multi-select.
 - Toasts/status: persistent inline `role="status"`/`role="alert"` regions are used for the current app; no browser dialogs are allowed.
