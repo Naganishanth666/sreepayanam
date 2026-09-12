@@ -1,4 +1,30 @@
-import { IMAGE_PRESETS } from '../utils/imagePresets';
+import familyBackwaters from '../assets/hero/family-backwaters.webp';
+import pilgrimageMadurai from '../assets/hero/pilgrimage-madurai.webp';
+import honeymoonTropical from '../assets/hero/honeymoon-tropical.webp';
+import hillOoty from '../assets/hero/hill-ooty.webp';
+import resortCoast from '../assets/hero/resort-coast.webp';
+import weekendPondicherry from '../assets/hero/weekend-pondicherry.webp';
+import groupSouthIndia from '../assets/hero/group-south-india.webp';
+import educationHeritage from '../assets/hero/education-heritage.webp';
+import corporateOffsite from '../assets/hero/corporate-offsite.webp';
+import festivalSouthIndia from '../assets/hero/festival-south-india.webp';
+import culturalChola from '../assets/hero/cultural-chola.webp';
+import medicalChennai from '../assets/hero/medical-chennai.webp';
+
+const HERO_IMAGES = {
+  'Family Tours': familyBackwaters,
+  'Pilgrimage Tours': pilgrimageMadurai,
+  'Honeymoon Tours': honeymoonTropical,
+  'Hill Station Tours': hillOoty,
+  'Resort Packages': resortCoast,
+  'Weekend Tours': weekendPondicherry,
+  'Group Tours': groupSouthIndia,
+  'School / College Tours': educationHeritage,
+  'Corporate Tours': corporateOffsite,
+  'Festival Tours': festivalSouthIndia,
+  'Cultural Tours': culturalChola,
+  'Medical Tours': medicalChennai
+};
 
 const HERO_SLIDE_SPECS = [
   {
@@ -75,7 +101,7 @@ const HERO_SLIDE_SPECS = [
   }
 ];
 
-const toHeroImage = type => (IMAGE_PRESETS[type]?.[0] || '').replace('w=800', 'w=1600');
+const toHeroImage = type => HERO_IMAGES[type] || familyBackwaters;
 
 export const HERO_PACKAGE_TYPES = HERO_SLIDE_SPECS.map(slide => slide.type);
 

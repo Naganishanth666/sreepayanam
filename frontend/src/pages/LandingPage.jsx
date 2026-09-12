@@ -304,7 +304,18 @@ const LandingPage = () => {
                   <motion.article className="package-card" key={pkg.id} whileHover={reduceMotion ? undefined : { y: -4 }}>
                     <Link to={link} aria-label={`Plan ${pkg.name}`}>
                       <div className="package-art" data-tone={index === 1 ? 'coral' : index === 2 ? 'gold' : 'teal'}>
-                        <img className="package-art-image" src={packageImage} alt="" loading="lazy" decoding="async" />
+                        <img
+                          className="package-art-image"
+                          src={packageImage}
+                          alt=""
+                          loading="lazy"
+                          decoding="async"
+                          onError={event => {
+                            if (event.currentTarget.dataset.fallbackApplied) return;
+                            event.currentTarget.dataset.fallbackApplied = 'true';
+                            event.currentTarget.src = fallbackImageFor(pkg.tourType);
+                          }}
+                        />
                         <small>{pkg.tourType || 'Curated route'}</small>
                         <h3>{pkg.name}</h3>
                       </div>

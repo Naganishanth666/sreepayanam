@@ -78,7 +78,7 @@ The public site uses a wide editorial grid with generous paper margins, occasion
 
 ## Elevation & Depth
 
-Hierarchy comes from tonal layers, hairline borders and one restrained shadow for floating summaries. Static content is mostly flat. The home hero uses a twelve-image route reel: a dark reading overlay keeps the message legible while the active place image supplies the emotional anchor. Modals and sticky summaries may float above the paper surface, but content cards should not look like separate plastic tiles.
+Hierarchy comes from tonal layers, hairline borders and one restrained shadow for floating summaries. Static content is mostly flat. The home hero uses a twelve-image route reel: a dark reading overlay keeps the message legible while the active place image supplies the emotional anchor. Hero artwork lives in `frontend/src/assets/hero/` and ships with the Vite bundle; remote package imagery is treated as an optional enhancement with a local fallback. Modals and sticky summaries may float above the paper surface, but content cards should not look like separate plastic tiles.
 
 ## Shapes
 
