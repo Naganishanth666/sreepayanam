@@ -33,12 +33,16 @@ app.set('trust proxy', 1);
 
 // The API is intentionally allow-listed. Same-origin requests have no Origin
 // header and remain valid; browser callers must be an explicitly configured UI.
-const allowedOrigins = new Set(
-  (process.env.CORS_ORIGINS || process.env.FRONTEND_ORIGIN || 'http://localhost:5173,http://localhost:4173')
-    .split(',')
-    .map(origin => origin.trim())
-    .filter(Boolean)
-);
+// Keep the canonical deployed Vercel origin as a safe fallback so a missing
+// Render env value does not break the admin console after a frontend deploy.
+const configuredOrigins = (process.env.CORS_ORIGINS || process.env.FRONTEND_ORIGIN || '')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+const defaultOrigins = isProduction
+  ? ['https://sreepayanam.vercel.app']
+  : ['http://localhost:5173', 'http://localhost:4173', 'https://sreepayanam.vercel.app'];
+const allowedOrigins = new Set([...defaultOrigins, ...configuredOrigins]);
 
 app.use(cors({
   origin(origin, callback) {
