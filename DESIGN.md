@@ -102,7 +102,7 @@ The navigation is a sticky white bar with a visible mobile menu button and blue 
 
 ### Forms and overlays
 
-Product forms use `noValidate`, real labels, app-owned errors and first-error focus. Native select/date controls are intentional where platform-owned popups are acceptable; the destination picker is a grouped checkbox primitive because its scope, selection count and “select recommended” action are part of the product contract. The quote PDF is generated from a server-authoritative calculation and is explicitly an estimate until confirmed.
+Product forms use `noValidate`, real labels, app-owned errors and first-error focus. Native select/date controls are intentional where platform-owned popups are acceptable; the destination picker is a searchable, grouped checkbox primitive because its broad guide, selection count, “select recommended” action and custom-place fallback are part of the product contract. A routebook is a starting point, not a restriction on customer requests. The quote PDF is generated from a server-authoritative calculation and is explicitly an estimate until confirmed.
 
 ### Iconography
 

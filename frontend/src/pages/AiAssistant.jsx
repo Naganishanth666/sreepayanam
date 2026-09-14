@@ -3,19 +3,21 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   ArrowLeft, ArrowRight, Check, CheckCircle2, CircleHelp, Download,
   FileText, Hotel, MapPin, MessageCircle, RefreshCw, Send, ShieldCheck,
-  Sparkles
+  Search, Sparkles, X
 } from 'lucide-react';
 import {
   DESTINATION_CATALOG,
   DESTINATION_KIND_LABELS,
   flattenDestinationGroups,
+  getDestinationGroups,
+  getStartingDestinationIds,
   toCatalogPackage
 } from '../data/destinationCatalog';
 import { calculateCosting } from '../utils/costingEngine';
 import { downloadQuotationPdf } from '../utils/quotationPdf';
 
 const STEPS = [
-  { id: 1, name: 'Route', detail: 'Package & dates' },
+  { id: 1, name: 'Route', detail: 'Guide & dates' },
   { id: 2, name: 'Places', detail: 'Your shortlist' },
   { id: 3, name: 'Comfort', detail: 'Stay & movement' },
   { id: 4, name: 'Contact', detail: 'Get the quote' }
@@ -97,12 +99,11 @@ const AiAssistant = () => {
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogStatus, setCatalogStatus] = useState('');
   const [selectedDestinations, setSelectedDestinations] = useState(
-    flattenDestinationGroups(DESTINATION_CATALOG[0].groups)
-      .filter(place => place.kind === 'recommended')
-      .map(place => place.id)
+    getStartingDestinationIds(DESTINATION_CATALOG[0])
   );
   const [customPlaces, setCustomPlaces] = useState([]);
   const [customPlace, setCustomPlace] = useState('');
+  const [destinationSearch, setDestinationSearch] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [validationError, setValidationError] = useState('');
   const [quote, setQuote] = useState(null);
@@ -131,10 +132,33 @@ const AiAssistant = () => {
     [form.packageId, packageOptions]
   );
 
+  const destinationGroups = useMemo(
+    () => getDestinationGroups(selectedPackage),
+    [selectedPackage]
+  );
+
   const allDestinations = useMemo(() => [
-    ...flattenDestinationGroups(selectedPackage?.groups || []),
+    ...flattenDestinationGroups(destinationGroups),
     ...customPlaces
-  ], [selectedPackage, customPlaces]);
+  ], [destinationGroups, customPlaces]);
+
+  const visibleDestinationGroups = useMemo(() => {
+    const query = destinationSearch.trim().toLowerCase();
+    return destinationGroups
+      .map(group => ({
+        ...group,
+        places: flattenDestinationGroups([group]).filter(place => !query || place.label.toLowerCase().includes(query))
+      }))
+      .filter(group => group.places.length > 0);
+  }, [destinationGroups, destinationSearch]);
+
+  const visibleCustomPlaces = useMemo(() => {
+    const query = destinationSearch.trim().toLowerCase();
+    return customPlaces.filter(place => !query || place.label.toLowerCase().includes(query));
+  }, [customPlaces, destinationSearch]);
+
+  const visiblePlaceCount = visibleDestinationGroups.reduce((total, group) => total + group.places.length, 0) + visibleCustomPlaces.length;
+  const totalPlaceCount = allDestinations.length;
 
   const selectedLabels = useMemo(
     () => allDestinations.filter(place => selectedDestinations.includes(place.id)).map(place => place.label),
@@ -205,9 +229,7 @@ const AiAssistant = () => {
 
   const handlePackageChange = event => {
     const nextPackage = packageOptions.find(pkg => pkg.id === event.target.value) || packageOptions[0];
-    const recommended = flattenDestinationGroups(nextPackage?.groups || [])
-      .filter(place => place.kind === 'recommended')
-      .map(place => place.id);
+    const recommended = getStartingDestinationIds(nextPackage);
     setForm(previous => ({
       ...previous,
       packageId: nextPackage.id,
@@ -217,6 +239,7 @@ const AiAssistant = () => {
     setSelectedDestinations(recommended);
     setCustomPlaces([]);
     setFieldErrors(previous => ({ ...previous, packageId: '', destinationPicker: '' }));
+    setDestinationSearch('');
     invalidateQuote();
   };
 
@@ -241,17 +264,30 @@ const AiAssistant = () => {
     event.preventDefault();
     const label = customPlace.trim().slice(0, 140);
     if (!label) return;
+
+    const existingPlace = allDestinations.find(place => place.label.trim().toLowerCase() === label.toLowerCase());
+    if (existingPlace) {
+      setSelectedDestinations(previous => previous.includes(existingPlace.id) ? previous : [...previous, existingPlace.id]);
+      setCustomPlace('');
+      setDestinationSearch('');
+      setFieldErrors(previous => ({ ...previous, destinationPicker: '' }));
+      invalidateQuote();
+      return;
+    }
+
     const item = { id: `custom-${Date.now()}`, label, groupId: 'custom', kind: 'optional' };
     setCustomPlaces(previous => [...previous, item]);
     setSelectedDestinations(previous => [...previous, item.id]);
     setCustomPlace('');
+    setDestinationSearch('');
+    setFieldErrors(previous => ({ ...previous, destinationPicker: '' }));
     invalidateQuote();
   };
 
   const validateStep = step => {
     const errors = {};
     if (step === 1) {
-      if (!form.packageId) errors.packageId = 'Choose a tour package to continue.';
+      if (!form.packageId) errors.packageId = 'Choose a destination guide to continue.';
       if (!Number(form.durationDays) || Number(form.durationDays) < 1) errors.durationDays = 'Add at least one travel day.';
       if (form.travelStartDate && form.returnDate && new Date(form.returnDate).getTime() < new Date(form.travelStartDate).getTime()) errors.returnDate = 'Return date must be on or after the start date.';
     }
@@ -413,9 +449,10 @@ const AiAssistant = () => {
   const startOver = () => {
     const firstPackage = DESTINATION_CATALOG[0];
     setForm(DEFAULT_FORM);
-    setSelectedDestinations(flattenDestinationGroups(firstPackage.groups).filter(place => place.kind === 'recommended').map(place => place.id));
+    setSelectedDestinations(getStartingDestinationIds(firstPackage));
     setCustomPlaces([]);
     setCustomPlace('');
+    setDestinationSearch('');
     setCurrentStep(1);
     setQuote(null);
     setRequestState('idle');
@@ -523,7 +560,7 @@ const AiAssistant = () => {
                       {currentStep === 1 && (
                         <div>
                           <div className="planner-section-title"><h2>Start with a route</h2><p>Packages are a starting point — every route can be shaped around your group.</p></div>
-                          <Field id="packageId" label="Choose a tour package" required error={fieldErrors.packageId} help={catalogLoading ? 'Loading published packages…' : catalogStatus || 'The place list will update with your choice.'}>
+                          <Field id="packageId" label="Choose a destination guide" required error={fieldErrors.packageId} help={catalogLoading ? 'Loading published routebooks…' : catalogStatus || 'This guide is a starting point; you can request places beyond our published packages.'}>
                             <select id="packageId" className="planner-select" value={form.packageId} onChange={handlePackageChange} {...getAria('packageId', fieldErrors.packageId)}>
                               {packageOptions.map(pkg => <option key={pkg.id} value={pkg.id}>{pkg.name} — {pkg.destination}</option>)}
                             </select>
@@ -554,18 +591,31 @@ const AiAssistant = () => {
 
                       {currentStep === 2 && (
                         <div id="destinationPicker" tabIndex="-1" aria-invalid={fieldErrors.destinationPicker ? 'true' : undefined} aria-describedby={fieldErrors.destinationPicker ? 'destinationPicker-error' : undefined}>
-                          <div className="planner-section-title"><h2>Mark the places</h2><p>Start with the recommended stops, then add nearby attractions or your own idea.</p></div>
+                          <div className="planner-section-title"><h2>Choose the places</h2><p>Browse the full destination guide, then pick anything you want our travel desk to shape into a route.</p></div>
+                          <div className="destination-search-wrap">
+                            <Search className="destination-search-icon" size={18} aria-hidden="true" />
+                            <label className="sr-only" htmlFor="destination-search">Search every place in this destination</label>
+                            <input
+                              id="destination-search"
+                              className="destination-search-input"
+                              type="search"
+                              value={destinationSearch}
+                              onChange={event => setDestinationSearch(event.target.value)}
+                              placeholder="Search every place in this destination"
+                              autoComplete="off"
+                            />
+                            {destinationSearch && <button type="button" className="destination-search-clear" onClick={() => setDestinationSearch('')} aria-label="Clear place search"><X size={16} aria-hidden="true" /></button>}
+                          </div>
+                          <p className="destination-guide-note" role="status">Showing {visiblePlaceCount} of {totalPlaceCount} available places{destinationSearch ? ` matching “${destinationSearch}”` : ''}. Not finding it? Add it below.</p>
                           <div className="destination-toolbar">
-                            <div className="destination-count"><span>{selectedDestinations.length}</span> places selected</div>
+                            <div className="destination-count"><span>{selectedDestinations.length}</span> of {totalPlaceCount} places selected</div>
                             <div className="destination-actions"><button type="button" className="text-action" onClick={selectRecommended}>Select recommended</button><button type="button" className="text-action" onClick={clearDestinations}>Clear selection</button></div>
                           </div>
                           {fieldErrors.destinationPicker && <div id="destinationPicker-error" className="field-error" role="alert" style={{ marginBottom: '0.7rem' }}>{fieldErrors.destinationPicker}</div>}
                           <div className="destination-groups">
-                            {(selectedPackage?.groups || []).map(group => {
-                              const places = flattenDestinationGroups([group]);
-                              return <section className="destination-group" key={group.id} aria-labelledby={`group-${group.id}`}><div className="destination-group-header"><h3 id={`group-${group.id}`}>{group.label}</h3><span>{DESTINATION_KIND_LABELS[group.kind] || 'Curated places'}</span></div><div className="destination-list">{places.map(place => <label className={`destination-option${selectedDestinations.includes(place.id) ? ' selected' : ''}`} key={place.id}><input type="checkbox" checked={selectedDestinations.includes(place.id)} onChange={() => toggleDestination(place.id)} /><span>{place.label}</span>{place.kind === 'recommended' && <small>route</small>}</label>)}</div></section>;
-                            })}
-                            {customPlaces.length > 0 && <section className="destination-group" aria-labelledby="group-custom"><div className="destination-group-header"><h3 id="group-custom">Your additions</h3><span>Added by you</span></div><div className="destination-list">{customPlaces.map(place => <label className={`destination-option${selectedDestinations.includes(place.id) ? ' selected' : ''}`} key={place.id}><input type="checkbox" checked={selectedDestinations.includes(place.id)} onChange={() => toggleDestination(place.id)} /><span>{place.label}</span><small>custom</small></label>)}</div></section>}
+                            {visibleDestinationGroups.map(group => <section className="destination-group" key={group.id} aria-labelledby={`group-${group.id}`}><div className="destination-group-header"><h3 id={`group-${group.id}`}>{group.label}</h3><span>{DESTINATION_KIND_LABELS[group.kind] || 'Guide places'}</span></div><div className="destination-list">{group.places.map(place => <label className={`destination-option${selectedDestinations.includes(place.id) ? ' selected' : ''}`} key={place.id}><input type="checkbox" checked={selectedDestinations.includes(place.id)} onChange={() => toggleDestination(place.id)} /><span>{place.label}</span>{place.kind === 'recommended' && <small>route</small>}</label>)}</div></section>)}
+                            {visibleCustomPlaces.length > 0 && <section className="destination-group" aria-labelledby="group-custom"><div className="destination-group-header"><h3 id="group-custom">Your additions</h3><span>Added by you</span></div><div className="destination-list">{visibleCustomPlaces.map(place => <label className={`destination-option${selectedDestinations.includes(place.id) ? ' selected' : ''}`} key={place.id}><input type="checkbox" checked={selectedDestinations.includes(place.id)} onChange={() => toggleDestination(place.id)} /><span>{place.label}</span><small>custom</small></label>)}</div></section>}
+                            {!visiblePlaceCount && <p className="destination-empty" role="status">No guide places match “{destinationSearch}”. Clear the search or add this place below.</p>}
                           </div>
                           <div className="planner-field-grid" style={{ marginTop: '1rem' }}>
                             <Field id="customPlace" label="Add another place" help="Optional — include a landmark, beach, temple or local stop.">

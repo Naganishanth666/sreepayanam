@@ -6,7 +6,7 @@ This contract covers the public planner/quotation workflow and the shared public
 
 | Concern | Source | Consequence in the UI |
 |---|---|---|
-| Package-dependent destination choices | Current task and existing package model (`backend/models/Package.js`) | Package selection controls grouped destination checkboxes; published package highlights merge into the curated fallback catalog. |
+| Destination guide and customer-selected places | Current task and existing package model (`backend/models/Package.js`) | The selected route or region supplies a broad, searchable grouped destination guide. Published package highlights are layered in as a starting point, while customers can select any listed place or add their own before the travel desk curates the final route. |
 | Customer estimate and PDF quotation | Current task and costing engine (`backend/utils/costingEngine.js`) | The browser shows a planning estimate; `/api/quotations/preview` is authoritative before a PDF is offered. |
 | 30% pricing instruction | Current task / prior conversation reference | Server calculation uses a fixed 30% markup on landed cost and 5% estimated tax. The PDF calls it an estimate and does not expose supplier cost or profit. Confirm true margin policy before commercial launch. |
 | Customer enquiries | `backend/routes/enquiryRoutes.js`, `backend/models/Enquiry.js` | Public POST is rate-limited, validated and idempotent by quote reference; reads and updates require admin authorization. |
