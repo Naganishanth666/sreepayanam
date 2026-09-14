@@ -72,7 +72,7 @@ const sanitizeDestinationGuide = (payload, destination) => {
         seenPlaces.add(key);
         return true;
       })
-      .slice(0, 24);
+      .slice(0, 40);
     if (!places.length) return null;
 
     const kind = fallbackKinds.includes(group?.kind) ? group.kind : fallbackKinds[Math.min(index, fallbackKinds.length - 1)];
@@ -375,7 +375,7 @@ router.post('/destination-guide', async (req, res) => {
       - nearby: other attractions in the destination or nearby vicinity
       - optional: realistic day trips or slower-travel additions
 
-      Return ONLY valid JSON in this shape, with 8 to 24 plain place-name strings per group:
+      Return ONLY valid JSON in this shape. For a destination with enough real options, you MUST return at least 20 and ideally 25 to 40 unique plain place-name strings in EACH group (up to 120 places total). Do not stop after a short shortlist. Cover different neighbourhoods, landmark types, local experiences and realistic nearby day trips. If a destination genuinely has fewer options, use the nearby and optional groups to include realistic places in the surrounding region rather than inventing anything:
       {
         "destination": ${JSON.stringify(destination)},
         "groups": [

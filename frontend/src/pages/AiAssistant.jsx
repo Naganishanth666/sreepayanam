@@ -94,7 +94,7 @@ const normalizeDestinationGuide = (payload, destination) => {
     label: typeof group?.label === 'string' && group.label ? group.label : 'Places to consider',
     kind: ['recommended', 'nearby', 'optional'].includes(group?.kind) ? group.kind : index === 0 ? 'recommended' : index === 1 ? 'nearby' : 'optional',
     places: Array.isArray(group?.places)
-      ? group.places.map(place => typeof place === 'string' ? place.trim() : '').filter(Boolean).slice(0, 24)
+      ? group.places.map(place => typeof place === 'string' ? place.trim() : '').filter(Boolean).slice(0, 40)
       : []
   })).filter(group => group.places.length) : [];
 
