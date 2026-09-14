@@ -90,6 +90,39 @@ const sanitizeDestinationGuide = (payload, destination) => {
   };
 };
 
+const mergeDestinationGuides = (guide, additions) => {
+  const groups = guide.groups.map(group => ({ ...group, places: [...group.places] }));
+  const seenPlaces = new Set(groups.flatMap(group => group.places).map(place => place.toLowerCase()));
+
+  additions.groups.forEach(group => {
+    const target = groups.find(existing => existing.kind === group.kind) || groups[groups.length - 1];
+    if (!target) return;
+
+    group.places.forEach(place => {
+      const key = place.toLowerCase();
+      if (!key || seenPlaces.has(key) || target.places.length >= 40) return;
+      seenPlaces.add(key);
+      target.places.push(place);
+    });
+  });
+
+  return { ...guide, groups };
+};
+
+const requestDestinationGuideJson = async (openai, prompt) => {
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      { role: 'system', content: 'You are a careful travel-destination data service. Return only valid JSON and never markdown.' },
+      { role: 'user', content: prompt }
+    ],
+    response_format: { type: 'json_object' },
+    temperature: 0.2
+  });
+
+  return JSON.parse(extractJson(completion.choices[0]?.message?.content || '{}'));
+};
+
 const extractNumericPrice = (str) => {
   if (!str) return 0;
   if (typeof str === 'number') return str;
@@ -386,19 +419,41 @@ router.post('/destination-guide', async (req, res) => {
       }
     `;
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: 'You are a careful travel-destination data service. Return only valid JSON and never markdown.' },
-        { role: 'user', content: destinationPrompt }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.2
-    });
-
-    const payload = JSON.parse(extractJson(completion.choices[0]?.message?.content || '{}'));
-    const guide = sanitizeDestinationGuide(payload, destination);
+    const payload = await requestDestinationGuideJson(openai, destinationPrompt);
+    let guide = sanitizeDestinationGuide(payload, destination);
     if (!guide.groups.length) throw new Error('The destination guide did not contain any places.');
+
+    const totalPlaceCount = guide.groups.reduce((total, group) => total + group.places.length, 0);
+    const needsExpansion = totalPlaceCount < 60 || guide.groups.some(group => group.places.length < 20);
+    if (needsExpansion) {
+      const existingPlaces = guide.groups.map(group => ({ kind: group.kind, places: group.places }));
+      const expansionPrompt = `
+        Expand the sightseeing guide for ${JSON.stringify(destination)} with additional real places. This is a second pass: return NEW places only and do not repeat any name from the existing list below.
+
+        Add 12 to 20 useful, distinct place names to EACH of these groups where the destination and surrounding region have enough genuine options: recommended highlights, nearby attractions, and optional day trips. Cover different neighbourhoods, museums, markets, viewpoints, gardens, cultural sites, nature spots, family activities and realistic day trips. Do not invent attractions, prices, distances or opening hours. If a group genuinely has fewer safe options, return only the real options you know.
+
+        Existing places to exclude:
+        ${JSON.stringify(existingPlaces)}
+
+        Return ONLY valid JSON in this shape:
+        {
+          "destination": ${JSON.stringify(destination)},
+          "groups": [
+            { "label": "Additional must-see landmarks", "kind": "recommended", "places": ["New place name"] },
+            { "label": "Additional nearby attractions", "kind": "nearby", "places": ["New place name"] },
+            { "label": "Additional optional day trips", "kind": "optional", "places": ["New place name"] }
+          ]
+        }
+      `;
+
+      try {
+        const expansionPayload = await requestDestinationGuideJson(openai, expansionPrompt);
+        guide = mergeDestinationGuides(guide, sanitizeDestinationGuide(expansionPayload, destination));
+      } catch (expansionError) {
+        console.warn('AI Destination Guide Expansion Error:', expansionError.message);
+      }
+    }
+
     res.json(guide);
   } catch (error) {
     console.error('AI Destination Guide Error:', error.message);
