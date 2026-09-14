@@ -57,6 +57,39 @@ const extractJson = (text) => {
   return text.trim();
 };
 
+const sanitizeDestinationGuide = (payload, destination) => {
+  const fallbackLabels = ['Must-see landmarks', 'Nearby attractions', 'Optional day trips'];
+  const fallbackKinds = ['recommended', 'nearby', 'optional'];
+  const seenPlaces = new Set();
+  const groups = Array.isArray(payload?.groups) ? payload.groups.slice(0, 4).map((group, index) => {
+    const rawPlaces = Array.isArray(group?.places) ? group.places : [];
+    const places = rawPlaces
+      .map(place => typeof place === 'string' ? place : place?.name)
+      .map(place => cleanAiText(place, 160))
+      .filter(place => {
+        const key = place.toLowerCase();
+        if (!key || seenPlaces.has(key)) return false;
+        seenPlaces.add(key);
+        return true;
+      })
+      .slice(0, 24);
+    if (!places.length) return null;
+
+    const kind = fallbackKinds.includes(group?.kind) ? group.kind : fallbackKinds[Math.min(index, fallbackKinds.length - 1)];
+    return {
+      id: `ai-${kind}-${index + 1}`,
+      label: cleanAiText(group?.label, 90) || fallbackLabels[index] || 'More places to consider',
+      kind,
+      places
+    };
+  }).filter(Boolean) : [];
+
+  return {
+    destination: cleanAiText(payload?.destination, 180) || destination,
+    groups
+  };
+};
+
 const extractNumericPrice = (str) => {
   if (!str) return 0;
   if (typeof str === 'number') return str;
@@ -320,6 +353,56 @@ router.post('/plan', async (req, res) => {
   } catch (error) {
     console.error('AI Plan Error:', error);
     res.status(500).json({ message: 'Error communicating with AI assistant' });
+  }
+});
+
+// 1.1 AI destination discovery for the public planner
+router.post('/destination-guide', async (req, res) => {
+  try {
+    const destination = cleanAiText(req.body?.destination, 180);
+    if (!destination) return res.status(400).json({ message: 'Enter a city, region or country to discover nearby places.' });
+
+    const openai = getOpenAIClient(res);
+    if (!openai) return;
+
+    const destinationPrompt = `
+      Build a broad, practical sightseeing guide for the customer-entered destination: ${JSON.stringify(destination)}.
+
+      This is for a custom AI travel planner. Do not limit the results to any company's existing packages or brochure. Include well-known landmarks, cultural sites, nature spots, beaches, museums, viewpoints, family attractions, local experiences and realistic nearby day-trip destinations in the vicinity. Be comprehensive, but only include real places you know with reasonable confidence. Do not invent attractions, prices, distances or opening hours.
+
+      Group the places into exactly these kinds where possible:
+      - recommended: must-see highlights in or very close to the destination
+      - nearby: other attractions in the destination or nearby vicinity
+      - optional: realistic day trips or slower-travel additions
+
+      Return ONLY valid JSON in this shape, with 8 to 24 plain place-name strings per group:
+      {
+        "destination": ${JSON.stringify(destination)},
+        "groups": [
+          { "label": "Must-see landmarks", "kind": "recommended", "places": ["Place name"] },
+          { "label": "Nearby attractions", "kind": "nearby", "places": ["Place name"] },
+          { "label": "Optional day trips", "kind": "optional", "places": ["Place name"] }
+        ]
+      }
+    `;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'You are a careful travel-destination data service. Return only valid JSON and never markdown.' },
+        { role: 'user', content: destinationPrompt }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.2
+    });
+
+    const payload = JSON.parse(extractJson(completion.choices[0]?.message?.content || '{}'));
+    const guide = sanitizeDestinationGuide(payload, destination);
+    if (!guide.groups.length) throw new Error('The destination guide did not contain any places.');
+    res.json(guide);
+  } catch (error) {
+    console.error('AI Destination Guide Error:', error.message);
+    res.status(500).json({ message: 'We could not discover places for that destination right now. Try again in a moment.' });
   }
 });
 

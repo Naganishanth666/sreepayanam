@@ -8,23 +8,21 @@ import {
 import {
   DESTINATION_CATALOG,
   DESTINATION_KIND_LABELS,
-  flattenDestinationGroups,
-  getDestinationGroups,
-  getStartingDestinationIds,
-  toCatalogPackage
+  flattenDestinationGroups
 } from '../data/destinationCatalog';
 import { calculateCosting } from '../utils/costingEngine';
 import { downloadQuotationPdf } from '../utils/quotationPdf';
 
 const STEPS = [
-  { id: 1, name: 'Route', detail: 'Guide & dates' },
-  { id: 2, name: 'Places', detail: 'Your shortlist' },
+  { id: 1, name: 'Route', detail: 'Destination & dates' },
+  { id: 2, name: 'Explore', detail: 'Nearby places' },
   { id: 3, name: 'Comfort', detail: 'Stay & movement' },
   { id: 4, name: 'Contact', detail: 'Get the quote' }
 ];
 
 const DEFAULT_FORM = {
-  packageId: DESTINATION_CATALOG[0].id,
+  packageId: 'custom-destination',
+  destination: '',
   departureCity: '',
   travelStartDate: '',
   returnDate: '',
@@ -90,17 +88,31 @@ const getAria = (id, error, help) => ({
   'aria-describedby': error ? `${id}-error` : help ? `${id}-help` : undefined
 });
 
+const normalizeDestinationGuide = (payload, destination) => {
+  const groups = Array.isArray(payload?.groups) ? payload.groups.slice(0, 4).map((group, index) => ({
+    id: typeof group?.id === 'string' && group.id ? group.id : `ai-group-${index + 1}`,
+    label: typeof group?.label === 'string' && group.label ? group.label : 'Places to consider',
+    kind: ['recommended', 'nearby', 'optional'].includes(group?.kind) ? group.kind : index === 0 ? 'recommended' : index === 1 ? 'nearby' : 'optional',
+    places: Array.isArray(group?.places)
+      ? group.places.map(place => typeof place === 'string' ? place.trim() : '').filter(Boolean).slice(0, 24)
+      : []
+  })).filter(group => group.places.length) : [];
+
+  return {
+    destination: typeof payload?.destination === 'string' && payload.destination.trim() ? payload.destination.trim() : destination,
+    groups
+  };
+};
+
 const AiAssistant = () => {
   const reduceMotion = useReducedMotion();
   const [activeTab, setActiveTab] = useState('planner');
   const [currentStep, setCurrentStep] = useState(1);
   const [form, setForm] = useState(DEFAULT_FORM);
-  const [remotePackages, setRemotePackages] = useState([]);
-  const [catalogLoading, setCatalogLoading] = useState(true);
-  const [catalogStatus, setCatalogStatus] = useState('');
-  const [selectedDestinations, setSelectedDestinations] = useState(
-    getStartingDestinationIds(DESTINATION_CATALOG[0])
-  );
+  const [destinationGuide, setDestinationGuide] = useState(null);
+  const [guideState, setGuideState] = useState('idle');
+  const [guideError, setGuideError] = useState('');
+  const [selectedDestinations, setSelectedDestinations] = useState([]);
   const [customPlaces, setCustomPlaces] = useState([]);
   const [customPlace, setCustomPlace] = useState('');
   const [destinationSearch, setDestinationSearch] = useState('');
@@ -117,25 +129,27 @@ const AiAssistant = () => {
   const [chatLoading, setChatLoading] = useState(false);
   const chatListRef = useRef(null);
   const mutationController = useRef(null);
+  const guideController = useRef(null);
 
-  const packageOptions = useMemo(() => {
-    const local = [...DESTINATION_CATALOG];
-    remotePackages.forEach(pkg => {
-      const item = toCatalogPackage(pkg);
-      if (!local.some(existing => existing.id === item.id)) local.push(item);
-    });
-    return local;
-  }, [remotePackages]);
+  const selectedPackage = useMemo(() => {
+    const destination = form.destination.trim() || 'Custom route';
+    const durationDays = Number(form.durationDays) || DESTINATION_CATALOG[0].durationDays;
+    const durationNights = Number(form.durationNights);
+    return {
+      id: 'custom-destination',
+      packageId: 'custom-destination',
+      name: destination === 'Custom route' ? 'Your custom route' : destination,
+      destination,
+      tourType: 'Custom itinerary',
+      durationDays,
+      durationNights: Number.isFinite(durationNights) ? durationNights : Math.max(durationDays - 1, 0),
+      description: destinationGuide?.destination
+        ? `AI-discovered places for ${destinationGuide.destination}. Choose what matters and the travel desk will curate the route.`
+        : 'Enter any destination and we will discover nearby places for you to choose.'
+    };
+  }, [destinationGuide, form.destination, form.durationDays, form.durationNights]);
 
-  const selectedPackage = useMemo(
-    () => packageOptions.find(pkg => pkg.id === form.packageId) || packageOptions[0],
-    [form.packageId, packageOptions]
-  );
-
-  const destinationGroups = useMemo(
-    () => getDestinationGroups(selectedPackage),
-    [selectedPackage]
-  );
+  const destinationGroups = useMemo(() => destinationGuide?.groups || [], [destinationGuide]);
 
   const allDestinations = useMemo(() => [
     ...flattenDestinationGroups(destinationGroups),
@@ -191,23 +205,10 @@ const AiAssistant = () => {
   const totalTravellers = Number(form.adultCount || 0) + Number(form.childWithBedCount || 0) + Number(form.childNoBedCount || 0) + Number(form.infantCount || 0);
   const visibleTotal = quote?.customerPrice || liveEstimate.customerPrice;
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch('/api/packages', { signal: controller.signal })
-      .then(async response => {
-        const data = await safeJson(response);
-        if (!response.ok) throw new Error(data.message || 'Live package catalogue unavailable.');
-        return data;
-      })
-      .then(data => setRemotePackages(Array.isArray(data) ? data : []))
-      .catch(error => {
-        if (error.name !== 'AbortError') setCatalogStatus('Using the routebook catalog while live packages reconnect.');
-      })
-      .finally(() => setCatalogLoading(false));
-    return () => controller.abort();
+  useEffect(() => () => {
+    mutationController.current?.abort();
+    guideController.current?.abort();
   }, []);
-
-  useEffect(() => () => mutationController.current?.abort(), []);
 
   useEffect(() => {
     if (chatListRef.current) chatListRef.current.scrollTop = chatListRef.current.scrollHeight;
@@ -227,20 +228,60 @@ const AiAssistant = () => {
     invalidateQuote();
   };
 
-  const handlePackageChange = event => {
-    const nextPackage = packageOptions.find(pkg => pkg.id === event.target.value) || packageOptions[0];
-    const recommended = getStartingDestinationIds(nextPackage);
-    setForm(previous => ({
-      ...previous,
-      packageId: nextPackage.id,
-      durationDays: nextPackage.durationDays,
-      durationNights: nextPackage.durationNights
-    }));
-    setSelectedDestinations(recommended);
+  const handleDestinationChange = event => {
+    const value = event.target.value;
+    setForm(previous => ({ ...previous, destination: value, packageId: 'custom-destination' }));
+    setDestinationGuide(null);
+    setGuideState('idle');
+    setGuideError('');
+    setSelectedDestinations([]);
     setCustomPlaces([]);
-    setFieldErrors(previous => ({ ...previous, packageId: '', destinationPicker: '' }));
+    setFieldErrors(previous => ({ ...previous, destination: '', destinationPicker: '' }));
     setDestinationSearch('');
     invalidateQuote();
+  };
+
+  const discoverDestinations = async () => {
+    const destination = form.destination.trim();
+    if (!destination || guideState === 'loading') return false;
+
+    guideController.current?.abort();
+    const controller = new AbortController();
+    guideController.current = controller;
+    setGuideState('loading');
+    setGuideError('');
+    setFieldErrors(previous => ({ ...previous, destination: '', destinationPicker: '' }));
+
+    try {
+      const response = await fetch('/api/ai/destination-guide', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ destination })
+      });
+      const data = await safeJson(response);
+      if (!response.ok) throw new Error(data.message || 'We could not discover places for that destination.');
+
+      const guide = normalizeDestinationGuide(data, destination);
+      if (!guide.groups.length) throw new Error('No nearby places were returned. Try a more specific destination.');
+      const recommended = flattenDestinationGroups(guide.groups)
+        .filter(place => place.kind === 'recommended')
+        .map(place => place.id);
+      setDestinationGuide(guide);
+      setSelectedDestinations(recommended);
+      setCustomPlaces([]);
+      setCustomPlace('');
+      setDestinationSearch('');
+      setGuideState('ready');
+      setCurrentStep(2);
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      return true;
+    } catch (error) {
+      if (error.name === 'AbortError') return false;
+      setGuideState('error');
+      setGuideError(error.message || 'We could not discover places for that destination. Try again.');
+      return false;
+    }
   };
 
   const toggleDestination = id => {
@@ -287,7 +328,7 @@ const AiAssistant = () => {
   const validateStep = step => {
     const errors = {};
     if (step === 1) {
-      if (!form.packageId) errors.packageId = 'Choose a destination guide to continue.';
+      if (!form.destination.trim()) errors.destination = 'Enter a city, region or country to continue.';
       if (!Number(form.durationDays) || Number(form.durationDays) < 1) errors.durationDays = 'Add at least one travel day.';
       if (form.travelStartDate && form.returnDate && new Date(form.returnDate).getTime() < new Date(form.travelStartDate).getTime()) errors.returnDate = 'Return date must be on or after the start date.';
     }
@@ -316,8 +357,15 @@ const AiAssistant = () => {
     return true;
   };
 
-  const goToStep = step => {
+  const goToStep = async step => {
     if (step > currentStep && !validateStep(currentStep)) return;
+    if (step === 2 && currentStep === 1) {
+      const sameDestination = destinationGuide?.destination?.trim().toLowerCase() === form.destination.trim().toLowerCase();
+      if (guideState !== 'ready' || !sameDestination) {
+        await discoverDestinations();
+        return;
+      }
+    }
     setCurrentStep(step);
     window.scrollTo({ top: 0, behavior: 'auto' });
   };
@@ -362,6 +410,7 @@ const AiAssistant = () => {
           remarks: form.notes.trim(),
           detailedPreferences: {
             plannerVersion: 2,
+            destination: form.destination.trim(),
             packageName: selectedPackage?.name,
             durationDays: Number(form.durationDays),
             durationNights: Number(form.durationNights),
@@ -447,9 +496,12 @@ const AiAssistant = () => {
   });
 
   const startOver = () => {
-    const firstPackage = DESTINATION_CATALOG[0];
+    guideController.current?.abort();
     setForm(DEFAULT_FORM);
-    setSelectedDestinations(getStartingDestinationIds(firstPackage));
+    setDestinationGuide(null);
+    setGuideState('idle');
+    setGuideError('');
+    setSelectedDestinations([]);
     setCustomPlaces([]);
     setCustomPlace('');
     setDestinationSearch('');
@@ -559,18 +611,16 @@ const AiAssistant = () => {
                     <motion.div key={currentStep} initial={reduceMotion ? false : { opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={reduceMotion ? false : { opacity: 0, x: -10 }} transition={{ duration: reduceMotion ? 0 : 0.18 }}>
                       {currentStep === 1 && (
                         <div>
-                          <div className="planner-section-title"><h2>Start with a route</h2><p>Packages are a starting point — every route can be shaped around your group.</p></div>
-                          <Field id="packageId" label="Choose a destination guide" required error={fieldErrors.packageId} help={catalogLoading ? 'Loading published routebooks…' : catalogStatus || 'This guide is a starting point; you can request places beyond our published packages.'}>
-                            <select id="packageId" className="planner-select" value={form.packageId} onChange={handlePackageChange} {...getAria('packageId', fieldErrors.packageId)}>
-                              {packageOptions.map(pkg => <option key={pkg.id} value={pkg.id}>{pkg.name} — {pkg.destination}</option>)}
-                            </select>
+                          <div className="planner-section-title"><h2>Start with a route</h2><p>Enter any city, region or country. The AI planner will discover places nearby for you to choose.</p></div>
+                          <Field id="destination" label="Where do you want to explore?" required error={fieldErrors.destination || guideError} help={guideState === 'loading' ? 'Finding real places in and around this destination…' : guideState === 'error' ? 'Try again, or enter a more specific city or region.' : 'You are not limited to our published packages.'}>
+                            <input id="destination" className="planner-field" value={form.destination} onChange={handleDestinationChange} placeholder="e.g. Kyoto, Japan or Munnar, Kerala" autoComplete="address-level2" {...getAria('destination', fieldErrors.destination || guideError)} />
                           </Field>
                           <div className="package-select-card" style={{ marginTop: '1rem' }}>
                             <div><h3>{selectedPackage?.name}</h3><p>{selectedPackage?.description}</p></div>
-                            <span className="summary-metric" style={{ color: 'var(--color-ink)', background: 'var(--color-turmeric)', border: 0 }}><span style={{ color: 'rgba(23,38,48,0.62)' }}>Routebook timing</span><strong style={{ color: 'var(--color-ink)' }}>{selectedPackage?.durationDays}D / {selectedPackage?.durationNights}N</strong></span>
+                            <span className="summary-metric" style={{ color: 'var(--color-ink)', background: 'var(--color-turmeric)', border: 0 }}><span style={{ color: 'rgba(23,38,48,0.62)' }}>Planning timing</span><strong style={{ color: 'var(--color-ink)' }}>{selectedPackage?.durationDays}D / {selectedPackage?.durationNights}N</strong></span>
                           </div>
                           <div className="planner-field-grid" style={{ marginTop: '1.15rem' }}>
-                            <Field id="departureCity" label="Where will you start?" help="Optional — we will use the package route if left blank.">
+                            <Field id="departureCity" label="Where will you start?" help="Optional — we will use the destination if left blank.">
                               <input id="departureCity" className="planner-field" value={form.departureCity} onChange={event => updateField('departureCity', event.target.value)} placeholder="e.g. Chennai" autoComplete="address-level2" />
                             </Field>
                             <Field id="travelStartDate" label="Travel start date">
@@ -591,7 +641,7 @@ const AiAssistant = () => {
 
                       {currentStep === 2 && (
                         <div id="destinationPicker" tabIndex="-1" aria-invalid={fieldErrors.destinationPicker ? 'true' : undefined} aria-describedby={fieldErrors.destinationPicker ? 'destinationPicker-error' : undefined}>
-                          <div className="planner-section-title"><h2>Choose the places</h2><p>Browse the full destination guide, then pick anything you want our travel desk to shape into a route.</p></div>
+                          <div className="planner-section-title"><h2>Discover nearby places</h2><p>Here are real attractions in and around {destinationGuide?.destination || form.destination}. Pick anything you want our travel desk to shape into a route.</p></div>
                           <div className="destination-search-wrap">
                             <Search className="destination-search-icon" size={18} aria-hidden="true" />
                             <label className="sr-only" htmlFor="destination-search">Search every place in this destination</label>
@@ -601,12 +651,12 @@ const AiAssistant = () => {
                               type="search"
                               value={destinationSearch}
                               onChange={event => setDestinationSearch(event.target.value)}
-                              placeholder="Search every place in this destination"
+                              placeholder="Search every place near this destination"
                               autoComplete="off"
                             />
                             {destinationSearch && <button type="button" className="destination-search-clear" onClick={() => setDestinationSearch('')} aria-label="Clear place search"><X size={16} aria-hidden="true" /></button>}
                           </div>
-                          <p className="destination-guide-note" role="status">Showing {visiblePlaceCount} of {totalPlaceCount} available places{destinationSearch ? ` matching “${destinationSearch}”` : ''}. Not finding it? Add it below.</p>
+                          <p className="destination-guide-note" role="status">Showing {visiblePlaceCount} of {totalPlaceCount} available places near {destinationGuide?.destination || form.destination}{destinationSearch ? ` matching “${destinationSearch}”` : ''}. Not finding it? Add it below.</p>
                           <div className="destination-toolbar">
                             <div className="destination-count"><span>{selectedDestinations.length}</span> of {totalPlaceCount} places selected</div>
                             <div className="destination-actions"><button type="button" className="text-action" onClick={selectRecommended}>Select recommended</button><button type="button" className="text-action" onClick={clearDestinations}>Clear selection</button></div>
@@ -664,7 +714,7 @@ const AiAssistant = () => {
 
                   <div className="planner-actions">
                     <button type="button" className="btn btn-ghost" onClick={() => currentStep === 1 ? window.history.back() : goToStep(currentStep - 1)} disabled={requestState === 'quoting' || requestState === 'sending'}><ArrowLeft size={16} aria-hidden="true" /> {currentStep === 1 ? 'Leave planner' : 'Back'}</button>
-                    {currentStep < 4 ? <button type="button" className="btn btn-primary" onClick={() => goToStep(currentStep + 1)}>Continue <ArrowRight size={16} aria-hidden="true" /></button> : <button type="submit" className="btn btn-primary" disabled={requestState === 'quoting' || requestState === 'sending' || requestState === 'success'} aria-busy={requestState === 'quoting' || requestState === 'sending'}>{requestState === 'quoting' ? 'Calculating estimate...' : requestState === 'sending' ? 'Sending enquiry...' : requestState === 'success' ? 'Enquiry sent' : quote ? 'Send enquiry again' : 'Generate quotation'} <ArrowRight size={16} aria-hidden="true" /></button>}
+                    {currentStep < 4 ? <button type="button" className="btn btn-primary" onClick={() => goToStep(currentStep + 1)} disabled={guideState === 'loading'} aria-busy={guideState === 'loading'}>{currentStep === 1 && guideState === 'loading' ? 'Finding nearby places...' : 'Continue'} <ArrowRight size={16} aria-hidden="true" /></button> : <button type="submit" className="btn btn-primary" disabled={requestState === 'quoting' || requestState === 'sending' || requestState === 'success'} aria-busy={requestState === 'quoting' || requestState === 'sending'}>{requestState === 'quoting' ? 'Calculating estimate...' : requestState === 'sending' ? 'Sending enquiry...' : requestState === 'success' ? 'Enquiry sent' : quote ? 'Send enquiry again' : 'Generate quotation'} <ArrowRight size={16} aria-hidden="true" /></button>}
                   </div>
                 </form>
               </section>
@@ -673,7 +723,7 @@ const AiAssistant = () => {
                 <div className="planner-summary-inner">
                   <span className="summary-kicker">Route note / live draft</span>
                   <h2>{selectedPackage?.name || 'Your SreePayanam route'}</h2>
-                  <div className="summary-route">{summaryStops.slice(0, 4).map((stop, index) => <div className="summary-stop" key={`${stop}-${index}`}><strong>{stop}</strong>{index === 0 ? 'Departure' : index === summaryStops.length - 1 ? 'Package region' : 'Selected stop'}</div>)}</div>
+                  <div className="summary-route">{summaryStops.slice(0, 4).map((stop, index) => <div className="summary-stop" key={`${stop}-${index}`}><strong>{stop}</strong>{index === 0 ? 'Departure' : index === summaryStops.length - 1 ? 'Destination' : 'Selected stop'}</div>)}</div>
                   <div className="summary-metrics"><div className="summary-metric"><span>Travellers</span><strong>{Math.max(1, totalTravellers)}</strong></div><div className="summary-metric"><span>Trip length</span><strong>{form.durationDays}D / {form.durationNights}N</strong></div><div className="summary-metric"><span>Places</span><strong>{selectedDestinations.length}</strong></div><div className="summary-metric"><span>Stay</span><strong>{form.hotelCategory}</strong></div></div>
                   <div className="estimate-box"><p>{quote ? 'Server-confirmed customer estimate' : 'Live planning estimate'}</p><strong>{formatINR(visibleTotal)}</strong><small>Includes a 3% planning buffer and 5% estimated tax. Final availability and commercial confirmation come from the travel desk.</small></div>
                   <p className="summary-note"><ShieldCheck size={14} aria-hidden="true" /> Your PDF keeps supplier cost and internal pricing out of the customer view.</p>
