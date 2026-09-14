@@ -644,7 +644,7 @@ const AiAssistant = () => {
                           <div className="planner-section-title"><h2>Discover nearby places</h2><p>Here are real attractions in and around {destinationGuide?.destination || form.destination}. Pick anything you want our travel desk to shape into a route.</p></div>
                           <div className="destination-search-wrap">
                             <Search className="destination-search-icon" size={18} aria-hidden="true" />
-                            <label className="sr-only" htmlFor="destination-search">Search every place in this destination</label>
+                            <label className="sr-only" htmlFor="destination-search">Search every place near this destination</label>
                             <input
                               id="destination-search"
                               className="destination-search-input"
