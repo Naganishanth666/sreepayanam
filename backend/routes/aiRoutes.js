@@ -518,6 +518,7 @@ router.post('/plan-structured', async (req, res) => {
          - The "meal" field must be highly descriptive, recommending specific local dishes, culinary highlights, street foods, or well-known restaurants.
          - The "transit" field must describe local transfer instructions, routes, vehicle types, approximate travel time, and driving distances in detail.
       7. The output MUST be a valid JSON object ONLY. Do not write any markdown wrappers (like \`\`\`json), explanations, or trailing characters.
+      8.please make sure that the location of the places are in the correct order, for instance day 1 in abudhabi day 2 in dubai and then day 3 back to abu dhabi doesnt make sense, please make sure the itinerary is in a logical order and the places are in the correct order.
 
       The JSON object MUST strictly conform to the following schema:
       {
