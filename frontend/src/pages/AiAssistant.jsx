@@ -1,23 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
-  ArrowLeft, ArrowRight, Check, CheckCircle2, CircleHelp, Download,
-  FileText, Hotel, MapPin, MessageCircle, RefreshCw, Send, ShieldCheck,
-  Search, Sparkles, X
+  ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, CircleHelp, Compass,
+  Download, FileText, Hotel, MapPin, MessageCircle, RefreshCw, Route, Send,
+  ShieldCheck, Search, Sparkles, X
 } from 'lucide-react';
 import {
   DESTINATION_CATALOG,
   DESTINATION_KIND_LABELS,
   flattenDestinationGroups
 } from '../data/destinationCatalog';
-import { calculateCosting } from '../utils/costingEngine';
 import { downloadQuotationPdf } from '../utils/quotationPdf';
 
 const STEPS = [
   { id: 1, name: 'Route', detail: 'Destination & dates' },
   { id: 2, name: 'Explore', detail: 'Nearby places' },
   { id: 3, name: 'Comfort', detail: 'Stay & movement' },
-  { id: 4, name: 'Contact', detail: 'Get the quote' }
+  { id: 4, name: 'Contact', detail: 'Send enquiry' }
 ];
 
 const DEFAULT_FORM = {
@@ -47,7 +46,11 @@ const DEFAULT_FORM = {
   consent: false
 };
 
-const formatINR = value => `INR ${Number(value || 0).toLocaleString('en-IN')}`;
+const PLANNING_FIELDS = new Set([
+  'adultCount', 'childWithBedCount', 'childNoBedCount', 'infantCount',
+  'hotelCategory', 'hotelRooms', 'mealPlan', 'vehicleType', 'guideRequired', 'entryTickets',
+  'durationDays', 'durationNights'
+]);
 
 const safeJson = async response => {
   try {
@@ -67,10 +70,128 @@ const buildItinerary = (destinations, days) => {
     return {
       day: index + 1,
       title: index === 0 ? 'Arrival & settle in' : index === totalDays - 1 ? 'Last light & return' : 'Discover the route',
-      places: dayItems.join(' · ')
+      base: '',
+      places: dayItems,
+      activities: dayItems.length ? `Keep this day centred around ${dayItems.join(', ')} with practical time for local travel, meals and rest.` : 'Leave this day open for flexible local discovery.',
+      hotel: { name: '', rating: '', desc: '' },
+      meal: '',
+      transit: ''
     };
   });
 };
+
+const parseDateOnly = value => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return NaN;
+  const [year, month, day] = value.split('-').map(Number);
+  const timestamp = Date.UTC(year, month - 1, day);
+  const parsed = new Date(timestamp);
+  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day
+    ? timestamp
+    : NaN;
+};
+
+const deriveTripTiming = (travelStartDate, returnDate) => {
+  const start = parseDateOnly(travelStartDate);
+  const end = parseDateOnly(returnDate);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null;
+  const days = Math.round((end - start) / 86400000) + 1;
+  return { days, nights: Math.max(days - 1, 0) };
+};
+
+const createDraftReference = () => {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const suffix = globalThis.crypto?.randomUUID?.().slice(0, 8).toUpperCase() || Math.random().toString(36).slice(2, 10).toUpperCase();
+  return `SP-DRAFT-${date}-${suffix}`;
+};
+
+const buildLocalPlanningReview = (selectedPlaces, durationDays) => {
+  const capacity = Math.max(Number(durationDays) || 1, (Number(durationDays) || 1) * 4);
+  const unplacedPlaces = selectedPlaces.slice(capacity);
+  const status = unplacedPlaces.length ? 'tight' : 'workable';
+  return {
+    status,
+    summary: status === 'workable'
+      ? 'The selected places can be shaped into this time window; the travel desk will still review the final routing.'
+      : `You selected ${selectedPlaces.length} places for ${durationDays} days. The draft will keep the most practical stops first and flag the rest for review.`,
+    selectedPlaceCount: selectedPlaces.length,
+    plannedPlaceCount: selectedPlaces.length - unplacedPlaces.length,
+    unplacedPlaces,
+    suggestedRemovals: unplacedPlaces.map(place => ({ place, reason: 'The time window may not support this stop alongside the other selected places.' })),
+    suggestedReplacements: []
+  };
+};
+
+const normalizePlannerDraft = (payload, preferences) => {
+  const durationDays = Math.max(1, Number(payload?.durationDays || preferences.durationDays) || 1);
+  const durationNights = Math.max(0, Number(payload?.durationNights ?? preferences.durationNights) || 0);
+  const selectedPlaces = Array.isArray(preferences.selectedDestinations) ? preferences.selectedDestinations : [];
+  const rawItinerary = Array.isArray(payload?.itinerary) ? payload.itinerary : [];
+  const fallbackReview = buildLocalPlanningReview(selectedPlaces, durationDays);
+  const rawReview = payload?.planningReview && typeof payload.planningReview === 'object' ? payload.planningReview : {};
+  const itinerary = Array.from({ length: durationDays }, (_, index) => {
+    const day = rawItinerary.find(item => Number(item?.day) === index + 1) || rawItinerary[index] || {};
+    const places = Array.isArray(day.places) ? day.places.filter(place => typeof place === 'string' && place.trim()).map(place => place.trim()).slice(0, 10) : [];
+    const hotel = day.hotel && typeof day.hotel === 'object' ? day.hotel : {};
+    return {
+      day: index + 1,
+      title: typeof day.title === 'string' && day.title.trim() ? day.title.trim().slice(0, 140) : index === 0 ? 'Arrival & settle in' : index === durationDays - 1 ? 'Last light & return' : 'Discover the route',
+      base: typeof day.base === 'string' ? day.base.trim().slice(0, 120) : '',
+      places,
+      activities: typeof day.activities === 'string' && day.activities.trim() ? day.activities.trim().slice(0, 1200) : places.length ? `A considered day around ${places.join(', ')} with time for local travel, meals and rest.` : 'Flexible time for local discovery.',
+      hotel: {
+        name: typeof hotel.name === 'string' ? hotel.name.trim().slice(0, 160) : '',
+        rating: typeof hotel.rating === 'string' ? hotel.rating.trim().slice(0, 80) : '',
+        desc: typeof (hotel.desc || hotel.description) === 'string' ? (hotel.desc || hotel.description).trim().slice(0, 360) : ''
+      },
+      meal: typeof day.meal === 'string' ? day.meal.trim().slice(0, 600) : '',
+      transit: typeof day.transit === 'string' ? day.transit.trim().slice(0, 600) : ''
+    };
+  });
+  const planned = new Set(itinerary.flatMap(day => day.places.map(place => place.toLowerCase())));
+  const inferredUnplaced = selectedPlaces.filter(place => !planned.has(place.toLowerCase()));
+  const reportedUnplaced = Array.isArray(rawReview.unplacedPlaces) ? rawReview.unplacedPlaces.filter(place => typeof place === 'string' && place.trim()).map(place => place.trim()).slice(0, 20) : [];
+  const unplacedPlaces = [...new Map([...reportedUnplaced, ...inferredUnplaced].map(place => [place.toLowerCase(), place])).values()];
+  const status = unplacedPlaces.length ? (planned.size >= Math.max(1, selectedPlaces.length - 2) ? 'tight' : 'not_feasible') : ['workable', 'tight', 'not_feasible'].includes(rawReview.status) ? rawReview.status : fallbackReview.status;
+  const fallbackSummary = status === 'workable'
+    ? 'The selected places can be shaped into this time window with practical daily clusters.'
+    : status === 'tight'
+      ? 'The selection is ambitious for this time window. Review the places marked for removal or replacement before confirming.'
+      : 'The selected places do not all fit comfortably into this time window. Review the suggested removals and replacements before confirming.';
+  const cleanSuggestions = value => Array.isArray(value) ? value.slice(0, 12).map(item => typeof item === 'string' ? { place: item.trim(), reason: '' } : ({ place: typeof item?.place === 'string' ? item.place.trim() : '', reason: typeof item?.reason === 'string' ? item.reason.trim() : '', replacement: typeof item?.replacement === 'string' ? item.replacement.trim() : '' })).filter(item => item.place) : [];
+
+  return {
+    planReference: typeof payload?.planReference === 'string' && payload.planReference.trim() ? payload.planReference.trim() : createDraftReference(),
+    inputFingerprint: preferences.planningFingerprint || '',
+    title: typeof payload?.title === 'string' && payload.title.trim() ? payload.title.trim().slice(0, 160) : `${preferences.destination || 'Custom'} route draft`,
+    destination: preferences.destination || '',
+    startingCity: preferences.startingCity || '',
+    endingCity: preferences.endingCity || '',
+    travelStartDate: preferences.travelStartDate || '',
+    returnDate: preferences.returnDate || '',
+    durationDays,
+    durationNights,
+    overview: typeof payload?.overview === 'string' && payload.overview.trim() ? payload.overview.trim().slice(0, 1200) : 'A time-aware route draft arranged around your chosen places.',
+    planningReview: {
+      status,
+      summary: typeof rawReview.summary === 'string' && rawReview.summary.trim() ? rawReview.summary.trim().slice(0, 700) : fallbackSummary,
+      selectedPlaceCount: selectedPlaces.length,
+      plannedPlaceCount: planned.size,
+      unplacedPlaces,
+      suggestedRemovals: cleanSuggestions(rawReview.suggestedRemovals),
+      suggestedReplacements: cleanSuggestions(rawReview.suggestedReplacements)
+    },
+    itinerary,
+    inclusions: Array.isArray(payload?.inclusions) ? payload.inclusions.filter(item => typeof item === 'string').slice(0, 20) : [],
+    exclusions: Array.isArray(payload?.exclusions) ? payload.exclusions.filter(item => typeof item === 'string').slice(0, 20) : []
+  };
+};
+
+const createFallbackDraft = preferences => normalizePlannerDraft({
+  title: `${preferences.destination || 'Custom'} route draft`,
+  overview: 'The AI route review is temporarily unavailable, so this is a simple planning placeholder for the travel desk to refine.',
+  planningReview: buildLocalPlanningReview(preferences.selectedDestinations || [], preferences.durationDays),
+  itinerary: buildItinerary(preferences.selectedDestinations || [], preferences.durationDays)
+}, preferences);
 
 const Field = ({ id, label, required = false, error, help, children, className = '' }) => (
   <div className={`planner-field-wrap ${className}`}>
@@ -118,7 +239,11 @@ const AiAssistant = () => {
   const [destinationSearch, setDestinationSearch] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [validationError, setValidationError] = useState('');
-  const [quote, setQuote] = useState(null);
+  const [planningDraft, setPlanningDraft] = useState(null);
+  const [submittedDraft, setSubmittedDraft] = useState(null);
+  const [planningState, setPlanningState] = useState('idle');
+  const [planningError, setPlanningError] = useState('');
+  const [pdfState, setPdfState] = useState('idle');
   const [requestState, setRequestState] = useState('idle');
   const [requestError, setRequestError] = useState('');
   const [enquirySuccess, setEnquirySuccess] = useState(false);
@@ -130,6 +255,12 @@ const AiAssistant = () => {
   const chatListRef = useRef(null);
   const mutationController = useRef(null);
   const guideController = useRef(null);
+  const planningController = useRef(null);
+
+  const dateDuration = useMemo(
+    () => deriveTripTiming(form.travelStartDate, form.returnDate),
+    [form.travelStartDate, form.returnDate]
+  );
 
   const selectedPackage = useMemo(() => {
     const destination = form.destination.trim() || 'Custom route';
@@ -179,35 +310,42 @@ const AiAssistant = () => {
     [allDestinations, selectedDestinations]
   );
 
-  const pricingParams = useMemo(() => ({
-    adultCount: form.adultCount,
-    childWithBedCount: form.childWithBedCount,
-    childNoBedCount: form.childNoBedCount,
-    infantCount: form.infantCount,
-    durationDays: form.durationDays,
-    durationNights: form.durationNights,
+  const planningPayload = useMemo(() => ({
+    destination: form.destination.trim(),
+    startingCity: form.departureCity.trim() || form.destination.trim(),
+    endingCity: form.destination.trim(),
+    travelStartDate: form.travelStartDate,
+    returnDate: form.returnDate,
+    durationDays: Number(form.durationDays) || 1,
+    durationNights: Number(form.durationNights) || 0,
+    durationSource: dateDuration ? 'travel dates' : 'manual duration fallback',
+    selectedDestinations: selectedLabels,
+    availableDestinations: allDestinations.map(place => place.label),
+    adultCount: Number(form.adultCount) || 1,
+    childWithBedCount: Number(form.childWithBedCount) || 0,
+    childNoBedCount: Number(form.childNoBedCount) || 0,
+    infantCount: Number(form.infantCount) || 0,
     hotelCategory: form.hotelCategory,
     hotelRooms: form.hotelRooms,
-    vehicleType: form.vehicleType,
-    vehicleDays: form.durationDays,
     mealPlan: form.mealPlan,
-    mealNights: form.durationNights,
-    guideCostPerDay: form.guideRequired === 'Yes' ? 1000 : 0,
-    sightseeingCostPerPax: selectedLabels.length ? 600 : 500,
-    activityCostPerPax: form.entryTickets === 'Yes' ? 500 : 150,
-    bufferPercent: 3,
-    markupPercent: 30,
-    taxPercent: 5
-  }), [form, selectedLabels.length]);
+    vehicleType: form.vehicleType,
+    guideRequired: form.guideRequired,
+    entryTickets: form.entryTickets,
+    planningFingerprint: ''
+  }), [allDestinations, dateDuration, form.adultCount, form.childNoBedCount, form.childWithBedCount, form.destination, form.departureCity, form.entryTickets, form.guideRequired, form.hotelCategory, form.hotelRooms, form.infantCount, form.mealPlan, form.returnDate, form.travelStartDate, form.vehicleType, form.durationDays, form.durationNights, selectedLabels]);
 
-  const liveEstimate = useMemo(() => calculateCosting(pricingParams), [pricingParams]);
-  const itinerary = useMemo(() => buildItinerary(selectedLabels, form.durationDays), [selectedLabels, form.durationDays]);
+  const planningFingerprint = useMemo(
+    () => JSON.stringify({ ...planningPayload, planningFingerprint: undefined }),
+    [planningPayload]
+  );
   const totalTravellers = Number(form.adultCount || 0) + Number(form.childWithBedCount || 0) + Number(form.childNoBedCount || 0) + Number(form.infantCount || 0);
-  const visibleTotal = quote?.customerPrice || liveEstimate.customerPrice;
+  const activeItinerary = submittedDraft?.itinerary || planningDraft?.itinerary || [];
+  const activeReview = submittedDraft?.planningReview || planningDraft?.planningReview || buildLocalPlanningReview(selectedLabels, form.durationDays);
 
   useEffect(() => () => {
     mutationController.current?.abort();
     guideController.current?.abort();
+    planningController.current?.abort();
   }, []);
 
   useEffect(() => {
@@ -215,15 +353,45 @@ const AiAssistant = () => {
   }, [chatMessages, chatLoading]);
 
   const invalidateQuote = () => {
-    setQuote(null);
+    setSubmittedDraft(null);
     setEnquirySuccess(false);
     setRequestError('');
     if (requestState !== 'idle') setRequestState('idle');
   };
 
   const updateField = (name, value) => {
-    setForm(previous => ({ ...previous, [name]: value }));
+    setForm(previous => {
+      const next = { ...previous, [name]: value };
+      if (name === 'durationDays' && !previous.travelStartDate && !previous.returnDate) {
+        next.durationNights = Math.max((Number(value) || 1) - 1, 0);
+      }
+      return next;
+    });
     setFieldErrors(previous => ({ ...previous, [name]: '' }));
+    setValidationError('');
+    if (PLANNING_FIELDS.has(name)) {
+      setPlanningDraft(null);
+      setPlanningState('idle');
+      setPlanningError('');
+    }
+    invalidateQuote();
+  };
+
+  const handleDateChange = event => {
+    const { name, value } = event.target;
+    setForm(previous => {
+      const next = { ...previous, [name]: value };
+      const derived = deriveTripTiming(next.travelStartDate, next.returnDate);
+      if (derived) {
+        next.durationDays = derived.days;
+        next.durationNights = derived.nights;
+      }
+      return next;
+    });
+    setFieldErrors(previous => ({ ...previous, [name]: '', returnDate: '' }));
+    setPlanningDraft(null);
+    setPlanningState('idle');
+    setPlanningError('');
     setValidationError('');
     invalidateQuote();
   };
@@ -238,6 +406,9 @@ const AiAssistant = () => {
     setCustomPlaces([]);
     setFieldErrors(previous => ({ ...previous, destination: '', destinationPicker: '' }));
     setDestinationSearch('');
+    setPlanningDraft(null);
+    setPlanningState('idle');
+    setPlanningError('');
     invalidateQuote();
   };
 
@@ -287,17 +458,26 @@ const AiAssistant = () => {
   const toggleDestination = id => {
     setSelectedDestinations(previous => previous.includes(id) ? previous.filter(item => item !== id) : [...previous, id]);
     setFieldErrors(previous => ({ ...previous, destinationPicker: '' }));
+    setPlanningDraft(null);
+    setPlanningState('idle');
+    setPlanningError('');
     invalidateQuote();
   };
 
   const selectRecommended = () => {
     const recommended = allDestinations.filter(place => place.kind === 'recommended').map(place => place.id);
     setSelectedDestinations(recommended);
+    setPlanningDraft(null);
+    setPlanningState('idle');
+    setPlanningError('');
     invalidateQuote();
   };
 
   const clearDestinations = () => {
     setSelectedDestinations([]);
+    setPlanningDraft(null);
+    setPlanningState('idle');
+    setPlanningError('');
     invalidateQuote();
   };
 
@@ -312,6 +492,9 @@ const AiAssistant = () => {
       setCustomPlace('');
       setDestinationSearch('');
       setFieldErrors(previous => ({ ...previous, destinationPicker: '' }));
+      setPlanningDraft(null);
+      setPlanningState('idle');
+      setPlanningError('');
       invalidateQuote();
       return;
     }
@@ -322,6 +505,9 @@ const AiAssistant = () => {
     setCustomPlace('');
     setDestinationSearch('');
     setFieldErrors(previous => ({ ...previous, destinationPicker: '' }));
+    setPlanningDraft(null);
+    setPlanningState('idle');
+    setPlanningError('');
     invalidateQuote();
   };
 
@@ -330,7 +516,8 @@ const AiAssistant = () => {
     if (step === 1) {
       if (!form.destination.trim()) errors.destination = 'Enter a city, region or country to continue.';
       if (!Number(form.durationDays) || Number(form.durationDays) < 1) errors.durationDays = 'Add at least one travel day.';
-      if (form.travelStartDate && form.returnDate && new Date(form.returnDate).getTime() < new Date(form.travelStartDate).getTime()) errors.returnDate = 'Return date must be on or after the start date.';
+      if ((form.travelStartDate && !form.returnDate) || (!form.travelStartDate && form.returnDate)) errors.returnDate = 'Choose both travel dates to calculate the trip length automatically.';
+      if (form.travelStartDate && form.returnDate && parseDateOnly(form.returnDate) < parseDateOnly(form.travelStartDate)) errors.returnDate = 'Return date must be on or after the start date.';
     }
     if (step === 2) {
       if (!selectedDestinations.length) errors.destinationPicker = 'Choose at least one place, or add a place of your own.';
@@ -344,7 +531,7 @@ const AiAssistant = () => {
       if (!form.fullName.trim()) errors.fullName = 'Add your full name.';
       if (!/^\+?[0-9 ()-]{8,20}$/.test(form.mobileNumber.trim())) errors.mobileNumber = 'Enter a valid mobile number.';
       if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) errors.email = 'Enter a valid email address.';
-      if (!form.consent) errors.consent = 'Please allow us to use these details to prepare your quote.';
+      if (!form.consent) errors.consent = 'Please allow us to use these details to prepare your route enquiry.';
     }
     setFieldErrors(errors);
     const firstError = Object.keys(errors)[0];
@@ -357,6 +544,37 @@ const AiAssistant = () => {
     return true;
   };
 
+  const requestRouteDraft = async () => {
+    planningController.current?.abort();
+    const controller = new AbortController();
+    planningController.current = controller;
+    const requestPayload = { ...planningPayload, planningFingerprint };
+    setPlanningState('loading');
+    setPlanningError('');
+
+    try {
+      const response = await fetch('/api/ai/plan-structured', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestPayload)
+      });
+      const data = await safeJson(response);
+      if (!response.ok) throw new Error(data.message || 'We could not prepare the route draft right now.');
+      const draft = normalizePlannerDraft(data, requestPayload);
+      setPlanningDraft(draft);
+      setPlanningState('ready');
+      return draft;
+    } catch (error) {
+      if (error.name === 'AbortError') return null;
+      const fallback = createFallbackDraft(requestPayload);
+      setPlanningDraft(fallback);
+      setPlanningState('error');
+      setPlanningError('The AI route review is temporarily unavailable. The travel desk can still refine this draft after you send the enquiry.');
+      return fallback;
+    }
+  };
+
   const goToStep = async step => {
     if (step > currentStep && !validateStep(currentStep)) return;
     if (step === 2 && currentStep === 1) {
@@ -366,27 +584,24 @@ const AiAssistant = () => {
         return;
       }
     }
+    if (step === 4 && currentStep === 3) {
+      if (!planningDraft || planningDraft.inputFingerprint !== planningFingerprint) await requestRouteDraft();
+    }
     setCurrentStep(step);
     window.scrollTo({ top: 0, behavior: 'auto' });
   };
 
-  const buildQuotePayload = () => ({
-    packageId: selectedPackage?.packageId || selectedPackage?.id,
-    packageName: selectedPackage?.name,
-    selectedDestinations: selectedLabels,
-    ...pricingParams
-  });
-
-  const submitEnquiry = async nextQuote => {
+  const submitEnquiry = async nextDraft => {
     const controller = new AbortController();
     mutationController.current = controller;
     setRequestState('sending');
     setRequestError('');
+    const draftReference = nextDraft?.planReference || createDraftReference();
     try {
       const response = await fetch('/api/enquiries', {
         method: 'POST',
         signal: controller.signal,
-        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': nextQuote.quoteReference },
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': draftReference },
         body: JSON.stringify({
           enquiryType: 'Tour Package Enquiry',
           customerName: form.fullName.trim(),
@@ -403,17 +618,23 @@ const AiAssistant = () => {
           hotelCategory: form.hotelCategory,
           hotelRooms: Number(form.hotelRooms) || undefined,
           carType: form.vehicleType,
-          quoteReference: nextQuote.quoteReference,
-          quotedAmount: nextQuote.customerPrice,
-          quoteIssuedAt: nextQuote.issuedAt,
+          quoteReference: draftReference,
           selectedDestinations: selectedLabels,
           remarks: form.notes.trim(),
           detailedPreferences: {
-            plannerVersion: 2,
+            plannerVersion: 3,
+            planningMode: 'time-aware route draft',
             destination: form.destination.trim(),
             packageName: selectedPackage?.name,
             durationDays: Number(form.durationDays),
             durationNights: Number(form.durationNights),
+            travelStartDate: form.travelStartDate,
+            returnDate: form.returnDate,
+            durationSource: dateDuration ? 'travel dates' : 'manual duration fallback',
+            planningStatus: nextDraft?.planningReview?.status || 'workable',
+            unplacedPlaces: nextDraft?.planningReview?.unplacedPlaces || [],
+            suggestedRemovals: nextDraft?.planningReview?.suggestedRemovals || [],
+            suggestedReplacements: nextDraft?.planningReview?.suggestedReplacements || [],
             contactMethod: form.contactMethod,
             guideRequired: form.guideRequired,
             mealPlan: form.mealPlan,
@@ -424,44 +645,28 @@ const AiAssistant = () => {
       });
       const data = await safeJson(response);
       if (!response.ok) throw new Error(data.message || 'The travel desk could not receive your enquiry.');
+      setSubmittedDraft({ ...(nextDraft || {}), planReference: draftReference });
       setEnquirySuccess(true);
       setRequestState('success');
     } catch (error) {
       if (error.name === 'AbortError') return;
       setRequestState('ready');
-      setRequestError(error.message || 'The quote is ready, but the enquiry could not be sent. Try again.');
+      setRequestError(error.message || 'The route brief is ready, but the enquiry could not be sent. Try again.');
     }
   };
 
   const requestQuote = async event => {
     event.preventDefault();
     if (!validateStep(4)) return;
-    if (quote) {
-      await submitEnquiry(quote);
+    if (submittedDraft) {
+      await submitEnquiry(submittedDraft);
       return;
     }
-
-    const controller = new AbortController();
-    mutationController.current = controller;
-    setRequestState('quoting');
-    setRequestError('');
+    const draft = planningDraft?.inputFingerprint === planningFingerprint
+      ? planningDraft
+      : createFallbackDraft({ ...planningPayload, planningFingerprint });
     setEnquirySuccess(false);
-    try {
-      const response = await fetch('/api/quotations/preview', {
-        method: 'POST',
-        signal: controller.signal,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildQuotePayload())
-      });
-      const data = await safeJson(response);
-      if (!response.ok || !data.quote) throw new Error(data.message || 'We could not calculate this estimate.');
-      setQuote(data.quote);
-      await submitEnquiry(data.quote);
-    } catch (error) {
-      if (error.name === 'AbortError') return;
-      setRequestState('idle');
-      setRequestError(error.message || 'We could not calculate this estimate. Check the details and try again.');
-    }
+    await submitEnquiry(draft);
   };
 
   const handleChatSend = async event => {
@@ -487,16 +692,29 @@ const AiAssistant = () => {
     }
   };
 
-  const downloadPdf = () => downloadQuotationPdf({
-    form,
-    quote,
-    selectedPackage,
-    selectedDestinations: selectedLabels,
-    itinerary
-  });
+  const downloadPdf = async () => {
+    if (!submittedDraft) return false;
+    setPdfState('loading');
+    setRequestError('');
+    try {
+      await downloadQuotationPdf({
+        form,
+        draft: submittedDraft,
+        selectedPackage,
+        selectedDestinations: selectedLabels
+      });
+      return true;
+    } catch {
+      setRequestError('We could not prepare the route brief PDF. Please try again.');
+      return false;
+    } finally {
+      setPdfState('idle');
+    }
+  };
 
   const startOver = () => {
     guideController.current?.abort();
+    planningController.current?.abort();
     setForm(DEFAULT_FORM);
     setDestinationGuide(null);
     setGuideState('idle');
@@ -506,7 +724,11 @@ const AiAssistant = () => {
     setCustomPlace('');
     setDestinationSearch('');
     setCurrentStep(1);
-    setQuote(null);
+    setPlanningDraft(null);
+    setSubmittedDraft(null);
+    setPlanningState('idle');
+    setPlanningError('');
+    setPdfState('idle');
     setRequestState('idle');
     setRequestError('');
     setEnquirySuccess(false);
@@ -519,6 +741,12 @@ const AiAssistant = () => {
     ...selectedLabels.slice(0, 2),
     selectedPackage?.destination || 'Curated route'
   ].filter((value, index, list) => list.indexOf(value) === index);
+  const reviewStatus = ['workable', 'tight', 'not_feasible'].includes(activeReview.status) ? activeReview.status : 'workable';
+  const reviewStatusCopy = {
+    workable: 'Route fits the timing',
+    tight: 'Route is ambitious',
+    not_feasible: 'Some places need a rethink'
+  };
 
   return (
     <div className="planner-page">
@@ -528,7 +756,7 @@ const AiAssistant = () => {
             <span className="eyebrow" style={{ color: 'var(--color-coral-dark)' }}>SreePayanam route desk</span>
             <h1>Make room for the <em>good parts.</em></h1>
           </div>
-          <p>Choose a route, mark the places that matter, and get a customer-facing estimate you can save as a PDF.</p>
+          <p>Choose a destination, mark the places that matter, and get a time-aware route brief you can save as a PDF.</p>
         </div>
 
         <div className="planner-tabs" role="tablist" aria-label="Planner modes">
@@ -554,44 +782,48 @@ const AiAssistant = () => {
           </motion.section>
         ) : (
           <>
-            {quote && (
-              <motion.section className="planner-card quote-result" aria-labelledby="quote-heading" initial={reduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+            {submittedDraft && (
+              <motion.section className="planner-card quote-result route-draft-result" aria-labelledby="route-draft-heading" initial={reduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
                 <div className="quote-result-top">
                   <div>
-                    <span className="eyebrow" style={{ color: 'var(--color-coral-dark)' }}>Your route note</span>
-                    <h2 id="quote-heading">The plan is taking shape.</h2>
-                    <p className="quote-reference">Reference {quote.quoteReference}</p>
+                    <span className="eyebrow" style={{ color: 'var(--color-coral-dark)' }}>Route brief ready</span>
+                    <h2 id="route-draft-heading">A route shaped around your time.</h2>
+                    <p className="quote-reference">Reference {submittedDraft.planReference}</p>
                   </div>
-                  <div className="quote-price">{formatINR(quote.customerPrice)}<small>customer estimate</small></div>
+                  <div className={`draft-status-badge status-${reviewStatus}`}><Route size={17} aria-hidden="true" /><span>{reviewStatusCopy[reviewStatus]}</span></div>
                 </div>
                 {requestError && <div className="form-feedback error" role="alert" style={{ marginTop: '1rem' }}><CircleHelp size={17} aria-hidden="true" />{requestError}</div>}
                 {enquirySuccess && <div className="form-feedback success" role="status" style={{ marginTop: '1rem' }}><CheckCircle2 size={17} aria-hidden="true" />Enquiry sent. Keep this reference when you speak with the travel desk.</div>}
-                <div className="quote-grid">
+                <div className="draft-overview-grid">
                   <div className="quote-panel">
-                    <h3>Customer-facing estimate</h3>
-                    <ul className="quote-breakdown">
-                      {(quote.breakdown || []).map(item => <li key={item.label}><span>{item.label}</span><strong>{formatINR(item.amount)}</strong></li>)}
-                      <li><span>{quote.tax?.label || 'Estimated taxes'}</span><strong>{formatINR(quote.tax?.amount)}</strong></li>
-                    </ul>
-                    <p style={{ marginTop: '0.8rem', color: 'var(--color-muted)', fontSize: '0.75rem' }}>{quote.disclaimer}</p>
+                    <div className="draft-panel-heading"><Compass size={18} aria-hidden="true" /><h3>Route review</h3></div>
+                    <p className="draft-overview">{submittedDraft.overview}</p>
+                    <div className="draft-review-stats">
+                      <div><span>Selected</span><strong>{submittedDraft.planningReview?.selectedPlaceCount || 0}</strong></div>
+                      <div><span>Planned</span><strong>{submittedDraft.planningReview?.plannedPlaceCount || 0}</strong></div>
+                      <div><span>Time</span><strong>{submittedDraft.durationDays}D / {submittedDraft.durationNights}N</strong></div>
+                    </div>
+                    {submittedDraft.planningReview?.summary && <p className="draft-review-summary">{submittedDraft.planningReview.summary}</p>}
+                    {!!submittedDraft.planningReview?.unplacedPlaces?.length && <div className="draft-review-alert"><strong>Review these places</strong><ul>{submittedDraft.planningReview.unplacedPlaces.map(place => <li key={place}>{place}</li>)}</ul></div>}
                   </div>
                   <div className="quote-panel">
-                    <h3>Proposed day plan</h3>
-                    <div className="quote-itinerary">
-                      {itinerary.slice(0, 6).map(day => <div className="quote-day" key={day.day}><span className="quote-day-number">D{day.day}</span><div><h4>{day.title}</h4><p>{day.places}</p></div></div>)}
+                    <div className="draft-panel-heading"><CalendarDays size={18} aria-hidden="true" /><h3>Day-by-day route</h3></div>
+                    <div className="quote-itinerary route-draft-itinerary">
+                      {submittedDraft.itinerary.map(day => <article className="quote-day route-draft-day" key={day.day}><span className="quote-day-number">D{day.day}</span><div><div className="route-draft-day-heading"><h4>{day.title}</h4>{day.base && <span>{day.base}</span>}</div><p><strong>Stops</strong> {day.places.length ? day.places.join(' · ') : 'Flexible local discovery'}</p>{day.activities && <p><strong>Plan</strong> {day.activities}</p>}{day.transit && <p><strong>Travel</strong> {day.transit}</p>}{day.meal && <p><strong>Meals</strong> {day.meal}</p>}</div></article>)}
                     </div>
                   </div>
                 </div>
+                <div className="draft-private-note"><ShieldCheck size={16} aria-hidden="true" /><span>Commercial details are shared separately after the travel desk reviews availability, timing and suppliers.</span></div>
                 <div className="quote-result-actions">
-                  {requestState === 'ready' && <button type="button" className="btn btn-primary" onClick={() => submitEnquiry(quote)} disabled={requestState === 'sending'} aria-busy={requestState === 'sending'}><RefreshCw size={16} aria-hidden="true" /> Send enquiry again</button>}
-                  <button type="button" className="btn btn-secondary" onClick={downloadPdf}><Download size={16} aria-hidden="true" /> Download quotation PDF</button>
-                  <button type="button" className="btn btn-outline" onClick={() => { setQuote(null); setEnquirySuccess(false); setRequestError(''); setRequestState('idle'); }}>Edit route</button>
+                  {requestState === 'ready' && <button type="button" className="btn btn-primary" onClick={() => submitEnquiry(submittedDraft)} disabled={requestState === 'sending'} aria-busy={requestState === 'sending'}><RefreshCw size={16} aria-hidden="true" /> Send enquiry again</button>}
+                  <button type="button" className="btn btn-secondary" onClick={downloadPdf} disabled={pdfState === 'loading'} aria-busy={pdfState === 'loading'}><Download size={16} aria-hidden="true" /> {pdfState === 'loading' ? 'Preparing route brief...' : 'Download route brief PDF'}</button>
+                  <button type="button" className="btn btn-outline" onClick={() => { setSubmittedDraft(null); setEnquirySuccess(false); setRequestError(''); setRequestState('idle'); }}>Edit route</button>
                   <button type="button" className="btn btn-ghost" onClick={startOver}>Start a new route</button>
                 </div>
               </motion.section>
             )}
 
-            <div className="planner-shell" style={{ marginTop: quote ? '1.15rem' : 0 }}>
+            <div className="planner-shell" style={{ marginTop: submittedDraft ? '1.15rem' : 0 }}>
               <section className="planner-card" aria-labelledby="planner-form-heading">
                 <div className="planner-stepper" aria-label={`Planner step ${currentStep} of ${STEPS.length}`}>
                   {STEPS.map(step => (
@@ -605,7 +837,7 @@ const AiAssistant = () => {
                 <form className="planner-body" onSubmit={requestQuote} noValidate>
                   <h2 id="planner-form-heading" className="sr-only">Build a SreePayanam travel route</h2>
                   {validationError && <div className="form-feedback error" role="alert" style={{ marginBottom: '1rem' }}><CircleHelp size={17} aria-hidden="true" />{validationError}</div>}
-                  {requestError && !quote && <div className="form-feedback error" role="alert" style={{ marginBottom: '1rem' }}><CircleHelp size={17} aria-hidden="true" />{requestError}</div>}
+                  {requestError && !submittedDraft && <div className="form-feedback error" role="alert" style={{ marginBottom: '1rem' }}><CircleHelp size={17} aria-hidden="true" />{requestError}</div>}
 
                   <AnimatePresence mode="wait" initial={false}>
                     <motion.div key={currentStep} initial={reduceMotion ? false : { opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={reduceMotion ? false : { opacity: 0, x: -10 }} transition={{ duration: reduceMotion ? 0 : 0.18 }}>
@@ -623,17 +855,17 @@ const AiAssistant = () => {
                             <Field id="departureCity" label="Where will you start?" help="Optional — we will use the destination if left blank.">
                               <input id="departureCity" className="planner-field" value={form.departureCity} onChange={event => updateField('departureCity', event.target.value)} placeholder="e.g. Chennai" autoComplete="address-level2" />
                             </Field>
-                            <Field id="travelStartDate" label="Travel start date">
-                              <input id="travelStartDate" className="planner-field" type="date" value={form.travelStartDate} onChange={event => updateField('travelStartDate', event.target.value)} {...getAria('travelStartDate', fieldErrors.travelStartDate)} />
+                            <Field id="travelStartDate" label="Travel start date" help="Optional — choose both dates to calculate days and nights automatically.">
+                              <input id="travelStartDate" name="travelStartDate" className="planner-field" type="date" value={form.travelStartDate} onChange={handleDateChange} {...getAria('travelStartDate', fieldErrors.travelStartDate, 'travelStartDate-help')} />
                             </Field>
-                            <Field id="returnDate" label="Return date" error={fieldErrors.returnDate}>
-                              <input id="returnDate" className="planner-field" type="date" value={form.returnDate} onChange={event => updateField('returnDate', event.target.value)} {...getAria('returnDate', fieldErrors.returnDate)} />
+                            <Field id="returnDate" label="Return date" error={fieldErrors.returnDate} help={dateDuration ? 'Travel days and hotel nights are calculated from these dates.' : 'Choose both dates to calculate days and nights automatically.'}>
+                              <input id="returnDate" name="returnDate" className="planner-field" type="date" value={form.returnDate} onChange={handleDateChange} {...getAria('returnDate', fieldErrors.returnDate, 'returnDate-help')} />
                             </Field>
-                            <Field id="durationDays" label="Travel days" required error={fieldErrors.durationDays}>
-                              <input id="durationDays" className="planner-field" type="number" min="1" max="60" inputMode="numeric" value={form.durationDays} onChange={event => updateField('durationDays', event.target.value)} {...getAria('durationDays', fieldErrors.durationDays)} />
+                            <Field id="durationDays" label="Travel days" required error={fieldErrors.durationDays} help={dateDuration ? 'Set by the travel dates.' : undefined}>
+                              <input id="durationDays" className="planner-field" type="number" min="1" max="60" inputMode="numeric" value={form.durationDays} readOnly={Boolean(dateDuration)} aria-readonly={dateDuration ? 'true' : undefined} onChange={event => updateField('durationDays', event.target.value)} {...getAria('durationDays', fieldErrors.durationDays, dateDuration ? 'durationDays-help' : undefined)} />
                             </Field>
-                            <Field id="durationNights" label="Hotel nights" error={fieldErrors.durationNights}>
-                              <input id="durationNights" className="planner-field" type="number" min="0" max="59" inputMode="numeric" value={form.durationNights} onChange={event => updateField('durationNights', event.target.value)} {...getAria('durationNights', fieldErrors.durationNights)} />
+                            <Field id="durationNights" label="Hotel nights" error={fieldErrors.durationNights} help={dateDuration ? 'Set by the travel dates.' : 'Optional manual fallback if dates are not set.'}>
+                              <input id="durationNights" className="planner-field" type="number" min="0" max="59" inputMode="numeric" value={form.durationNights} readOnly={Boolean(dateDuration)} aria-readonly={dateDuration ? 'true' : undefined} onChange={event => updateField('durationNights', event.target.value)} {...getAria('durationNights', fieldErrors.durationNights, 'durationNights-help')} />
                             </Field>
                           </div>
                         </div>
@@ -678,7 +910,7 @@ const AiAssistant = () => {
 
                       {currentStep === 3 && (
                         <div>
-                          <div className="planner-section-title"><h2>Set the comfort level</h2><p>These choices power the live planning estimate. The final commercial quote is calculated on the server.</p></div>
+                          <div className="planner-section-title"><h2>Set the comfort level</h2><p>These choices help the AI shape a realistic route draft around your pace, stay and movement preferences.</p></div>
                           <div className="planner-field-grid">
                             <Field id="adultCount" label="Adults" required error={fieldErrors.adultCount}><input id="adultCount" className="planner-field" type="number" min="1" max="50" inputMode="numeric" value={form.adultCount} onChange={event => updateField('adultCount', event.target.value)} {...getAria('adultCount', fieldErrors.adultCount)} /></Field>
                             <Field id="childWithBedCount" label="Children with bed"><input id="childWithBedCount" className="planner-field" type="number" min="0" max="30" inputMode="numeric" value={form.childWithBedCount} onChange={event => updateField('childWithBedCount', event.target.value)} /></Field>
@@ -691,13 +923,21 @@ const AiAssistant = () => {
                             <Field id="mealPlan" label="Meal preference"><select id="mealPlan" className="planner-select" value={form.mealPlan} onChange={event => updateField('mealPlan', event.target.value)}><option value="EP">EP — room only</option><option value="CP">CP — breakfast</option><option value="MAP">MAP — breakfast + dinner</option><option value="AP">AP — all meals</option></select></Field>
                             <Field id="vehicleType" label="Local transport"><select id="vehicleType" className="planner-select" value={form.vehicleType} onChange={event => updateField('vehicleType', event.target.value)}><option>Sedan</option><option>Ertiga</option><option>Innova</option><option>Tempo Traveller</option><option>Mini Coach</option><option>Coach</option></select></Field>
                           </div>
-                          <div style={{ marginTop: '1rem' }}><span className="field-label">Add-ons for the estimate</span><div className="choice-row"><label className={`choice-card${form.guideRequired === 'Yes' ? ' selected' : ''}`}><input type="radio" name="guideRequired" checked={form.guideRequired === 'Yes'} onChange={() => updateField('guideRequired', 'Yes')} /><strong><Hotel size={16} aria-hidden="true" /> Local guide</strong><span>Include guide support in the estimate.</span></label><label className={`choice-card${form.guideRequired === 'No' ? ' selected' : ''}`}><input type="radio" name="guideRequired" checked={form.guideRequired === 'No'} onChange={() => updateField('guideRequired', 'No')} /><strong><MapPin size={16} aria-hidden="true" /> Self-guided</strong><span>Keep the route flexible.</span></label><label className={`choice-card${form.entryTickets === 'Yes' ? ' selected' : ''}`}><input type="checkbox" checked={form.entryTickets === 'Yes'} onChange={event => updateField('entryTickets', event.target.checked ? 'Yes' : 'No')} /><strong><FileText size={16} aria-hidden="true" /> Entry tickets</strong><span>Include a standard activity allowance.</span></label></div></div>
+                          <div style={{ marginTop: '1rem' }}><span className="field-label">Add-ons for the route draft</span><div className="choice-row"><label className={`choice-card${form.guideRequired === 'Yes' ? ' selected' : ''}`}><input type="radio" name="guideRequired" checked={form.guideRequired === 'Yes'} onChange={() => updateField('guideRequired', 'Yes')} /><strong><Hotel size={16} aria-hidden="true" /> Local guide</strong><span>Include guide support in the route brief.</span></label><label className={`choice-card${form.guideRequired === 'No' ? ' selected' : ''}`}><input type="radio" name="guideRequired" checked={form.guideRequired === 'No'} onChange={() => updateField('guideRequired', 'No')} /><strong><MapPin size={16} aria-hidden="true" /> Self-guided</strong><span>Keep the route flexible.</span></label><label className={`choice-card${form.entryTickets === 'Yes' ? ' selected' : ''}`}><input type="checkbox" checked={form.entryTickets === 'Yes'} onChange={event => updateField('entryTickets', event.target.checked ? 'Yes' : 'No')} /><strong><FileText size={16} aria-hidden="true" /> Entry tickets</strong><span>Keep activity preferences visible to the travel desk.</span></label></div></div>
                         </div>
                       )}
 
                       {currentStep === 4 && (
                         <div>
-                          <div className="planner-section-title"><h2>Where should we send it?</h2><p>We use these details to prepare the enquiry and keep the quote reference connected to your route.</p></div>
+                          <div className="planner-section-title"><h2>Where should we send it?</h2><p>We use these details to prepare the enquiry and keep the route brief reference connected to your draft.</p></div>
+                          <div className={`planning-review status-${reviewStatus}`} aria-live="polite">
+                            <div className="planning-review-header"><span className="planning-review-icon"><Route size={18} aria-hidden="true" /></span><div><span className="planning-review-kicker">AI route review</span><h3>{reviewStatusCopy[reviewStatus]}</h3></div></div>
+                            <p className="planning-review-summary">{activeReview.summary}</p>
+                            <div className="planning-review-stats"><div><span>Selected places</span><strong>{activeReview.selectedPlaceCount}</strong></div><div><span>Planned stops</span><strong>{activeReview.plannedPlaceCount}</strong></div><div><span>Timing</span><strong>{form.durationDays}D / {form.durationNights}N</strong></div></div>
+                            {planningError && <div className="planning-review-warning" role="status"><CircleHelp size={16} aria-hidden="true" />{planningError}</div>}
+                            {!!activeReview.unplacedPlaces?.length && <div className="planning-review-items"><div className="planning-review-list"><strong>Consider removing</strong><ul>{(activeReview.suggestedRemovals?.length ? activeReview.suggestedRemovals : activeReview.unplacedPlaces.map(place => ({ place }))).map(item => <li key={`unplaced-${item.place}`}><span>{item.place}</span>{item.reason && <small>{item.reason}</small>}</li>)}</ul></div>{!!activeReview.suggestedReplacements?.length && <div className="planning-review-list"><strong>Possible alternatives</strong><ul>{activeReview.suggestedReplacements.map(item => <li key={`replacement-${item.place}-${item.replacement || ''}`}><span>{item.replacement ? `${item.place} → ${item.replacement}` : item.place}</span>{item.reason && <small>{item.reason}</small>}</li>)}</ul></div>}</div>}
+                            {!!activeItinerary.length && <div className="planning-review-itinerary"><strong>Draft day order</strong><ol>{activeItinerary.map(day => <li key={`draft-day-${day.day}`}><span>D{day.day}</span><div><b>{day.title}</b><small>{day.places?.length ? day.places.join(' · ') : 'Flexible local discovery'}</small></div></li>)}</ol></div>}
+                          </div>
                           <div className="planner-field-grid">
                             <Field id="fullName" label="Full name" required error={fieldErrors.fullName}><input id="fullName" className="planner-field" autoComplete="name" value={form.fullName} onChange={event => updateField('fullName', event.target.value)} {...getAria('fullName', fieldErrors.fullName)} /></Field>
                             <Field id="mobileNumber" label="Mobile number" required error={fieldErrors.mobileNumber}><input id="mobileNumber" className="planner-field" type="tel" inputMode="tel" autoComplete="tel" value={form.mobileNumber} onChange={event => updateField('mobileNumber', event.target.value)} {...getAria('mobileNumber', fieldErrors.mobileNumber)} /></Field>
@@ -713,8 +953,8 @@ const AiAssistant = () => {
                   </AnimatePresence>
 
                   <div className="planner-actions">
-                    <button type="button" className="btn btn-ghost" onClick={() => currentStep === 1 ? window.history.back() : goToStep(currentStep - 1)} disabled={requestState === 'quoting' || requestState === 'sending'}><ArrowLeft size={16} aria-hidden="true" /> {currentStep === 1 ? 'Leave planner' : 'Back'}</button>
-                    {currentStep < 4 ? <button type="button" className="btn btn-primary" onClick={() => goToStep(currentStep + 1)} disabled={guideState === 'loading'} aria-busy={guideState === 'loading'}>{currentStep === 1 && guideState === 'loading' ? 'Finding nearby places...' : 'Continue'} <ArrowRight size={16} aria-hidden="true" /></button> : <button type="submit" className="btn btn-primary" disabled={requestState === 'quoting' || requestState === 'sending' || requestState === 'success'} aria-busy={requestState === 'quoting' || requestState === 'sending'}>{requestState === 'quoting' ? 'Calculating estimate...' : requestState === 'sending' ? 'Sending enquiry...' : requestState === 'success' ? 'Enquiry sent' : quote ? 'Send enquiry again' : 'Generate quotation'} <ArrowRight size={16} aria-hidden="true" /></button>}
+                    <button type="button" className="btn btn-ghost" onClick={() => currentStep === 1 ? window.history.back() : goToStep(currentStep - 1)} disabled={planningState === 'loading' || requestState === 'sending'}><ArrowLeft size={16} aria-hidden="true" /> {currentStep === 1 ? 'Leave planner' : 'Back'}</button>
+                    {currentStep < 4 ? <button type="button" className="btn btn-primary" onClick={() => goToStep(currentStep + 1)} disabled={guideState === 'loading' || (currentStep === 3 && planningState === 'loading')} aria-busy={guideState === 'loading' || (currentStep === 3 && planningState === 'loading')}>{currentStep === 1 && guideState === 'loading' ? 'Finding nearby places...' : currentStep === 3 && planningState === 'loading' ? 'Mapping your days...' : 'Continue'} <ArrowRight size={16} aria-hidden="true" /></button> : <button type="submit" className="btn btn-primary" disabled={requestState === 'sending' || requestState === 'success'} aria-busy={requestState === 'sending'}>{requestState === 'sending' ? 'Sending enquiry...' : requestState === 'success' ? 'Enquiry sent' : submittedDraft ? 'Send enquiry again' : 'Send route enquiry'} <ArrowRight size={16} aria-hidden="true" /></button>}
                   </div>
                 </form>
               </section>
@@ -725,8 +965,12 @@ const AiAssistant = () => {
                   <h2>{selectedPackage?.name || 'Your SreePayanam route'}</h2>
                   <div className="summary-route">{summaryStops.slice(0, 4).map((stop, index) => <div className="summary-stop" key={`${stop}-${index}`}><strong>{stop}</strong>{index === 0 ? 'Departure' : index === summaryStops.length - 1 ? 'Destination' : 'Selected stop'}</div>)}</div>
                   <div className="summary-metrics"><div className="summary-metric"><span>Travellers</span><strong>{Math.max(1, totalTravellers)}</strong></div><div className="summary-metric"><span>Trip length</span><strong>{form.durationDays}D / {form.durationNights}N</strong></div><div className="summary-metric"><span>Places</span><strong>{selectedDestinations.length}</strong></div><div className="summary-metric"><span>Stay</span><strong>{form.hotelCategory}</strong></div></div>
-                  <div className="estimate-box"><p>{quote ? 'Server-confirmed customer estimate' : 'Live planning estimate'}</p><strong>{formatINR(visibleTotal)}</strong><small>Includes a 3% planning buffer and 5% estimated tax. Final availability and commercial confirmation come from the travel desk.</small></div>
-                  <p className="summary-note"><ShieldCheck size={14} aria-hidden="true" /> Your PDF keeps supplier cost and internal pricing out of the customer view.</p>
+                  <div className="route-draft-visual" aria-label="Route draft status">
+                    <div className="route-draft-map" aria-hidden="true"><span className="route-draft-node one" /><span className="route-draft-node two" /><span className="route-draft-node three" /><span className="route-draft-route" /></div>
+                    <div className="route-draft-copy"><span>Route draft</span><strong>{planningState === 'loading' ? 'Mapping your days...' : planningDraft ? 'Clustered by place' : 'Ready to map'}</strong><p>{planningDraft ? 'Nearby stops are being shaped into a calmer day-by-day brief.' : 'Your selected places will become a considered travel-desk brief.'}</p></div>
+                    <div className="route-draft-signals"><span><Route size={13} aria-hidden="true" /> Time aware</span><span><Compass size={13} aria-hidden="true" /> Less backtracking</span><span><CalendarDays size={13} aria-hidden="true" /> {form.durationDays} days</span></div>
+                  </div>
+                  <p className="summary-note"><ShieldCheck size={14} aria-hidden="true" /> Commercial details are handled separately by the travel desk.</p>
                 </div>
               </aside>
             </div>

@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const { OpenAI } = require('openai');
 const multer = require('multer');
 const { PDFParse } = require('pdf-parse');
@@ -19,12 +20,18 @@ const cleanAiText = (value, maxLength = 1600) => typeof value === 'string'
   ? value.replace(/[<>\u0000-\u001F]/g, '').trim().slice(0, maxLength)
   : '';
 
+const cleanPlanningText = (value, maxLength = 1600) => cleanAiText(value, maxLength)
+  .replace(/(?:₹|INR|Rs\.?|Rupees)\s*[\d,]+(?:\.\d+)?(?:\s*[-–—]\s*(?:₹|INR|Rs\.?|Rupees)?\s*[\d,]+(?:\.\d+)?)?/gi, '')
+  .replace(/\b(?:price|cost|fare|rate|tax|discount|budget|amount)\s*[:\-]?\s*(?:₹|INR|Rs\.?|Rupees)?\s*[\d,]+(?:\.\d+)?(?:\s*[-–—]\s*(?:₹|INR|Rs\.?|Rupees)?\s*[\d,]+(?:\.\d+)?)?/gi, '')
+  .replace(/\s{2,}/g, ' ')
+  .trim();
+
 const formatDetailedPreferences = (body) => {
   const excludeKeys = [
     'destination', 'startingCity', 'endingCity', 'durationDays', 'durationNights',
     'packageCategory', 'tourType', 'selectedHotel', 'selectedFlight', 'selectedTrain',
     'selectedCar', 'customPrompt', 'includeFlight', 'includeTrain', 'includeCar', 'category', 'prompt',
-    'mealRequired', 'mealPlan', 'suggestTemples'
+    'mealRequired', 'mealPlan', 'suggestTemples', 'selectedDestinations', 'availableDestinations', 'planningFingerprint'
   ];
   let formatted = '';
   for (const [key, value] of Object.entries(body)) {
@@ -57,6 +64,128 @@ const extractJson = (text) => {
   return text.trim();
 };
 
+const numberInRange = (value, fallback, min, max) => {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  const integer = Math.round(number);
+  return Math.min(Math.max(integer, min), max);
+};
+
+const parseDateOnly = value => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return NaN;
+  const [year, month, day] = value.split('-').map(Number);
+  const timestamp = Date.UTC(year, month - 1, day);
+  const parsed = new Date(timestamp);
+  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day
+    ? timestamp
+    : NaN;
+};
+
+const cleanDateOnly = value => Number.isFinite(parseDateOnly(value)) ? value : '';
+
+const deriveDateOnlyDuration = (travelStartDate, returnDate) => {
+  if (!travelStartDate || !returnDate) return null;
+  const start = parseDateOnly(travelStartDate);
+  const end = parseDateOnly(returnDate);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null;
+  const days = Math.round((end - start) / 86400000) + 1;
+  return { days: Math.min(days, 60), nights: Math.min(Math.max(days - 1, 0), 59) };
+};
+
+const normalizePlaceKey = value => cleanAiText(value, 160).toLowerCase().replace(/\s+/g, ' ');
+
+const cleanPlaceList = (value, max = 120) => {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value
+    .map(place => typeof place === 'string' ? place : place?.name)
+    .map(place => cleanPlanningText(place, 160))
+    .filter(Boolean))].slice(0, max);
+};
+
+const createPlanReference = () => {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  return `SP-DRAFT-${date}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+};
+
+const sanitizePlanningSuggestions = (value, max = 12) => {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, max).map(item => {
+    if (typeof item === 'string') return { place: cleanPlanningText(item, 160), reason: '' };
+    return {
+      place: cleanPlanningText(item?.place || item?.name, 160),
+      reason: cleanPlanningText(item?.reason, 320),
+      replacement: cleanPlanningText(item?.replacement, 160)
+    };
+  }).filter(item => item.place);
+};
+
+const sanitizeStructuredPlan = (payload, preferences) => {
+  const durationDays = numberInRange(preferences.durationDays, 5, 1, 60);
+  const durationNights = numberInRange(preferences.durationNights, Math.max(durationDays - 1, 0), 0, 59);
+  const selectedPlaces = cleanPlaceList(preferences.selectedDestinations, 40);
+  const rawItinerary = Array.isArray(payload?.itinerary) ? payload.itinerary : [];
+  const itinerary = Array.from({ length: durationDays }, (_, index) => {
+    const day = rawItinerary.find(item => Number(item?.day) === index + 1) || rawItinerary[index] || {};
+    const hotel = day.hotel && typeof day.hotel === 'object' ? day.hotel : {};
+    return {
+      day: index + 1,
+      title: cleanPlanningText(day.title, 120) || (index === 0 ? 'Arrival & settle in' : index === durationDays - 1 ? 'Last light & return' : 'Discover the route'),
+      base: cleanPlanningText(day.base || day.location, 120),
+      places: cleanPlaceList(day.places, 10),
+      activities: cleanPlanningText(day.activities, 900) || 'Flexible time for local discovery.',
+      hotel: {
+        name: cleanPlanningText(hotel.name, 160),
+        rating: cleanPlanningText(hotel.rating, 80),
+        desc: cleanPlanningText(hotel.desc || hotel.description, 320)
+      },
+      meal: cleanPlanningText(day.meal, 500),
+      transit: cleanPlanningText(day.transit, 500)
+    };
+  });
+
+  const plannedPlaceKeys = new Set(itinerary.flatMap(day => day.places).map(normalizePlaceKey).filter(Boolean));
+  const inferredUnplaced = selectedPlaces.filter(place => !plannedPlaceKeys.has(normalizePlaceKey(place)));
+  const review = payload?.planningReview && typeof payload.planningReview === 'object' ? payload.planningReview : {};
+  const reportedUnplaced = cleanPlaceList(review.unplacedPlaces, 20);
+  const unplacedPlaces = [...new Map([...reportedUnplaced, ...inferredUnplaced].map(place => [normalizePlaceKey(place), place])).values()];
+  const reportedStatus = ['workable', 'tight', 'not_feasible'].includes(review.status) ? review.status : '';
+  const selectedPlaceKeys = new Set(selectedPlaces.map(normalizePlaceKey));
+  const plannedSelectedPlaceKeys = new Set([...plannedPlaceKeys].filter(place => selectedPlaceKeys.has(place)));
+  const status = unplacedPlaces.length
+    ? (plannedSelectedPlaceKeys.size >= Math.max(1, selectedPlaces.length - 2) ? 'tight' : 'not_feasible')
+    : reportedStatus || (selectedPlaces.length > durationDays * 4 ? 'tight' : 'workable');
+  const defaultSummary = status === 'workable'
+    ? 'The selected places can be shaped into this time window with sensible daily clusters.'
+    : status === 'tight'
+      ? 'The route is ambitious for this time window. Review the places marked for removal or replacement before confirming.'
+      : 'The selected places do not all fit comfortably into this time window. Review the suggested removals and replacements before confirming.';
+
+  return {
+    planReference: createPlanReference(),
+    title: cleanPlanningText(payload?.title, 160) || `${cleanPlanningText(preferences.destination, 120) || 'Custom'} route draft`,
+    destination: cleanPlanningText(preferences.destination, 180),
+    startingCity: cleanPlanningText(preferences.startingCity, 160),
+    endingCity: cleanPlanningText(preferences.endingCity, 160),
+    travelStartDate: cleanDateOnly(preferences.travelStartDate),
+    returnDate: cleanDateOnly(preferences.returnDate),
+    durationDays,
+    durationNights,
+    overview: cleanPlanningText(payload?.overview, 900) || 'A time-aware route draft arranged around the places you selected.',
+    planningReview: {
+      status,
+      summary: cleanPlanningText(review.summary, 500) || defaultSummary,
+      selectedPlaceCount: selectedPlaces.length,
+      plannedPlaceCount: plannedSelectedPlaceKeys.size,
+      unplacedPlaces,
+      suggestedRemovals: sanitizePlanningSuggestions(review.suggestedRemovals),
+      suggestedReplacements: sanitizePlanningSuggestions(review.suggestedReplacements)
+    },
+    itinerary,
+    inclusions: cleanPlaceList(payload?.inclusions, 20).map(item => cleanPlanningText(item, 240)).filter(Boolean),
+    exclusions: cleanPlaceList(payload?.exclusions, 20).map(item => cleanPlanningText(item, 240)).filter(Boolean)
+  };
+};
+
 const sanitizeDestinationGuide = (payload, destination) => {
   const fallbackLabels = ['Must-see landmarks', 'Nearby attractions', 'Optional day trips'];
   const fallbackKinds = ['recommended', 'nearby', 'optional'];
@@ -65,7 +194,7 @@ const sanitizeDestinationGuide = (payload, destination) => {
     const rawPlaces = Array.isArray(group?.places) ? group.places : [];
     const places = rawPlaces
       .map(place => typeof place === 'string' ? place : place?.name)
-      .map(place => cleanAiText(place, 160))
+      .map(place => cleanPlanningText(place, 160))
       .filter(place => {
         const key = place.toLowerCase();
         if (!key || seenPlaces.has(key)) return false;
@@ -469,6 +598,8 @@ router.post('/plan-structured', async (req, res) => {
       destination,
       startingCity,
       endingCity,
+      travelStartDate,
+      returnDate,
       durationDays,
       durationNights,
       transportType,
@@ -478,15 +609,40 @@ router.post('/plan-structured', async (req, res) => {
       flight_ticket,
       train_ticket,
       bus_ticket,
-      local_transport
+      local_transport,
+      selectedDestinations,
+      availableDestinations
     } = preferences;
+
+    const safeTravelStartDate = cleanDateOnly(travelStartDate);
+    const safeReturnDate = cleanDateOnly(returnDate);
+    if (safeTravelStartDate && safeReturnDate && !deriveDateOnlyDuration(safeTravelStartDate, safeReturnDate)) {
+      return res.status(400).json({ message: 'Return date must be on or after the travel start date.' });
+    }
+    const dateDuration = deriveDateOnlyDuration(safeTravelStartDate, safeReturnDate);
+    const safeDurationDays = dateDuration?.days || numberInRange(durationDays, 5, 1, 60);
+    const safeDurationNights = dateDuration?.nights ?? numberInRange(durationNights, Math.max(safeDurationDays - 1, 0), 0, 59);
+
+    const safePreferences = {
+      ...preferences,
+      destination: cleanAiText(destination, 180),
+      startingCity: cleanAiText(startingCity, 160),
+      endingCity: cleanAiText(endingCity, 160),
+      travelStartDate: safeTravelStartDate,
+      returnDate: safeReturnDate,
+      durationDays: safeDurationDays,
+      durationNights: safeDurationNights,
+      selectedDestinations: cleanPlaceList(selectedDestinations, 40),
+      availableDestinations: cleanPlaceList(availableDestinations, 120)
+    };
 
     const openai = getOpenAIClient(res);
     if (!openai) return;
 
     // Convert preferences object to a readable string for the AI prompt
     let formattedPreferences = '';
-    for (const [key, value] of Object.entries(preferences)) {
+    for (const [key, value] of Object.entries(safePreferences)) {
+      if (['selectedDestinations', 'availableDestinations', 'planningFingerprint'].includes(key)) continue;
       if (value !== undefined && value !== null && value !== '') {
         const formattedKey = key
           .split('_')
@@ -503,6 +659,12 @@ router.post('/plan-structured', async (req, res) => {
       User Selection & Detailed Preferences:
       ${formattedPreferences}
 
+      Authoritative route selection:
+      - Customer-selected places to preserve where feasible: ${JSON.stringify(safePreferences.selectedDestinations)}
+      - Additional guide places available for credible replacements: ${JSON.stringify(safePreferences.availableDestinations)}
+      - Date-only travel window: ${safePreferences.travelStartDate || 'not supplied'} through ${safePreferences.returnDate || 'not supplied'}
+      - Authoritative trip length: ${safePreferences.durationDays} days / ${safePreferences.durationNights} nights
+
       Instructions:
       1. Perform realistic travel research. Suggest genuine local hotels/resorts matching the requested accommodation level (${hotelCategory || 'Premium'}).
       2. Suggest authentic local dining options, meal plans, and cuisines to try based on the client's meal requirements and preferences. Be highly creative and recommend specific popular local dishes, street food, or well-known restaurants.
@@ -511,29 +673,41 @@ router.post('/plan-structured', async (req, res) => {
          - Train: Check if Train Ticket ('train_ticket') is true. If 'train_ticket' is true, suggest train travel/train numbers. If 'train_ticket' is false (or not provided), you MUST NOT suggest or mention train travel.
          - Bus: Check if Bus Ticket ('bus_ticket') is true. If 'bus_ticket' is true, suggest bus travel. If 'bus_ticket' is false (or not provided), you MUST NOT suggest or mention bus travel.
          - Local Car/Cab: If local_transport (e.g. 'Sedan', 'SUV') is specified and requested, detail road travel/excursions using that vehicle category.
-      4. Suggest a realistic price range for the overall trip in Indian Rupees (₹), e.g., "₹25,000 - ₹35,000 per person" conforming to the budget constraints.
-      5. Include specific sightseeing spots, pace (e.g. slow, moderate, active) and entry tickets matching their sightseeing choices.
-      6. Make the daily itinerary descriptions extremely descriptive, informative, and engaging:
+      4. This is a route-planning draft, not a quotation. NEVER return prices, currency amounts, fares, rates, budgets, taxes, discounts or any other commercial figures.
+      5. Use exactly ${safePreferences.durationDays} itinerary entries and ${safePreferences.durationNights} hotel nights. Treat the supplied dates and duration as authoritative; never silently change them.
+      6. Optimize the route geographically and by time. Keep places in the same neighbourhood, corridor or nearby area on the same day where practical; order each day and the overall trip to minimize backtracking; allow realistic travel, meal and rest time; do not force every selected place into the plan when the time window cannot support it.
+      7. Detect feasibility honestly. If the selection is too large or geographically spread out, set planningReview.status to "tight" or "not_feasible", explain the constraint in planningReview.summary, list every selected place that could not fit in planningReview.unplacedPlaces, and suggest specific removals in planningReview.suggestedRemovals. Suggest replacements only from the available guide places or credible nearby alternatives in planningReview.suggestedReplacements. Never invent exact distances or travel times when uncertain.
+      8. For every itinerary day, the places array MUST contain the plain names of the actual places assigned to that day. Keep the places array limited to realistic stops for the day and preserve the customer's selections whenever feasible.
+      9. Include specific sightseeing spots, pace (e.g. slow, moderate, active) and entry tickets matching their sightseeing choices. Make the daily itinerary descriptions extremely descriptive, informative, and engaging:
          - The "activities" field must be a detailed, rich paragraph (at least 4-5 sentences) describing the scenic beauty, historical significance, local culture, and specific sightseeing places visited, explaining why they are special.
          - The "meal" field must be highly descriptive, recommending specific local dishes, culinary highlights, street foods, or well-known restaurants.
          - The "transit" field must describe local transfer instructions, routes, vehicle types, approximate travel time, and driving distances in detail.
-      7. The output MUST be a valid JSON object ONLY. Do not write any markdown wrappers (like \`\`\`json), explanations, or trailing characters.
-      8.please make sure that the location of the places are in the correct order, for instance day 1 in abudhabi day 2 in dubai and then day 3 back to abu dhabi doesnt make sense, please make sure the itinerary is in a logical order and the places are in the correct order.
+      10. The output MUST be a valid JSON object ONLY. Do not write any markdown wrappers (like \`\`\`json), explanations, prices or trailing characters.
 
       The JSON object MUST strictly conform to the following schema:
       {
         "title": "Inspiring and premium package title matching the vibe",
-        "destination": "${destination || ''}",
-        "startingCity": "${startingCity || ''}",
-        "endingCity": "${endingCity || ''}",
-        "durationDays": ${Number(durationDays) || 5},
-        "durationNights": ${Number(durationNights) || 4},
-        "estimatedPrice": "Estimated price range in ₹ (e.g., ₹22,000 - ₹28,000 per person)",
+        "destination": "${safePreferences.destination}",
+        "startingCity": "${safePreferences.startingCity}",
+        "endingCity": "${safePreferences.endingCity}",
+        "travelStartDate": "${safePreferences.travelStartDate}",
+        "returnDate": "${safePreferences.returnDate}",
+        "durationDays": ${safePreferences.durationDays},
+        "durationNights": ${safePreferences.durationNights},
+        "planningReview": {
+          "status": "workable | tight | not_feasible",
+          "summary": "Clear explanation of whether the chosen places fit the time window.",
+          "unplacedPlaces": ["Selected place that could not fit"],
+          "suggestedRemovals": [{ "place": "Place to remove", "reason": "Why it does not fit" }],
+          "suggestedReplacements": [{ "place": "Selected place to reconsider", "replacement": "Nearby alternative", "reason": "Why it is a better fit" }]
+        },
         "overview": "Thorough, engaging overview paragraph describing the customized experience.",
         "itinerary": [
           {
             "day": 1,
             "title": "Arrival & Leisure / Activity Title",
+            "base": "The area where the day is centred",
+            "places": ["Exact plain place name"],
             "activities": "Detailed description of activities for this day.",
             "hotel": {
               "name": "Name of a specific realistic hotel/resort matching the requested tier",
@@ -564,7 +738,7 @@ router.post('/plan-structured', async (req, res) => {
     });
 
     const cleanJsonText = extractJson(completion.choices[0].message.content);
-    const itineraryData = JSON.parse(cleanJsonText);
+    const itineraryData = sanitizeStructuredPlan(JSON.parse(cleanJsonText), safePreferences);
     res.json(itineraryData);
   } catch (error) {
     console.error('AI Structured Plan Error:', error);

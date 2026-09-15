@@ -1,5 +1,13 @@
 const nodemailer = require('nodemailer');
 
+const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;'
+}[character]));
+
 /**
  * Sends an email notification to info@sreepayanamtours.com containing
  * all details of the newly submitted inquiry.
@@ -65,8 +73,8 @@ const sendEnquiryEmail = async (enquiryData) => {
       }
       detailsHtml += `
         <tr>
-          <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; width: 35%; background-color: #f8fafc; color: #475569;">${label}</td>
-          <td style="padding: 10px; border: 1px solid #e2e8f0; color: #1e293b;">${displayValue}</td>
+          <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; width: 35%; background-color: #f8fafc; color: #475569;">${escapeHtml(label)}</td>
+          <td style="padding: 10px; border: 1px solid #e2e8f0; color: #1e293b;">${escapeHtml(displayValue)}</td>
         </tr>`;
     }
   };

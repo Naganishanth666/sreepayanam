@@ -1,6 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const { calculateCosting, HOTEL_RATES, VEHICLE_RATES, MEAL_RATES } = require('../utils/costingEngine');
+const { checkAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 const FIXED_MARKUP_PERCENT = 30;
@@ -44,7 +45,9 @@ const buildPublicBreakdown = (costing) => {
   });
 };
 
-router.post('/preview', async (req, res) => {
+// Commercial pricing remains an internal/admin operation. The public planner
+// requests a route draft instead and never receives costing fields.
+router.post('/preview', checkAdmin, async (req, res) => {
   try {
     const body = req.body || {};
     const adultCount = numberInRange(body.adultCount, 2, 1, 50);

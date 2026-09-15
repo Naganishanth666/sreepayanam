@@ -274,7 +274,7 @@ const LandingPage = () => {
               {[
                 ['01', 'Choose your anchor', 'Start from a package, a city, or a temple you have been meaning to see.'],
                 ['02', 'Shape the days', 'Select the places, pace, hotel comfort and transport that fit your group.'],
-                ['03', 'Take the plan with you', 'Get a customer-facing estimate and a PDF quotation you can share.']
+                ['03', 'Take the plan with you', 'Get a time-aware route brief and a structured PDF you can share.']
               ].map(([index, title, description]) => (
                 <motion.article className="feature-card" key={index} whileHover={reduceMotion ? undefined : { y: -4 }}>
                   <span className="feature-index">{index}</span>

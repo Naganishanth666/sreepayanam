@@ -6,6 +6,24 @@ const { sendEnquiryEmail } = require('../utils/mailer');
 
 const router = express.Router();
 
+const parseDateOnly = value => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return NaN;
+  const [year, month, day] = value.split('-').map(Number);
+  const timestamp = Date.UTC(year, month - 1, day);
+  const parsed = new Date(timestamp);
+  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day
+    ? timestamp
+    : NaN;
+};
+
+const deriveRouteTiming = (travelStartDate, returnDate) => {
+  const start = parseDateOnly(travelStartDate);
+  const end = parseDateOnly(returnDate);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null;
+  const days = Math.round((end - start) / 86400000) + 1;
+  return { days: Math.min(days, 60), nights: Math.min(Math.max(days - 1, 0), 59) };
+};
+
 const PUBLIC_FIELDS = [
   'enquiryType', 'travelDate', 'fromLocation', 'toLocation', 'numberOfPassengers', 'adultCount', 'childCount',
   'budget', 'preferredCategory', 'remarks', 'returnDate', 'hotelCheckIn', 'hotelCheckOut', 'hotelRooms',
@@ -22,7 +40,7 @@ const PUBLIC_FIELDS = [
   'roomViewPreference', 'privatePoolVilla', 'photographyService', 'deityTempleName', 'primaryDestination',
   'specialDarshanPasses', 'ritualPoojaArrangements', 'seniorCitizenAssistance', 'vegetarianJainFood',
   'physicalDisabilityAssistance', 'dressCodeGuidelinesAccepted', 'packageId', 'detailedPreferences',
-  'quoteReference', 'quotedAmount', 'quoteIssuedAt', 'selectedDestinations'
+  'quoteReference', 'selectedDestinations'
 ];
 
 const sanitise = (value, depth = 0) => {
@@ -61,7 +79,7 @@ const pickPublicFields = body => PUBLIC_FIELDS.reduce((result, key) => {
 }, {});
 
 // Submit a new enquiry. This is intentionally public, but bounded, sanitised
-// and idempotent when it comes from the quote flow.
+// and idempotent when it comes from the route-brief flow.
 router.post('/', async (req, res) => {
   try {
     const body = sanitise(req.body || {}) || {};
@@ -86,7 +104,27 @@ router.post('/', async (req, res) => {
       }
     }
 
+    const routeTiming = deriveRouteTiming(body.travelDate, body.returnDate);
+    const hasDateOnlyPair = typeof body.travelDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.travelDate)
+      && typeof body.returnDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.returnDate);
+    if (hasDateOnlyPair && !routeTiming) {
+      return res.status(400).json({ message: 'Return date must be on or after the travel date.' });
+    }
+
     const publicFields = pickPublicFields(body);
+    if (routeTiming) {
+      const existingPreferences = publicFields.detailedPreferences && typeof publicFields.detailedPreferences === 'object'
+        ? publicFields.detailedPreferences
+        : {};
+      publicFields.detailedPreferences = {
+        ...existingPreferences,
+        travelStartDate: body.travelDate,
+        returnDate: body.returnDate,
+        durationDays: routeTiming.days,
+        durationNights: routeTiming.nights,
+        durationSource: 'travel dates (server-derived)'
+      };
+    }
 
     const newEnquiry = new Enquiry({
       ...publicFields,
@@ -94,7 +132,6 @@ router.post('/', async (req, res) => {
       mobileNumber,
       emailId: emailId || undefined,
       quoteReference: body.quoteReference ? String(body.quoteReference).slice(0, 80) : undefined,
-      quotedAmount: Number.isFinite(Number(body.quotedAmount)) ? Math.max(Number(body.quotedAmount), 0) : undefined,
       selectedDestinations: Array.isArray(body.selectedDestinations) ? body.selectedDestinations.slice(0, 40) : undefined,
       enquiryType: body.enquiryType || 'Tour Package Enquiry'
     });

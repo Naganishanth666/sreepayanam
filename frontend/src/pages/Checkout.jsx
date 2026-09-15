@@ -205,7 +205,7 @@ const Checkout = () => {
         <div className="glass-card access-card">
           <span className="eyebrow">Checkout needs a package</span>
           <h1>{packageError || 'Choose a published package before checkout.'}</h1>
-          <p>For a custom route, use the trip planner to receive a server-calculated estimate and downloadable quotation.</p>
+          <p>For a custom route, use the trip planner to receive a time-aware route brief and downloadable PDF for travel-desk review.</p>
           <div className="access-card-actions">
             <Link className="btn btn-primary" to="/packages">Browse packages</Link>
             <Link className="btn btn-ghost" to="/ai-assistant">Open trip planner</Link>

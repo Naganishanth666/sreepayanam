@@ -56,13 +56,13 @@ The supplied logo is the brand anchor: a deep-blue SreePayanam wordmark with a c
 
 ### Product context and register
 
-- **Audience and primary job:** Families, pilgrims, couples, student groups and corporate travellers need to turn a rough travel idea into a route, destination shortlist, planning estimate and enquiry.
+- **Audience and primary job:** Families, pilgrims, couples, student groups and corporate travellers need to turn a rough travel idea into a route, destination shortlist, time-aware route draft and enquiry.
 - **Target market(s) and evidence:** India-first travel planning, with domestic and international packages. Evidence is the existing National/International package model, the current planner fields, and the requested destination catalogue.
 - **Locale(s) and language policy:** English UI and copy; INR is the default customer-facing currency. Use clear, non-legalistic English and avoid inventing package policies.
 - **Usage scene:** Primarily mobile and small laptop use, often while comparing routes or messaging a travel desk. Touch targets must be generous and progress must remain obvious.
 - **Register:** Hybrid. `/`, `/about`, `/packages`, `/contact` are brand surfaces; `/ai-assistant`, `/checkout`, `/bookings` and `/admin` are product surfaces with stronger state and recovery rules.
 - **Memorable signature:** A twelve-frame route reel on the home hero, pairing each package type with a destination image and a practical route note.
-- **Restraint:** Form labels, prices, errors, dates and customer data remain calm, high-contrast and unsurprising.
+- **Restraint:** Form labels, commercial boundaries, errors, dates and customer data remain calm, high-contrast and unsurprising.
 - **Anti-references:** Neon “AI” gradients, anonymous hotel-booking grids, and generic dashboard chrome. The brand should feel grounded in the journeys it coordinates.
 - **Token ownership/runtime mapping:** Existing runtime CSS is the canonical source for this repository. `DESIGN.md` mirrors the accepted values; `frontend/src/index.css` maps the semantic variables and `frontend/src/App.css` consumes them. If tokens move to a generator later, update both the owner and this mapping in the same changeset.
 
@@ -98,11 +98,11 @@ Solid blue is the primary safe action. Outline ink is neutral. Orange is a focus
 
 ### Navigation and data display
 
-The navigation is a sticky white bar with a visible mobile menu button and blue link states. Package cards use real links for navigation. The planner's route ribbon and estimate panel are the primary data display; customer-facing quotes never expose supplier cost or internal profit.
+The navigation is a sticky white bar with a visible mobile menu button and blue link states. Package cards use real links for navigation. The planner's route ribbon and route-draft panel are the primary data display; the public planner and route brief never expose supplier cost, internal profit or commercial totals.
 
 ### Forms and overlays
 
-Product forms use `noValidate`, real labels, app-owned errors and first-error focus. Native select/date controls are intentional where platform-owned popups are acceptable; the destination picker is a searchable, grouped checkbox primitive because its broad guide, selection count, “select recommended” action and custom-place fallback are part of the product contract. A routebook is a starting point, not a restriction on customer requests. The quote PDF is generated from a server-authoritative calculation and is explicitly an estimate until confirmed.
+Product forms use `noValidate`, real labels, app-owned errors and first-error focus. Native select/date controls are intentional where platform-owned popups are acceptable; the destination picker is a searchable, grouped checkbox primitive because its broad guide, selection count, “select recommended” action and custom-place fallback are part of the product contract. A routebook is a starting point, not a restriction on customer requests. The route brief PDF is generated from the time-aware draft and keeps commercial details separate for the travel desk.
 
 ### Iconography
 
@@ -114,11 +114,11 @@ Motion has one job: make the route reveal feel like a journey. The home hero adv
 
 ### Content and data visualization
 
-Use plain travel language: “Choose a package”, “Add places”, “Review your estimate”, “Download quotation”. INR uses `en-IN` grouping. Dates are stored as date-only input values and displayed as local calendar dates; the backend validates money inputs and owns the final calculation.
+Use plain travel language: “Choose a destination”, “Add places”, “Review the route”, “Download route brief”. Dates are stored as date-only input values and displayed as local calendar dates; both dates derive the day/night count and the server owns any internal commercial calculation.
 
 ## Do's and Don'ts
 
 - **Do:** Let the route and destination choices carry the personality of the experience.
-- **Do:** Keep prices, privacy notes, error recovery and confirmation language unambiguous.
+- **Do:** Keep commercial boundaries, privacy notes, error recovery and confirmation language unambiguous.
 - **Don't:** Use a decorative animation to hide a slow or uncertain request.
 - **Don't:** Put raw backend errors, supplier cost, secrets or internal profit into customer-facing UI or PDFs.
