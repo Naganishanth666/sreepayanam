@@ -15,6 +15,8 @@ const TOUR_TYPES = [
   'MICE Tours','Education Tours','Adventure Tours'
 ];
 
+const ADMIN_VERIFY_TIMEOUT_MS = 20_000;
+
 const emptyForm = {
   title: '', destination: '', packageCategory: 'National', tourType: 'Family Tours',
   startingCity: '', endingCity: '', durationDays: '', durationNights: '',
@@ -969,22 +971,38 @@ const AdminPage = () => {
     }
     setLoading(true);
     setError('');
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), ADMIN_VERIFY_TIMEOUT_MS);
     try {
       const res = await fetch('/api/auth/verify-admin', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-admin-password': password
-        }
+        },
+        signal: controller.signal
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data.message || 'Incorrect admin password.');
+        if (res.status === 401) {
+          throw new Error('The admin password was not accepted. Please check it and try again.');
+        }
+        if (res.status === 503) {
+          throw new Error(data.message || 'Admin authentication is not configured on the server.');
+        }
+        throw new Error(data.message || 'Admin verification failed. Please try again.');
       }
       setIsAuthenticated(true);
     } catch (err) {
-      setError(err.message);
+      if (err.name === 'AbortError') {
+        setError('The admin service did not respond within 20 seconds. Render may be waking up; please try again.');
+      } else if (err instanceof TypeError) {
+        setError('The admin service could not be reached. Please check the deployment and try again.');
+      } else {
+        setError(err.message || 'Admin verification failed. Please try again.');
+      }
     } finally {
+      window.clearTimeout(timeoutId);
       setLoading(false);
     }
   };
@@ -1231,16 +1249,16 @@ const AdminPage = () => {
           <div style={sty.loginIcon}><LogIn size={32} color="var(--primary)" /></div>
           <h2 style={{ textAlign: 'center', marginBottom: 8, color: 'var(--dark)' }}>Admin Access</h2>
           <p style={{ textAlign: 'center', color: 'var(--text-muted)', marginBottom: 24, fontSize: '0.9rem' }}>SreePayanam Tours &amp; Travels</p>
-          {error && <div style={sty.errBox}>{error}</div>}
+          {error && <div role="alert" style={sty.errBox}>{error}</div>}
           <form onSubmit={handleLogin} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <label className="sr-only" htmlFor="admin-password">Admin password</label>
             <div className="password-field-wrap">
-              <input id="admin-password" type={showAdminPassword ? 'text' : 'password'} className="input-field" placeholder="Admin Password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" />
-              <button type="button" className="password-toggle" onClick={() => setShowAdminPassword(value => !value)} aria-label={showAdminPassword ? 'Hide admin password' : 'Show admin password'}>
+              <input id="admin-password" type={showAdminPassword ? 'text' : 'password'} className="input-field" placeholder="Admin Password" value={password} onChange={e => { setPassword(e.target.value); if (error) setError(''); }} autoComplete="current-password" disabled={loading} />
+              <button type="button" className="password-toggle" onClick={() => setShowAdminPassword(value => !value)} aria-label={showAdminPassword ? 'Hide admin password' : 'Show admin password'} disabled={loading}>
                 {showAdminPassword ? <EyeOff size={17} /> : <Eye size={17} />}
               </button>
             </div>
-            <button type="submit" className="btn btn-primary" disabled={loading}>
+            <button type="submit" className="btn btn-primary" disabled={loading} aria-busy={loading}>
               {loading ? 'Verifying...' : 'Login'}
             </button>
           </form>
