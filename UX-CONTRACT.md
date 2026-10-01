@@ -2,7 +2,7 @@
 
 ## Scope and sources
 
-This contract covers the public planner/route-brief workflow and the shared public shell. It records observable UI behavior; business policy remains in the API and package records.
+This contract covers the public planner/route-brief workflow, the shared public shell, and the admin account directory. It records observable UI behavior; business policy remains in the API and package records.
 
 | Concern | Source | Consequence in the UI |
 |---|---|---|
@@ -11,6 +11,7 @@ This contract covers the public planner/route-brief workflow and the shared publ
 | Internal commercial costing | Admin-only quotation route and costing engine (`backend/routes/quotationRoutes.js`, `backend/utils/costingEngine.js`) | Commercial previews are protected by admin authorization and are not requested by the public planner. |
 | Customer enquiries | `backend/routes/enquiryRoutes.js`, `backend/models/Enquiry.js` | Public POST is rate-limited, validated and idempotent by route reference; reads and updates require admin authorization. |
 | Admin/package changes | `backend/middleware/auth.js`, package routes | Admin-only mutations require `ADMIN_PASSWORD` or a valid admin JWT; no hard-coded fallback credential is accepted. |
+| Admin account directory | `backend/routes/adminRoutes.js`, `backend/models/User.js` | The admin can search and page through registered accounts and approve or revoke Agent access. Password hashes are never returned; role changes and account deletion are outside this workflow. |
 
 ## Canonical owners
 
@@ -20,6 +21,7 @@ This contract covers the public planner/route-brief workflow and the shared publ
 - Select/date controls: native controls are intentional for standard browser-owned popup behavior. The destination list is a checkbox group, not a native multi-select.
 - Toasts/status: persistent inline `role="status"`/`role="alert"` regions are used for the current app; no browser dialogs are allowed.
 - Route brief mutation: pessimistic route-draft confirmation, then enquiry submission, then PDF download.
+- Admin account directory: server-paginated account list with committed search and role/approval filters. Agent approval is a server-confirmed, pessimistic mutation; Customer/Admin roles are displayed read-only until a separate role-management policy exists.
 
 ## Planner flow ledger
 
@@ -38,6 +40,7 @@ This contract covers the public planner/route-brief workflow and the shared publ
 - Error: API failures are described without raw stack traces and provide Retry where safe.
 - Offline/degraded: form input remains available; the app does not claim the enquiry was sent or the route draft is final until the server confirms.
 - Success: route reference, timing status, selected/planned places and the day-by-day route remain visible; commercial details stay separate.
+- Admin accounts: loading retains the directory frame, empty and no-results states explain the next action, server failures keep filters and provide retry, and approval actions show a busy state until the server confirms the change.
 - Reduced motion: step transitions and route-stop movement become immediate/opacity-only.
 
 ## Data and safety behavior

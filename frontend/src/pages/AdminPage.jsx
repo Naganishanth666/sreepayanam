@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trash2, Plus, LogIn, ChevronDown, ChevronUp, X, Edit, Eye, EyeOff } from 'lucide-react';
+import { Trash2, Plus, LogIn, ChevronDown, ChevronUp, X, Edit, Eye, EyeOff, Users, ShieldCheck, Search, RefreshCw, ChevronLeft, ChevronRight, CheckCircle2, Clock3, Building2 } from 'lucide-react';
 import { IMAGE_PRESETS } from '../utils/imagePresets';
 import NicheTravelFields from '../components/NicheTravelFields';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -16,6 +16,13 @@ const TOUR_TYPES = [
 ];
 
 const ADMIN_VERIFY_TIMEOUT_MS = 20_000;
+const ADMIN_ACCOUNTS_TIMEOUT_MS = 15_000;
+
+const formatAccountDate = value => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown date';
+  return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+};
 
 const emptyForm = {
   title: '', destination: '', packageCategory: 'National', tourType: 'Family Tours',
@@ -812,6 +819,21 @@ const AdminPage = () => {
   const [bookingFilterStatus, setBookingFilterStatus] = useState('All');
   const [bookingFilterPayment, setBookingFilterPayment] = useState('All');
 
+  // Account directory states
+  const [accounts, setAccounts] = useState([]);
+  const [accountsLoading, setAccountsLoading] = useState(false);
+  const [accountsError, setAccountsError] = useState('');
+  const [accountsNotice, setAccountsNotice] = useState('');
+  const [accountSearchInput, setAccountSearchInput] = useState('');
+  const [accountSearch, setAccountSearch] = useState('');
+  const [accountRoleFilter, setAccountRoleFilter] = useState('All');
+  const [accountApprovalFilter, setAccountApprovalFilter] = useState('All');
+  const [accountPage, setAccountPage] = useState(1);
+  const [accountPagination, setAccountPagination] = useState({ page: 1, pages: 1, total: 0, limit: 20 });
+  const [accountActionId, setAccountActionId] = useState(null);
+  const [accountApprovalTarget, setAccountApprovalTarget] = useState(null);
+  const accountsAbortRef = useRef(null);
+
   useEffect(() => {
     if (builderParams.suggestTemples && builderParams.destination) {
       setBuilderParams(prev => ({
@@ -831,6 +853,14 @@ const AdminPage = () => {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (isAuthenticated && activeTab === 'accounts') {
+      fetchAccounts();
+    }
+    return () => accountsAbortRef.current?.abort();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, activeTab, accountPage, accountRoleFilter, accountApprovalFilter, accountSearch]);
 
   const fetchPackages = async () => {
     try {
@@ -884,6 +914,94 @@ const AdminPage = () => {
       }
     } catch (err) { console.error(err); }
     finally { setBookingsLoading(false); }
+  };
+
+  const fetchAccounts = async () => {
+    accountsAbortRef.current?.abort();
+    const controller = new AbortController();
+    accountsAbortRef.current = controller;
+    const timeoutId = window.setTimeout(() => controller.abort(), ADMIN_ACCOUNTS_TIMEOUT_MS);
+    setAccountsLoading(true);
+    setAccountsError('');
+
+    try {
+      const params = new URLSearchParams({
+        page: String(accountPage),
+        limit: '20',
+        role: accountRoleFilter,
+        approval: accountApprovalFilter
+      });
+      if (accountSearch) params.set('search', accountSearch);
+
+      const res = await fetch(`/api/admin/users?${params.toString()}`, {
+        headers: { 'x-admin-password': password },
+        signal: controller.signal
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Could not load accounts.');
+
+      setAccounts(Array.isArray(data.accounts) ? data.accounts : []);
+      setAccountPagination(data.pagination || { page: accountPage, pages: 1, total: 0, limit: 20 });
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        setAccountsError(err.name === 'TypeError'
+          ? 'The account service could not be reached. Please try again.'
+          : err.message || 'Could not load accounts.');
+      }
+    } finally {
+      window.clearTimeout(timeoutId);
+      if (accountsAbortRef.current === controller) {
+        accountsAbortRef.current = null;
+        setAccountsLoading(false);
+      }
+    }
+  };
+
+  const requestAccountApproval = account => {
+    if (account.role !== 'Agent') return;
+    setAccountsError('');
+    setAccountsNotice('');
+    setAccountApprovalTarget({ account, approved: !account.isApproved });
+  };
+
+  const confirmAccountApproval = async () => {
+    const target = accountApprovalTarget;
+    if (!target) return;
+    const { account, approved } = target;
+    setAccountActionId(account.id);
+    setAccountsError('');
+    setAccountsNotice('');
+
+    try {
+      const res = await fetch(`/api/admin/users/${account.id}/approval`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ approved })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Could not update account approval.');
+      setAccountsNotice(data.message || (approved ? 'Agent account approved.' : 'Agent approval revoked.'));
+      await fetchAccounts();
+      setAccountApprovalTarget(null);
+    } catch (err) {
+      setAccountsError(err.message || 'Could not update account approval.');
+    } finally {
+      setAccountActionId(null);
+    }
+  };
+
+  const applyAccountSearch = e => {
+    e.preventDefault();
+    setAccountPage(1);
+    setAccountsNotice('');
+    setAccountSearch(accountSearchInput.trim());
+  };
+
+  const clearAccountSearch = () => {
+    setAccountSearchInput('');
+    setAccountSearch('');
+    setAccountPage(1);
+    setAccountsNotice('');
   };
 
   const handleBookingStatusUpdate = async (bookingId, newStatus) => {
@@ -1280,7 +1398,7 @@ const AdminPage = () => {
         </div>
 
         {/* Navigation Tabs */}
-        <div style={{ display: 'flex', gap: 12, marginBottom: 30 }}>
+        <div style={{ display: 'flex', gap: 12, marginBottom: 30, flexWrap: 'wrap' }}>
           <button
             type="button"
             onClick={() => setActiveTab('packages')}
@@ -1328,6 +1446,22 @@ const AdminPage = () => {
             }}
           >
             💼 Paid Booking CRM &amp; Auditing
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('accounts')}
+            className="btn"
+            style={{
+              background: activeTab === 'accounts' ? 'var(--primary)' : 'white',
+              color: activeTab === 'accounts' ? 'white' : 'var(--text-main)',
+              border: '1.5px solid ' + (activeTab === 'accounts' ? 'var(--primary)' : '#e2e8f0'),
+              fontWeight: 700,
+              padding: '10px 24px',
+              borderRadius: 10,
+              cursor: 'pointer'
+            }}
+          >
+            <Users size={17} aria-hidden="true" /> Accounts
           </button>
         </div>
 
@@ -3274,6 +3408,194 @@ const AdminPage = () => {
               </div>
             </div>
           </div>
+        ) : activeTab === 'accounts' ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: 24, alignItems: 'start' }}>
+            <div className="glass-card" style={{ padding: 32 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginBottom: 22 }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--primary)', fontSize: '0.75rem', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>
+                    <ShieldCheck size={16} aria-hidden="true" /> Account desk
+                  </div>
+                  <h2 style={{ margin: 0, color: 'var(--dark)' }}>Accounts &amp; access</h2>
+                  <p style={{ margin: '6px 0 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                    Review registered customers and manage travel-agent approvals.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={fetchAccounts}
+                  disabled={accountsLoading}
+                  aria-busy={accountsLoading}
+                  style={{ padding: '8px 14px', fontSize: '0.82rem' }}
+                >
+                  <RefreshCw size={15} aria-hidden="true" /> Refresh
+                </button>
+              </div>
+
+              <form onSubmit={applyAccountSearch} noValidate style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'end', background: '#f8fafc', border: '1px solid #e2e8f0', padding: 14, borderRadius: 12, marginBottom: 20 }}>
+                <div style={{ flex: '1 1 240px', minWidth: 0 }}>
+                  <label htmlFor="account-search" style={lbl}>Search accounts</label>
+                  <div style={{ position: 'relative', marginTop: 6 }}>
+                    <Search size={16} aria-hidden="true" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <input
+                      id="account-search"
+                      type="search"
+                      className="input-field"
+                      placeholder="Name, email, phone or agency"
+                      value={accountSearchInput}
+                      onChange={e => setAccountSearchInput(e.target.value)}
+                      style={{ paddingLeft: 36, paddingRight: accountSearchInput ? 38 : 12, width: '100%' }}
+                    />
+                    {accountSearchInput && (
+                      <button type="button" onClick={clearAccountSearch} aria-label="Clear account search" style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 6, color: 'var(--text-muted)', background: 'transparent', cursor: 'pointer' }}>
+                        <X size={15} aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div style={{ flex: '0 1 150px' }}>
+                  <label htmlFor="account-role-filter" style={lbl}>Role</label>
+                  <select id="account-role-filter" className="input-field" value={accountRoleFilter} onChange={e => { setAccountRoleFilter(e.target.value); setAccountPage(1); setAccountsNotice(''); }} style={{ marginTop: 6, width: '100%', padding: '8px 12px' }}>
+                    <option value="All">All roles</option>
+                    <option value="Customer">Customers</option>
+                    <option value="Agent">Travel agents</option>
+                    <option value="Admin">Admins</option>
+                  </select>
+                </div>
+                <div style={{ flex: '0 1 170px' }}>
+                  <label htmlFor="account-approval-filter" style={lbl}>Approval</label>
+                  <select id="account-approval-filter" className="input-field" value={accountApprovalFilter} onChange={e => { setAccountApprovalFilter(e.target.value); setAccountPage(1); setAccountsNotice(''); }} style={{ marginTop: 6, width: '100%', padding: '8px 12px' }}>
+                    <option value="All">All accounts</option>
+                    <option value="Pending">Needs review</option>
+                  <option value="Approved">Approved / registered</option>
+                  </select>
+                </div>
+                <button type="submit" className="btn btn-primary" style={{ padding: '9px 16px', fontSize: '0.82rem' }}>Apply filters</button>
+              </form>
+
+              {accountsError && <div role="alert" style={sty.errBox}>{accountsError}</div>}
+              {accountsNotice && <div role="status" style={sty.succBox}>{accountsNotice}</div>}
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+                <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                  {accountPagination.total} account{accountPagination.total === 1 ? '' : 's'} match these filters.
+                </p>
+                {accountPagination.pages > 1 && (
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                    Page {accountPagination.page} of {accountPagination.pages}
+                  </span>
+                )}
+              </div>
+
+              {accountsLoading ? (
+                <div role="status" aria-live="polite" style={{ minHeight: 220, display: 'grid', placeItems: 'center', color: 'var(--text-muted)' }}>
+                  Loading account directory...
+                </div>
+              ) : accounts.length === 0 ? (
+                <div style={{ minHeight: 220, display: 'grid', placeItems: 'center', textAlign: 'center', padding: 24, border: '1px dashed #cbd5e1', borderRadius: 12, background: '#f8fafc' }}>
+                  <div>
+                    <Users size={28} color="var(--primary)" aria-hidden="true" style={{ margin: '0 auto 10px' }} />
+                    <h3 style={{ margin: '0 0 6px', color: 'var(--dark)', fontSize: '1rem' }}>
+                      {accountSearch || accountRoleFilter !== 'All' || accountApprovalFilter !== 'All' ? 'No accounts match these filters' : 'No accounts registered yet'}
+                    </h3>
+                    <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.84rem' }}>
+                      {accountSearch || accountRoleFilter !== 'All' || accountApprovalFilter !== 'All' ? 'Clear a filter or try a different search.' : 'New customer and agent registrations will appear here.'}
+                    </p>
+                    {(accountSearch || accountRoleFilter !== 'All' || accountApprovalFilter !== 'All') && (
+                      <button type="button" className="btn btn-outline" onClick={() => { clearAccountSearch(); setAccountRoleFilter('All'); setAccountApprovalFilter('All'); }} style={{ marginTop: 14, padding: '8px 14px', fontSize: '0.8rem' }}>
+                        Clear filters
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 12 }}>
+                  <table style={{ width: '100%', minWidth: 760, borderCollapse: 'collapse', fontSize: '0.84rem' }} aria-label="Accounts directory">
+                    <thead>
+                      <tr style={{ background: '#f8fafc', color: '#475569', textAlign: 'left' }}>
+                        <th scope="col" style={{ padding: '12px 14px', fontWeight: 800 }}>Account</th>
+                        <th scope="col" style={{ padding: '12px 14px', fontWeight: 800 }}>Role</th>
+                        <th scope="col" style={{ padding: '12px 14px', fontWeight: 800 }}>Contact</th>
+                        <th scope="col" style={{ padding: '12px 14px', fontWeight: 800 }}>Joined</th>
+                        <th scope="col" style={{ padding: '12px 14px', fontWeight: 800, textAlign: 'right' }}>Access</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {accounts.map(account => {
+                        const isPendingAgent = account.role === 'Agent' && !account.isApproved;
+                        const isActionBusy = accountActionId === account.id;
+                        return (
+                          <tr key={account.id} style={{ borderTop: '1px solid #e2e8f0', verticalAlign: 'top' }}>
+                            <td style={{ padding: '14px', maxWidth: 240 }}>
+                              <div style={{ fontWeight: 800, color: 'var(--dark)' }}>{account.fullName || 'Unnamed account'}</div>
+                              <div style={{ color: 'var(--text-muted)', marginTop: 3, wordBreak: 'break-word' }}>{account.email}</div>
+                              {account.agencyName && <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6, color: 'var(--primary)', fontSize: '0.76rem', fontWeight: 700 }}><Building2 size={13} aria-hidden="true" /> {account.agencyName}</div>}
+                            </td>
+                            <td style={{ padding: '14px' }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 9px', borderRadius: 999, background: account.role === 'Admin' ? '#eff6ff' : account.role === 'Agent' ? '#fff7ed' : '#f1f5f9', color: account.role === 'Admin' ? '#1d4ed8' : account.role === 'Agent' ? '#c2410c' : '#475569', fontSize: '0.72rem', fontWeight: 800 }}>
+                                {account.role}
+                              </span>
+                              <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 5, color: isPendingAgent ? '#b45309' : '#047857', fontSize: '0.76rem', fontWeight: 700 }}>
+                                {isPendingAgent ? <Clock3 size={14} aria-hidden="true" /> : <CheckCircle2 size={14} aria-hidden="true" />}
+                                {isPendingAgent ? 'Needs approval' : account.role === 'Agent' ? 'Approved' : 'Registered'}
+                              </div>
+                            </td>
+                            <td style={{ padding: '14px', color: 'var(--text-main)' }}>
+                              <div>{account.mobile || 'No phone added'}</div>
+                              <div style={{ color: 'var(--text-muted)', marginTop: 4 }}>{[account.city, account.state].filter(Boolean).join(', ') || 'Location not added'}</div>
+                            </td>
+                            <td style={{ padding: '14px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatAccountDate(account.createdAt)}</td>
+                            <td style={{ padding: '14px', textAlign: 'right' }}>
+                              {account.role === 'Agent' ? (
+                                <button type="button" className={account.isApproved ? 'btn btn-outline' : 'btn btn-primary'} onClick={() => requestAccountApproval(account)} disabled={isActionBusy} aria-busy={isActionBusy} style={{ padding: '7px 10px', fontSize: '0.74rem', whiteSpace: 'nowrap' }}>
+                                  {isActionBusy ? 'Saving...' : account.isApproved ? 'Revoke approval' : 'Approve agent'}
+                                </button>
+                              ) : (
+                                <span style={{ color: 'var(--text-muted)', fontSize: '0.76rem' }}>Managed by role policy</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {accountPagination.pages > 1 && (
+                <nav aria-label="Account directory pages" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 16 }}>
+                  <button type="button" className="btn btn-outline" aria-label="Previous account page" onClick={() => setAccountPage(page => Math.max(1, page - 1))} disabled={accountPage <= 1 || accountsLoading} style={{ padding: '7px 10px' }}>
+                    <ChevronLeft size={16} aria-hidden="true" />
+                  </button>
+                  <span style={{ minWidth: 72, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>Page {accountPage}</span>
+                  <button type="button" className="btn btn-outline" aria-label="Next account page" onClick={() => setAccountPage(page => Math.min(accountPagination.pages, page + 1))} disabled={accountPage >= accountPagination.pages || accountsLoading} style={{ padding: '7px 10px' }}>
+                    <ChevronRight size={16} aria-hidden="true" />
+                  </button>
+                </nav>
+              )}
+            </div>
+
+            <aside>
+              <div className="glass-card" style={{ padding: 24, marginBottom: 16, background: 'linear-gradient(145deg, #0b3d91 0%, #183a68 100%)', color: 'white' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#f7d46b', fontSize: '0.72rem', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                  <ShieldCheck size={16} aria-hidden="true" /> Access policy
+                </div>
+                <h3 style={{ margin: '14px 0 8px', fontSize: '1.35rem', lineHeight: 1.1 }}>Keep the travel desk trusted.</h3>
+                <p style={{ margin: 0, color: 'rgba(255,255,255,0.78)', fontSize: '0.84rem', lineHeight: 1.6 }}>
+                  Agent accounts cannot log in until an admin approves them. Customers and admins remain visible for account context, but their roles are not changed from this screen.
+                </p>
+              </div>
+              <div className="glass-card" style={{ padding: 24 }}>
+                <h3 style={{ fontSize: '1rem', marginBottom: 14, color: 'var(--dark)' }}>What this desk shows</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                  <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}><Users size={16} color="var(--primary)" aria-hidden="true" /><span>Registered customers, agents and admins.</span></div>
+                  <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}><Search size={16} color="var(--primary)" aria-hidden="true" /><span>Search by name, email, phone or agency.</span></div>
+                  <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}><ShieldCheck size={16} color="var(--primary)" aria-hidden="true" /><span>Approval actions are confirmed by the server before the list refreshes.</span></div>
+                </div>
+              </div>
+            </aside>
+          </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 30, alignItems: 'start' }}>
             {/* Bookings CRM List */}
@@ -3967,6 +4289,15 @@ const AdminPage = () => {
             </div>
           )}
         </AnimatePresence>
+        <ConfirmDialog
+          open={Boolean(accountApprovalTarget)}
+          title={accountApprovalTarget?.approved ? 'Approve this agent account?' : 'Revoke agent approval?'}
+          message={accountApprovalTarget ? `${accountApprovalTarget.approved ? 'Approve' : 'Revoke approval for'} ${accountApprovalTarget.account.fullName || 'this agent'}? ${accountApprovalTarget.approved ? 'This allows the account to sign in as an approved travel agent.' : 'This prevents the account from signing in until an admin approves it again.'}` : ''}
+          confirmLabel={accountApprovalTarget?.approved ? 'Approve agent' : 'Revoke approval'}
+          onConfirm={confirmAccountApproval}
+          onCancel={() => setAccountApprovalTarget(null)}
+          busy={Boolean(accountActionId)}
+        />
         <ConfirmDialog
           open={Boolean(deleteTarget)}
           title="Delete this tour package?"

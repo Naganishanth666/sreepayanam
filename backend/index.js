@@ -10,6 +10,7 @@ const authRoutes = require('./routes/authRoutes');
 const enquiryRoutes = require('./routes/enquiryRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
 const quotationRoutes = require('./routes/quotationRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 const { checkAdmin } = require('./middleware/auth');
 
 const app = express();
@@ -203,6 +204,7 @@ app.post('/api/migrate-packages', checkAdmin, async (req, res) => {
 app.use('/api/packages', packageRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/enquiries', enquiryRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/quotations', quotationRoutes);
