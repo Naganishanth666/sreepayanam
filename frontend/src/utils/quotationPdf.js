@@ -1,4 +1,5 @@
 import { createStayDetails, createStaySummary } from './stayPlan.js';
+import { buildStandardQuotationPdfBlob } from './standardQuotationPdf.js';
 
 const logoSrc = new URL('../assets/sreepayanam-official-logo.png', import.meta.url).href;
 
@@ -222,6 +223,7 @@ const createLines = ({ form, draft, selectedPackage, selectedDestinations }) => 
     addParagraph(`Stops: ${Array.isArray(day.places) && day.places.length ? day.places.join(' | ') : 'Flexible local discovery'}`, { maxChars: 88 });
     if (day.activities) addParagraph(`Plan: ${day.activities}`, { maxChars: 88 });
     if (day.transit) addParagraph(`Travel: ${day.transit}`, { maxChars: 88 });
+    if (day.entryWindow) addParagraph(`Darshan / entry: ${day.entryWindow}`, { maxChars: 88 });
     if (day.meal) addParagraph(`Meals: ${day.meal}`, { maxChars: 88 });
     const stay = createStayDetails({ ...form, destination: draft?.destination || form.destination }, day, index, durationNights);
     addParagraph(index < durationNights
@@ -254,80 +256,6 @@ const createLines = ({ form, draft, selectedPackage, selectedDestinations }) => 
   inclusions.forEach(item => addParagraph(`- ${item}`, { maxChars: 88 }));
   lines.push({ text: 'Noted for separate confirmation:', bold: true, leading: 16 });
   exclusions.forEach(item => addParagraph(`- ${item}`, { maxChars: 88 }));
-  return lines;
-};
-
-const addWrapped = (lines, value, maxChars = 90) => {
-  wrapText(value, maxChars).forEach(text => lines.push({ text }));
-  lines.push({ text: '', leading: 6 });
-};
-
-const createApprovedQuoteLines = quote => {
-  const lines = [];
-  const route = quote.route || {};
-  const review = route.planningReview || {};
-  const terms = quote.terms || {};
-  const places = quote.selectedPlaces || [];
-  const customer = quote.customer || {};
-  const days = route.itinerary || [];
-  const date = quote.approvedAt ? String(quote.approvedAt).slice(0, 10) : '';
-
-  lines.push({ type: 'meta', text: `Quotation ${quote.reference} | Version ${quote.version} | Approved ${formatDate(date)}` });
-  if (quote.approvedBy) lines.push({ type: 'meta', text: `Approved by ${quote.approvedBy}` });
-  lines.push({ type: 'meta', text: `Enquiry ${quote.enquiryReference} | Prepared for ${customer.name || 'Traveller'}` });
-  lines.push({ type: 'meta', text: `${customer.email || 'Email to be confirmed'} | ${customer.mobile || 'Mobile to be confirmed'}` });
-  lines.push({ text: '', leading: 10 });
-
-  lines.push({ type: 'heading', text: 'Route overview' });
-  addWrapped(lines, `${route.startingCity || 'Flexible departure'} -> ${route.endingCity || route.destination || 'Destination to be confirmed'}`);
-  addWrapped(lines, `Travel window: ${formatDate(route.travelStartDate)} to ${formatDate(route.returnDate)} | ${route.durationDays} days / ${route.durationNights} nights | ${customer.adults || 0} adults, ${customer.children || 0} children`);
-  addWrapped(lines, `${places.length} selected places: ${places.join(', ')}`);
-  if (route.overview) addWrapped(lines, route.overview);
-
-  lines.push({ type: 'heading', text: 'Planning review' });
-  lines.push({ text: `Status: ${review.status === 'not_feasible' ? 'Route changes needed' : review.status === 'tight' ? 'Ambitious timing' : 'Reviewed for selected timing'}`, bold: true });
-  if (review.summary) addWrapped(lines, review.summary);
-  lines.push({ text: `Selected places: ${places.length} | Planned stops: ${days.flatMap(day => day.places || []).length} | ${route.durationDays} days / ${route.durationNights} nights` });
-  if (review.unplacedPlaces?.length) addWrapped(lines, `Places needing review: ${review.unplacedPlaces.join(', ')}`);
-  if (terms.routeReviewNote) addWrapped(lines, `Travel-desk review: ${terms.routeReviewNote}`);
-
-  lines.push({ type: 'heading', text: 'Day-by-day route' });
-  days.forEach(day => {
-    lines.push({ text: `Day ${day.day} - ${day.title || 'Discover the route'}`, bold: true, leading: 16, keepWithNext: true });
-    if (day.base) lines.push({ text: `Area: ${day.base}` });
-    addWrapped(lines, `Stops: ${day.places?.length ? day.places.join(' | ') : 'Flexible local discovery'}`, 88);
-    if (day.activities) addWrapped(lines, `Plan: ${day.activities}`, 88);
-    if (day.transit) addWrapped(lines, `Travel: ${day.transit}`, 88);
-    if (day.meal) addWrapped(lines, `Meals: ${day.meal}`, 88);
-    if (day.hotel?.name) addWrapped(lines, `Stay planning: ${day.hotel.name}${day.hotel.rating ? ` | ${day.hotel.rating}` : ''}${day.hotel.desc ? ` - ${day.hotel.desc}` : ''}`, 88);
-  });
-
-  lines.push({ type: 'heading', text: 'Destination detail references' });
-  (quote.destinationReferences || []).forEach(reference => {
-    const label = `${reference.name} - ${reference.sourceType}; checked ${formatDate(reference.lastChecked)} (open details)`;
-    wrapText(label, 88).forEach(text => lines.push({ text, link: reference.url }));
-  });
-  lines.push({ text: '', leading: 8 });
-
-  lines.push({ type: 'heading', text: 'Economic, Deluxe and Premium' });
-  (quote.tiers || []).forEach(tier => {
-    const money = amount => `INR ${Number(amount || 0).toLocaleString('en-IN')}`;
-    lines.push({ text: `${tier.name}: ${money(tier.price?.total)} group | ${money(tier.price?.perPerson)} per person`, bold: true, leading: 17, keepWithNext: true });
-    addWrapped(lines, `Stay: ${tier.accommodation}. Transport: ${tier.transport}. Meals: ${tier.meals}.`, 88);
-    if (tier.activities) addWrapped(lines, `Activities: ${tier.activities}`, 88);
-    lines.push({ text: `Supplier source checked: ${formatDate(tier.sourceCheckedAt)} | Category/equivalent subject to availability`, size: 8.5, leading: 16 });
-  });
-
-  lines.push({ type: 'heading', text: 'Inclusions and exclusions' });
-  (terms.inclusions || []).forEach(item => addWrapped(lines, `Included: ${item}`, 88));
-  (terms.exclusions || []).forEach(item => addWrapped(lines, `Excluded: ${item}`, 88));
-
-  lines.push({ type: 'heading', text: 'Commercial terms' });
-  addWrapped(lines, `Price validity: ${formatDate(terms.validUntil)}. Subject to availability and supplier confirmation.`);
-  addWrapped(lines, `Tax: ${terms.taxNote}`);
-  addWrapped(lines, `Payment schedule: ${terms.paymentSchedule}`);
-  addWrapped(lines, `Cancellation terms: ${terms.cancellationTerms}`);
-  addWrapped(lines, `Assumptions: ${terms.assumptions}`);
   return lines;
 };
 
@@ -395,16 +323,11 @@ export const downloadQuotationPdf = async ({ form, draft, selectedPackage, selec
   return true;
 };
 
-export const buildApprovedQuotationPdfBlob = (quote, logoImage) => {
-  if (!quote || quote.status !== 'Approved') throw new Error('The quotation has not been approved.');
-  const pages = paginateLines(createApprovedQuoteLines(quote));
-  const streams = pages.map((pageLines, index) => buildPage(pageLines, index + 1, pages.length, logoImage, 'quotation'));
-  return buildPdf(streams, logoImage);
-};
+export const buildApprovedQuotationPdfBlob = quote => buildStandardQuotationPdfBlob(quote);
 
 export const downloadApprovedQuotationPdf = async quote => {
-  const logoImage = await loadLogoJpeg();
-  const blob = buildApprovedQuotationPdfBlob(quote, logoImage);
+  await document.fonts?.ready;
+  const blob = buildApprovedQuotationPdfBlob(quote);
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

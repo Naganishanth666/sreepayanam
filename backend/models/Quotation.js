@@ -32,6 +32,7 @@ const quotationSchema = new mongoose.Schema({
     paymentSchedule: String,
     cancellationTerms: String,
     assumptions: String,
+    specialNotes: String,
     inclusions: [String],
     exclusions: [String],
     routeReviewNote: String

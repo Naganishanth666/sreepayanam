@@ -4,8 +4,10 @@ const { calculateCosting, HOTEL_RATES, VEHICLE_RATES, MEAL_RATES } = require('..
 const { checkAdmin, authAdmin } = require('../middleware/auth');
 const Enquiry = require('../models/Enquiry');
 const Quotation = require('../models/Quotation');
+const TravelDocumentPack = require('../models/TravelDocumentPack');
 const User = require('../models/User');
 const { BUFFER_PERCENT, MARKUP_PERCENT, priceTier } = require('../utils/quotationPricing');
+const { requiredFields, sanitizeFields, completionProblems } = require('../utils/travelPackValidation');
 
 const router = express.Router();
 const FIXED_MARKUP_PERCENT = MARKUP_PERCENT;
@@ -167,6 +169,8 @@ const routeFromEnquiry = enquiry => {
     planReference: cleanText(source.planReference || enquiry.quoteReference, 80),
     title: cleanText(source.title, 160),
     destination: cleanText(source.destination || enquiry.toLocation, 180),
+    packageCategory: cleanText(enquiry.preferredCategory, 120),
+    packageName: cleanText(enquiry.detailedPreferences?.packageName, 160),
     startingCity: cleanText(source.startingCity || enquiry.fromLocation, 160),
     endingCity: cleanText(source.endingCity || enquiry.toLocation, 160),
     travelStartDate: dateOnly(source.travelStartDate) || dateFromEnquiry(enquiry.travelDate),
@@ -187,6 +191,8 @@ const routeFromEnquiry = enquiry => {
       activities: cleanText(day?.activities, 1200),
       transit: cleanText(day?.transit, 700),
       meal: cleanText(day?.meal, 700),
+      entryWindow: cleanText(day?.entryWindow, 500)
+        || 'Entry and darshan timing to be confirmed from an official source.',
       hotel: {
         name: cleanText(day?.hotel?.name, 160),
         rating: cleanText(day?.hotel?.rating, 80),
@@ -199,6 +205,7 @@ const routeFromEnquiry = enquiry => {
 const editedRouteFromInput = (enquiry, requested, selectedPlaces) => {
   const route = routeFromEnquiry(enquiry);
   if (!route) return null;
+  route.endingCity = cleanText(requested?.endingCity ?? route.endingCity, 160);
   const days = Array.isArray(requested?.itinerary) ? requested.itinerary : [];
   route.itinerary = route.itinerary.map((day, index) => {
     const input = days[index] || {};
@@ -211,6 +218,7 @@ const editedRouteFromInput = (enquiry, requested, selectedPlaces) => {
       activities: cleanText(input.activities ?? day.activities, 1200),
       transit: cleanText(input.transit ?? day.transit, 700),
       meal: cleanText(input.meal ?? day.meal, 700),
+      entryWindow: cleanText(input.entryWindow ?? day.entryWindow, 500),
       hotel: {
         name: cleanText(hotel.name ?? day.hotel.name, 160),
         rating: cleanText(hotel.rating ?? day.hotel.rating, 80),
@@ -240,7 +248,18 @@ const quotationInput = (body, enquiry, existing) => {
       mobile: cleanText(enquiry.mobileNumber, 24),
       adults: Number(enquiry.adultCount) || 1,
       children: Number(enquiry.childCount) || 0,
-      passengers: passengerCount
+      infants: numberInRange(enquiry.detailedPreferences?.infantCount, 0, 0, 20),
+      passengers: passengerCount,
+      childAges: Array.isArray(enquiry.detailedPreferences?.childAges)
+        ? enquiry.detailedPreferences.childAges.slice(0, 30).map(Number).filter(age => Number.isInteger(age) && age >= 0 && age <= 17)
+        : [],
+      rooms: numberInRange(body.customer?.rooms, numberInRange(enquiry.hotelRooms, 0, 0, 30), 0, 30),
+      preferredTier: cleanText(enquiry.detailedPreferences?.preferredTier, 40),
+      mealPreference: cleanText(enquiry.detailedPreferences?.mealPreference, 80),
+      vehicleType: cleanText(enquiry.carType, 80),
+      accessibilityNeeds: cleanText(enquiry.detailedPreferences?.accessibilityNeeds, 300),
+      foodRestrictions: cleanText(enquiry.detailedPreferences?.foodRestrictions, 300),
+      visitTimingPreferences: cleanText(enquiry.detailedPreferences?.visitTimingPreferences, 300)
     },
     route: editedRouteFromInput(enquiry, body.route, selectedPlaces),
     selectedPlaces,
@@ -274,6 +293,7 @@ const quotationInput = (body, enquiry, existing) => {
       paymentSchedule: cleanText(body.terms?.paymentSchedule, 800),
       cancellationTerms: cleanText(body.terms?.cancellationTerms, 1200),
       assumptions: cleanText(body.terms?.assumptions, 1200),
+      specialNotes: cleanText(body.terms?.specialNotes, 800),
       inclusions: cleanLines(body.terms?.inclusions),
       exclusions: cleanLines(body.terms?.exclusions),
       routeReviewNote: cleanText(body.terms?.routeReviewNote, 800)
@@ -289,7 +309,9 @@ const approvalProblems = quote => {
   const problems = [];
   const today = todayInIndia();
   if (!quote.route?.itinerary?.length) problems.push('The day-by-day route is missing.');
-  if (quote.route?.itinerary?.some(day => !day.title || !day.activities)) problems.push('Each day needs a title and a reviewed plan.');
+  if (!quote.route?.endingCity) problems.push('Confirm the trip return point.');
+  if (quote.route?.durationNights > 0 && !quote.customer?.rooms) problems.push('Confirm the room count for the selected nights.');
+  if (quote.route?.itinerary?.some(day => !day.title || !day.activities || !day.entryWindow)) problems.push('Each day needs a title, reviewed plan and entry-window status.');
   if (!quote.selectedPlaces?.length) problems.push('The selected-place list is missing.');
   if (quote.destinationReferences?.length !== quote.selectedPlaces?.length) problems.push('Each selected place needs its own detail reference.');
   for (const reference of quote.destinationReferences || []) {
@@ -406,6 +428,111 @@ router.get('/:id/download-data', checkAdmin, async (req, res) => {
     } });
   } catch {
     res.status(400).json({ message: 'Could not prepare the approved quotation.' });
+  }
+});
+
+const packQuoteData = quote => ({
+  reference: quote.reference,
+  version: quote.version,
+  status: quote.status,
+  enquiryReference: quote.enquiryReference,
+  customer: quote.customer,
+  route: quote.route,
+  selectedPlaces: quote.selectedPlaces,
+  destinationReferences: quote.destinationReferences,
+  tiers: (quote.tiers || []).map(({ name, price, sourceCheckedAt, accommodation, transport, meals, activities }) => ({
+    name, price, sourceCheckedAt, accommodation, transport, meals, activities
+  })),
+  terms: quote.terms,
+  approvedAt: quote.approval?.at,
+  approvedBy: quote.approval?.displayName
+});
+
+const currentAdmin = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id).select('fullName role');
+    if (!user || user.role !== 'Admin') return res.status(403).json({ message: 'A current Admin account is required for document packs.' });
+    req.currentAdminUser = user;
+    next();
+  } catch {
+    res.status(403).json({ message: 'Could not verify the current Admin account.' });
+  }
+};
+
+router.get('/:id/pack', authAdmin, currentAdmin, async (req, res) => {
+  try {
+    const quote = await Quotation.findById(req.params.id).lean();
+    if (!quote) return res.status(404).json({ message: 'Quotation not found.' });
+    if (quote.status !== 'Approved') return res.status(409).json({ message: 'Approve the quotation before preparing its document pack.' });
+    const pack = await TravelDocumentPack.findOne({ quotation: quote._id }).lean();
+    res.json({ quote: packQuoteData(quote), pack: pack || { status: 'Draft', fields: {}, completedSections: [], checks: {} }, requiredFields: requiredFields(quote) });
+  } catch {
+    res.status(400).json({ message: 'Could not load the document pack.' });
+  }
+});
+
+router.put('/:id/pack', authAdmin, currentAdmin, async (req, res) => {
+  try {
+    const quote = await Quotation.findById(req.params.id).lean();
+    if (!quote) return res.status(404).json({ message: 'Quotation not found.' });
+    if (quote.status !== 'Approved') return res.status(409).json({ message: 'Approve the quotation before preparing its document pack.' });
+    let pack = await TravelDocumentPack.findOne({ quotation: quote._id });
+    if (pack?.status === 'Finalized') return res.status(409).json({ message: 'This document pack is finalized and locked.' });
+    if (!pack) pack = new TravelDocumentPack({ quotation: quote._id });
+    pack.fields = sanitizeFields(req.body?.fields, quote);
+    pack.completedSections = [...new Set((req.body?.completedSections || []).map(Number).filter(number => Number.isInteger(number) && number >= 1 && number <= 12))];
+    pack.checks = {
+      accountantReviewed: req.body?.checks?.accountantReviewed === true,
+      paymentVerified: req.body?.checks?.paymentVerified === true,
+      suppliersConfirmed: req.body?.checks?.suppliersConfirmed === true,
+      reconciliationReviewed: req.body?.checks?.reconciliationReviewed === true
+    };
+    pack.updatedAt = new Date();
+    await pack.save();
+    res.json({ pack, problems: completionProblems(quote, pack).slice(0, 30) });
+  } catch {
+    res.status(400).json({ message: 'Could not save the document pack.' });
+  }
+});
+
+router.post('/:id/pack/finalize', authAdmin, currentAdmin, async (req, res) => {
+  try {
+    const currentUser = req.currentAdminUser;
+    const quote = await Quotation.findById(req.params.id).lean();
+    const pack = await TravelDocumentPack.findOne({ quotation: quote?._id });
+    if (!quote || !pack) return res.status(404).json({ message: 'Quotation or document pack not found.' });
+    if (pack.status !== 'Draft') return res.status(409).json({ message: 'This document pack is already finalized.' });
+    const problems = completionProblems(quote, pack);
+    if (problems.length) return res.status(422).json({ message: 'Complete every document before finalizing the pack.', problems: problems.slice(0, 80), remaining: problems.length });
+    const numberKeys = ['38:1:2', '54:1:1', '69:1:0', '79:1:0', '119:1:0', '130:1:0', '140:1:0', '150:1:0', '161:1:0'];
+    const documentNumbers = numberKeys.map(key => String(pack.fields[key] || '').trim()).filter(value => value && !/^n\/?a$/i.test(value));
+    if (new Set(documentNumbers).size !== documentNumbers.length) return res.status(422).json({ message: 'Document numbers must be unique within the pack.' });
+    if (documentNumbers.length) {
+      const conflict = await TravelDocumentPack.findOne({ quotation: { $ne: quote._id }, documentNumbers: { $in: documentNumbers }, status: 'Finalized' }).select('_id');
+      if (conflict) return res.status(409).json({ message: 'A document number has already been used in another pack.' });
+    }
+    pack.documentNumbers = documentNumbers;
+    pack.status = 'Finalized';
+    pack.finalizedBy = currentUser.fullName;
+    pack.finalizedAt = new Date();
+    pack.updatedAt = new Date();
+    await pack.save();
+    res.json({ pack });
+  } catch (error) {
+    if (error.code === 11000) return res.status(409).json({ message: 'A document number has already been used in another pack.' });
+    res.status(400).json({ message: 'Could not finalize the document pack.' });
+  }
+});
+
+router.get('/:id/pack/download-data', authAdmin, currentAdmin, async (req, res) => {
+  try {
+    const quote = await Quotation.findById(req.params.id).lean();
+    if (!quote || quote.status !== 'Approved') return res.status(404).json({ message: 'Approved quotation not found.' });
+    const pack = await TravelDocumentPack.findOne({ quotation: quote._id }).lean();
+    if (!pack || pack.status !== 'Finalized') return res.status(403).json({ message: 'Complete and finalize all twelve documents before downloading the pack.' });
+    res.json({ quote: packQuoteData(quote), pack: { status: pack.status, fields: pack.fields, finalizedAt: pack.finalizedAt, finalizedBy: pack.finalizedBy } });
+  } catch {
+    res.status(400).json({ message: 'Could not prepare the completed document pack.' });
   }
 });
 

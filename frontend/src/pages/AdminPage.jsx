@@ -3071,7 +3071,7 @@ const AdminPage = () => {
                           </div>
                         )}
 
-                        {enq.detailedPreferences?.plannerVersion >= 4 && <QuotationDesk enquiry={enq} adminPassword={password} />}
+                        {!!enq.detailedPreferences?.routeDraft?.itinerary?.length && <QuotationDesk enquiry={enq} adminPassword={password} />}
 
                         {(enq.detailedPreferences || enq.companyName || enq.patientName || enq.cruiseLinePreference || enq.institutionName || enq.coupleNames || enq.deityTempleName) && (
                           <div style={{ marginTop: 10, marginBottom: 14 }}>

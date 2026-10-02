@@ -26,6 +26,7 @@ const DEFAULT_FORM = {
   packageId: 'custom-destination',
   destination: '',
   departureCity: '',
+  returnCity: '',
   travelStartDate: '',
   returnDate: '',
   durationDays: DESTINATION_CATALOG[0].durationDays,
@@ -41,6 +42,7 @@ const DEFAULT_FORM = {
   accessibilityNeeds: '',
   mealPreference: 'Either',
   foodRestrictions: '',
+  visitTimingPreferences: '',
   budget: '',
   hotelCategory: '3 Star',
   hotelRooms: '',
@@ -62,6 +64,7 @@ const DEFAULT_FORM = {
 const PLANNING_FIELDS = new Set([
   'adultCount', 'childWithBedCount', 'childNoBedCount', 'infantCount',
   'childAges', 'preferredTier', 'travelPace', 'interests', 'accessibilityNeeds', 'mealPreference', 'foodRestrictions', 'budget',
+  'returnCity', 'visitTimingPreferences',
   'hotelCategory', 'hotelRooms', 'preferredHotelName', 'preferredHotelArea', 'mealPlan', 'vehicleType', 'guideRequired', 'entryTickets',
   'durationDays', 'durationNights'
 ]);
@@ -89,7 +92,8 @@ const buildItinerary = (destinations, days) => {
       activities: dayItems.length ? `Keep this day centred around ${dayItems.join(', ')} with practical time for local travel, meals and rest.` : 'Leave this day open for flexible local discovery.',
       hotel: { name: '', rating: '', desc: '' },
       meal: '',
-      transit: ''
+      transit: '',
+      entryWindow: 'Entry and darshan timing to be confirmed from an official source.'
     };
   });
 };
@@ -156,7 +160,10 @@ const normalizePlannerDraft = (payload, preferences) => {
       activities: typeof day.activities === 'string' && day.activities.trim() ? day.activities.trim().slice(0, 1200) : places.length ? `A considered day around ${places.join(', ')} with time for local travel, meals and rest.` : 'Flexible time for local discovery.',
       hotel: createStayDetails(preferences, { base }, index, durationNights),
       meal: typeof day.meal === 'string' ? day.meal.trim().slice(0, 600) : '',
-      transit: typeof day.transit === 'string' ? day.transit.trim().slice(0, 600) : ''
+      transit: typeof day.transit === 'string' ? day.transit.trim().slice(0, 600) : '',
+      entryWindow: typeof day.entryWindow === 'string' && day.entryWindow.trim()
+        ? day.entryWindow.trim().slice(0, 600)
+        : 'Entry and darshan timing to be confirmed from an official source.'
     };
   });
   const planned = new Set(itinerary.flatMap(day => day.places.map(place => place.toLowerCase())));
@@ -327,7 +334,7 @@ const AiAssistant = () => {
   const planningPayload = useMemo(() => ({
     destination: form.destination.trim(),
     startingCity: form.departureCity.trim() || form.destination.trim(),
-    endingCity: form.destination.trim(),
+    endingCity: form.returnCity.trim() || form.departureCity.trim() || form.destination.trim(),
     travelStartDate: form.travelStartDate,
     returnDate: form.returnDate,
     durationDays: Number(form.durationDays) || 1,
@@ -346,6 +353,7 @@ const AiAssistant = () => {
     accessibilityNeeds: form.accessibilityNeeds,
     mealPreference: form.mealPreference,
     foodRestrictions: form.foodRestrictions,
+    visitTimingPreferences: form.visitTimingPreferences,
     budget: form.budget,
     hotelCategory: form.hotelCategory,
     hotelRooms: form.hotelRooms,
@@ -356,7 +364,7 @@ const AiAssistant = () => {
     guideRequired: form.guideRequired,
     entryTickets: form.entryTickets,
     planningFingerprint: ''
-  }), [allDestinations, dateDuration, form.adultCount, form.budget, form.childAges, form.childNoBedCount, form.childWithBedCount, form.destination, form.departureCity, form.entryTickets, form.foodRestrictions, form.guideRequired, form.hotelCategory, form.hotelRooms, form.preferredHotelName, form.preferredHotelArea, form.infantCount, form.interests, form.accessibilityNeeds, form.mealPlan, form.mealPreference, form.preferredTier, form.returnDate, form.travelPace, form.travelStartDate, form.vehicleType, form.durationDays, form.durationNights, selectedLabels]);
+  }), [allDestinations, dateDuration, form.adultCount, form.budget, form.childAges, form.childNoBedCount, form.childWithBedCount, form.destination, form.departureCity, form.returnCity, form.entryTickets, form.foodRestrictions, form.visitTimingPreferences, form.guideRequired, form.hotelCategory, form.hotelRooms, form.preferredHotelName, form.preferredHotelArea, form.infantCount, form.interests, form.accessibilityNeeds, form.mealPlan, form.mealPreference, form.preferredTier, form.returnDate, form.travelPace, form.travelStartDate, form.vehicleType, form.durationDays, form.durationNights, selectedLabels]);
 
   const planningFingerprint = useMemo(
     () => JSON.stringify({ ...planningPayload, planningFingerprint: undefined }),
@@ -692,7 +700,9 @@ const AiAssistant = () => {
             preferredHotelArea: form.preferredHotelArea.trim(),
             mealPreference: form.mealPreference,
             foodRestrictions: form.foodRestrictions,
+            visitTimingPreferences: form.visitTimingPreferences.trim(),
             childAges: form.childAges.split(',').map(age => age.trim()).filter(Boolean).map(Number),
+            infantCount: Number(form.infantCount || 0),
             preferredTier: form.preferredTier,
             travelPace: form.travelPace,
             interests: form.interests,
@@ -875,7 +885,7 @@ const AiAssistant = () => {
                   <div className="quote-panel">
                     <div className="draft-panel-heading"><CalendarDays size={18} aria-hidden="true" /><h3>Day-by-day route</h3></div>
                     <div className="quote-itinerary route-draft-itinerary">
-                      {submittedDraft.itinerary.map(day => <article className="quote-day route-draft-day" key={day.day}><span className="quote-day-number">D{day.day}</span><div><div className="route-draft-day-heading"><h4>{day.title}</h4>{day.base && <span>{day.base}</span>}</div><p><strong>Stops</strong> {day.places.length ? day.places.join(' · ') : 'Flexible local discovery'}</p>{day.activities && <p><strong>Plan</strong> {day.activities}</p>}{day.transit && <p><strong>Travel</strong> {day.transit}</p>}{day.meal && <p><strong>Meals</strong> {day.meal}</p>}</div></article>)}
+                      {submittedDraft.itinerary.map(day => <article className="quote-day route-draft-day" key={day.day}><span className="quote-day-number">D{day.day}</span><div><div className="route-draft-day-heading"><h4>{day.title}</h4>{day.base && <span>{day.base}</span>}</div><p><strong>Stops</strong> {day.places.length ? day.places.join(' · ') : 'Flexible local discovery'}</p>{day.activities && <p><strong>Plan</strong> {day.activities}</p>}{day.transit && <p><strong>Travel</strong> {day.transit}</p>}{day.entryWindow && <p><strong>Darshan / entry</strong> {day.entryWindow}</p>}{day.meal && <p><strong>Meals</strong> {day.meal}</p>}</div></article>)}
                     </div>
                   </div>
                 </div>
@@ -920,6 +930,9 @@ const AiAssistant = () => {
                           <div className="planner-field-grid" style={{ marginTop: '1.15rem' }}>
                             <Field id="departureCity" label="Where will you start?" help="Optional — we will use the destination if left blank.">
                               <input id="departureCity" className="planner-field" value={form.departureCity} onChange={event => updateField('departureCity', event.target.value)} placeholder="e.g. Chennai" autoComplete="address-level2" />
+                            </Field>
+                            <Field id="returnCity" label="Where will the trip end?" help="Optional — we will use your starting city if left blank.">
+                              <input id="returnCity" className="planner-field" value={form.returnCity} onChange={event => updateField('returnCity', event.target.value)} placeholder="e.g. Chennai" autoComplete="address-level2" />
                             </Field>
                             <Field id="travelStartDate" label="Travel start date" help="Optional — choose both dates to calculate days and nights automatically.">
                               <input id="travelStartDate" name="travelStartDate" className="planner-field" type="date" value={form.travelStartDate} onChange={handleDateChange} {...getAria('travelStartDate', fieldErrors.travelStartDate, 'travelStartDate-help')} />
@@ -1000,6 +1013,7 @@ const AiAssistant = () => {
                             <Field id="interests" label="Interests" help="Optional. Temples, food, nature, history or anything important to you."><input id="interests" className="planner-field" value={form.interests} onChange={event => updateField('interests', event.target.value)} /></Field>
                             <Field id="foodRestrictions" label="Allergies or food restrictions" help="Tell the travel desk what must be checked with suppliers."><input id="foodRestrictions" className="planner-field" value={form.foodRestrictions} onChange={event => updateField('foodRestrictions', event.target.value)} /></Field>
                             <Field id="accessibilityNeeds" label="Mobility or accessibility needs" help="Optional. The travel desk will confirm what can be arranged."><input id="accessibilityNeeds" className="planner-field" value={form.accessibilityNeeds} onChange={event => updateField('accessibilityNeeds', event.target.value)} /></Field>
+                            <Field id="visitTimingPreferences" label="Darshan or entry timing requests" help="Optional. Tell us about preferred slots; the travel desk will verify opening times and availability."><input id="visitTimingPreferences" className="planner-field" value={form.visitTimingPreferences} onChange={event => updateField('visitTimingPreferences', event.target.value)} placeholder="e.g. morning darshan" /></Field>
                           </div>
                           <div style={{ marginTop: '1rem' }}><span className="field-label">Add-ons for the route draft</span><div className="choice-row"><label className={`choice-card${form.guideRequired === 'Yes' ? ' selected' : ''}`}><input type="radio" name="guideRequired" checked={form.guideRequired === 'Yes'} onChange={() => updateField('guideRequired', 'Yes')} /><strong><Hotel size={16} aria-hidden="true" /> Local guide</strong><span>Include guide support in the route brief.</span></label><label className={`choice-card${form.guideRequired === 'No' ? ' selected' : ''}`}><input type="radio" name="guideRequired" checked={form.guideRequired === 'No'} onChange={() => updateField('guideRequired', 'No')} /><strong><MapPin size={16} aria-hidden="true" /> Self-guided</strong><span>Keep the route flexible.</span></label><label className={`choice-card${form.entryTickets === 'Yes' ? ' selected' : ''}`}><input type="checkbox" checked={form.entryTickets === 'Yes'} onChange={event => updateField('entryTickets', event.target.checked ? 'Yes' : 'No')} /><strong><FileText size={16} aria-hidden="true" /> Entry tickets</strong><span>Keep activity preferences visible to the travel desk.</span></label></div></div>
                         </div>

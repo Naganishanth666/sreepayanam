@@ -152,7 +152,9 @@ const sanitizeStructuredPlan = (payload, preferences) => {
       activities: cleanPlanningText(day.activities, 900) || 'Flexible time for local discovery.',
       hotel,
       meal: cleanPlanningText(day.meal, 500),
-      transit: cleanPlanningText(day.transit, 500)
+      transit: cleanPlanningText(day.transit, 500),
+      entryWindow: cleanPlanningText(day.entryWindow, 500)
+        || 'Entry and darshan timing to be confirmed from an official source.'
     };
   });
 
@@ -602,6 +604,7 @@ router.post('/plan-structured', async (req, res) => {
       hotelRooms: preferences.hotelRooms === '' || preferences.hotelRooms == null ? '' : numberInRange(preferences.hotelRooms, 0, 0, 30),
       preferredHotelName: cleanPlanningText(preferences.preferredHotelName, 120),
       preferredHotelArea: cleanPlanningText(preferences.preferredHotelArea, 120),
+      visitTimingPreferences: cleanPlanningText(preferences.visitTimingPreferences, 240),
       selectedDestinations: cleanPlaceList(selectedDestinations, 40),
       availableDestinations: cleanPlaceList(availableDestinations, 120)
     };
@@ -648,10 +651,11 @@ router.post('/plan-structured', async (req, res) => {
       6. Optimize the route geographically and by time. Keep places in the same neighbourhood, corridor or nearby area on the same day where practical; order each day and the overall trip to minimize backtracking; allow realistic travel, meal and rest time; do not force every selected place into the plan when the time window cannot support it.
       7. Detect feasibility honestly. If the selection is too large or geographically spread out, set planningReview.status to "tight" or "not_feasible", explain the constraint in planningReview.summary, list every selected place that could not fit in planningReview.unplacedPlaces, and suggest specific removals in planningReview.suggestedRemovals. Suggest replacements only from the available guide places or credible nearby alternatives in planningReview.suggestedReplacements. Never invent exact distances or travel times when uncertain.
       8. For every itinerary day, the places array MUST contain only exact names from the customer-selected places above. Do not silently add other guide places to the itinerary. Put any alternative in planningReview.suggestedReplacements for staff/customer review. An arrival or rest day may use an empty places array. Preserve the customer's selections whenever feasible.
-      9. Include specific sightseeing spots, pace (e.g. slow, moderate, active) and entry tickets matching their sightseeing choices. Make the daily itinerary descriptions extremely descriptive, informative, and engaging:
+      9. Include specific sightseeing spots, pace (e.g. slow, moderate, active) and entry tickets matching their sightseeing choices. The traveller's darshan or entry preference is ${safePreferences.visitTimingPreferences || 'not supplied'}. Place it on the relevant day as a request, never as a confirmed slot. Make the daily itinerary descriptions extremely descriptive, informative, and engaging:
          - The "activities" field must be a detailed, rich paragraph (at least 4-5 sentences) describing the scenic beauty, historical significance, local culture, and specific sightseeing places visited, explaining why they are special.
          - The "meal" field should describe appropriate meals and rest stops without inventing a restaurant or confirmed menu.
          - The "transit" field should describe route order and vehicle type. Do not invent numerical times or distances without verified routing data.
+         - The "entryWindow" field should record any requested darshan or entry window and explicitly say that opening times and slot availability need official-source confirmation. Never invent an opening hour, reservation or source check.
       10. The output MUST be a valid JSON object ONLY. Do not write any markdown wrappers (like \`\`\`json), explanations, prices or trailing characters.
 
       The JSON object MUST strictly conform to the following schema:
@@ -685,7 +689,8 @@ router.post('/plan-structured', async (req, res) => {
               "desc": "Check-in or return plan and supplier-confirmation status"
             },
             "meal": "Recommended local meals, cuisines, or hotel dining for the day",
-            "transit": "Concrete transit recommendation for this day matching the transport preferences"
+            "transit": "Concrete transit recommendation for this day matching the transport preferences",
+            "entryWindow": "Requested darshan or entry window, with official-source confirmation status"
           }
         ],
         "inclusions": [

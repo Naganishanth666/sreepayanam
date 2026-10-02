@@ -1,19 +1,25 @@
 import { useEffect, useState } from 'react';
-import { Download, FileCheck2, FilePenLine } from 'lucide-react';
+import { FileCheck2, FilePenLine } from 'lucide-react';
 import ConfirmDialog from './ConfirmDialog';
 import { useAuth } from '../context/useAuth';
-import { downloadApprovedQuotationPdf } from '../utils/quotationPdf';
+import TravelDocumentPackDesk from './TravelDocumentPackDesk';
 import './QuotationDesk.css';
 
 const TIER_NAMES = ['Economic', 'Deluxe', 'Premium'];
 const SOURCE_TYPES = ['Official', 'Tourism board', 'Government', 'Maps', 'Third party'];
 
 const blankForm = enquiry => ({
-  route: { itinerary: (enquiry.detailedPreferences?.routeDraft?.itinerary || []).map(day => ({ ...day, hotel: { ...day.hotel } })) },
+  customer: { rooms: enquiry.hotelRooms || '' },
+  route: { endingCity: enquiry.detailedPreferences?.routeDraft?.endingCity || '', itinerary: (enquiry.detailedPreferences?.routeDraft?.itinerary || []).map(day => ({
+    ...day,
+    entryWindow: day.entryWindow || 'Entry and darshan timing to be confirmed from an official source.',
+    hotel: { ...day.hotel }
+  })) },
   destinationReferences: (enquiry.selectedDestinations || []).map(name => ({ name, url: '', sourceType: '', lastChecked: '' })),
   tiers: TIER_NAMES.map(name => ({ name, directCost: '', sourceReference: '', sourceCheckedAt: '', accommodation: '', transport: '', meals: '', activities: '' })),
   terms: {
     validUntil: '', taxNote: '', paymentSchedule: '', cancellationTerms: '', assumptions: '',
+    specialNotes: enquiry.remarks || '',
     inclusions: (enquiry.detailedPreferences?.routeDraft?.inclusions || []).join('\n'),
     exclusions: (enquiry.detailedPreferences?.routeDraft?.exclusions || []).join('\n'),
     routeReviewNote: ''
@@ -21,7 +27,12 @@ const blankForm = enquiry => ({
 });
 
 const formFromQuote = quote => ({
-  route: { itinerary: (quote.route?.itinerary || []).map(day => ({ ...day, hotel: { ...day.hotel } })) },
+  customer: { rooms: quote.customer?.rooms || '' },
+  route: { endingCity: quote.route?.endingCity || '', itinerary: (quote.route?.itinerary || []).map(day => ({
+    ...day,
+    entryWindow: day.entryWindow || 'Entry and darshan timing to be confirmed from an official source.',
+    hotel: { ...day.hotel }
+  })) },
   destinationReferences: (quote.destinationReferences || []).map(item => ({ ...item })),
   tiers: TIER_NAMES.map(name => {
     const tier = quote.tiers?.find(item => item.name === name) || {};
@@ -33,6 +44,7 @@ const formFromQuote = quote => ({
     paymentSchedule: quote.terms?.paymentSchedule || '',
     cancellationTerms: quote.terms?.cancellationTerms || '',
     assumptions: quote.terms?.assumptions || '',
+    specialNotes: quote.terms?.specialNotes || '',
     inclusions: (quote.terms?.inclusions || []).join('\n'),
     exclusions: (quote.terms?.exclusions || []).join('\n'),
     routeReviewNote: quote.terms?.routeReviewNote || ''
@@ -99,6 +111,10 @@ const QuotationDesk = ({ enquiry, adminPassword }) => {
     setForm(current => ({ ...current, terms: { ...current.terms, [field]: value } }));
     setDirty(true);
   };
+  const changeTripDetail = (scope, field, value) => {
+    setForm(current => ({ ...current, [scope]: { ...current[scope], [field]: value } }));
+    setDirty(true);
+  };
   const changeDay = (index, field, value) => {
     setForm(current => ({
       ...current,
@@ -151,22 +167,10 @@ const QuotationDesk = ({ enquiry, adminPassword }) => {
       setDraft(null);
       setForm(blankForm(enquiry));
       setApprovalNote(''); setVerifiedSources(false);
-      setNotice(`Quotation ${data.quote.reference} approved and locked. Its PDF is ready below.`);
+      setNotice(`Quotation ${data.quote.reference} approved and locked. Complete its document pack below before downloading the combined PDF.`);
     } catch (approvalError) {
       setError(approvalError.message || 'Could not approve the quotation.');
     } finally { setBusy(''); setConfirmApproval(false); }
-  };
-
-  const download = async quote => {
-    setBusy(`download-${quote._id}`); setError('');
-    try {
-      const response = await fetch(`/api/quotations/${quote._id}/download-data`, { headers: { 'x-admin-password': adminPassword } });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Could not prepare the quotation.');
-      await downloadApprovedQuotationPdf(data.quote);
-    } catch (downloadError) {
-      setError(downloadError.message || 'Could not download the quotation.');
-    } finally { setBusy(''); }
   };
 
   return (
@@ -177,7 +181,7 @@ const QuotationDesk = ({ enquiry, adminPassword }) => {
       {open && <div className="quotation-desk-panel">
         <div className="quotation-desk-intro">
           <div><span className="eyebrow">Staff review</span><h4>Quotation from route brief</h4></div>
-          <p>Costs and source evidence stay internal. Only an approved version can be downloaded.</p>
+          <p>Costs and source evidence stay internal. After quotation approval, staff complete all twelve standard travel documents for one combined PDF.</p>
         </div>
         {!hasRoute ? <p role="status" className="quotation-desk-note">This enquiry predates saved route drafts. Ask the customer to submit the route again before creating a quotation.</p> : <>
           {loading && <p role="status" className="quotation-desk-note">Loading quotation versions…</p>}
@@ -185,11 +189,16 @@ const QuotationDesk = ({ enquiry, adminPassword }) => {
           {notice && <p role="status" className="quotation-desk-success">{notice}</p>}
           {quotes.filter(item => item.status === 'Approved').map(item => <div className="quotation-desk-approved" key={item._id}>
             <div><FileCheck2 size={18} aria-hidden="true" /><span><strong>{item.reference}</strong> · Version {item.version} · Approved {new Date(item.approval?.at).toLocaleDateString('en-IN')}</span></div>
-            <button type="button" className="btn btn-primary" onClick={() => download(item)} disabled={Boolean(busy)} aria-busy={busy === `download-${item._id}`}><Download size={16} aria-hidden="true" /> {busy === `download-${item._id}` ? 'Preparing…' : 'Download PDF'}</button>
+            {isAdmin && <TravelDocumentPackDesk quoteId={item._id} token={token} />}
           </div>)}
           {!loading && <div className="quotation-desk-form">
             <div className="quotation-desk-section-head"><h5>{draft ? `Draft ${draft.reference} · Version ${draft.version}` : 'New quotation draft'}</h5><span>10% contingency, then 25% markup</span></div>
             <p className="quotation-desk-note">The route and customer details are copied from the enquiry. Check the day plan, supplier evidence, destination links and legal terms before approval.</p>
+
+            <div className="quotation-desk-fields">
+              <label>Trip return point <input value={form.route.endingCity || ''} onChange={event => changeTripDetail('route', 'endingCity', event.target.value)} /></label>
+              <label>Rooms for overnight stays <input type="number" min="0" max="30" value={form.customer.rooms} onChange={event => changeTripDetail('customer', 'rooms', event.target.value)} /></label>
+            </div>
 
             <h6>Destination detail references</h6>
             <div className="quotation-desk-reference-list">{form.destinationReferences.map((item, index) => <div className="quotation-desk-reference" key={`${item.name}-${index}`}>
@@ -209,6 +218,7 @@ const QuotationDesk = ({ enquiry, adminPassword }) => {
                 <label className="quotation-desk-wide">Stops · one per line <textarea rows="3" value={(day.places || []).join('\n')} onChange={event => changeDay(index, 'places', event.target.value)} /></label>
                 <label className="quotation-desk-wide">Plan <textarea rows="4" value={day.activities || ''} onChange={event => changeDay(index, 'activities', event.target.value)} /></label>
                 <label className="quotation-desk-wide">Travel and timing <textarea rows="2" value={day.transit || ''} onChange={event => changeDay(index, 'transit', event.target.value)} /></label>
+                <label className="quotation-desk-wide">Darshan / entry window and source status <textarea rows="2" value={day.entryWindow || ''} onChange={event => changeDay(index, 'entryWindow', event.target.value)} placeholder="Requested morning darshan; official hours and availability need confirmation" /></label>
                 <label className="quotation-desk-wide">Meals and rest <textarea rows="2" value={day.meal || ''} onChange={event => changeDay(index, 'meal', event.target.value)} /></label>
                 <label>Stay name/category <input value={day.hotel?.name || ''} onChange={event => changeDay(index, 'hotel.name', event.target.value)} /></label>
                 <label>Stay rating <input value={day.hotel?.rating || ''} onChange={event => changeDay(index, 'hotel.rating', event.target.value)} /></label>
@@ -223,7 +233,7 @@ const QuotationDesk = ({ enquiry, adminPassword }) => {
                 <label>Direct supplier cost (internal) <input type="number" min="0" step="1" value={tier.directCost} onChange={event => changeTier(index, 'directCost', event.target.value)} /></label>
                 <label>Supplier quote or contracted rate reference <input value={tier.sourceReference} onChange={event => changeTier(index, 'sourceReference', event.target.value)} placeholder="Supplier quote ID or contract reference" /></label>
                 <label>Source checked <input type="date" max={today()} value={tier.sourceCheckedAt} onChange={event => changeTier(index, 'sourceCheckedAt', event.target.value)} /></label>
-                <label>Stay category / equivalent <input value={tier.accommodation} onChange={event => changeTier(index, 'accommodation', event.target.value)} /></label>
+                <label>Stay property/category and room type <input value={tier.accommodation} onChange={event => changeTier(index, 'accommodation', event.target.value)} placeholder="e.g. 3 Star equivalent, double room" /></label>
                 <label>Transport class <input value={tier.transport} onChange={event => changeTier(index, 'transport', event.target.value)} /></label>
                 <label>Meal plan <input value={tier.meals} onChange={event => changeTier(index, 'meals', event.target.value)} /></label>
                 <label className="quotation-desk-wide">Activity differences <input value={tier.activities} onChange={event => changeTier(index, 'activities', event.target.value)} /></label>
@@ -237,6 +247,7 @@ const QuotationDesk = ({ enquiry, adminPassword }) => {
               <label className="quotation-desk-wide">Payment schedule <textarea rows="2" value={form.terms.paymentSchedule} onChange={event => changeTerm('paymentSchedule', event.target.value)} /></label>
               <label className="quotation-desk-wide">Cancellation terms <textarea rows="3" value={form.terms.cancellationTerms} onChange={event => changeTerm('cancellationTerms', event.target.value)} /></label>
               <label className="quotation-desk-wide">Assumptions and availability <textarea rows="3" value={form.terms.assumptions} onChange={event => changeTerm('assumptions', event.target.value)} /></label>
+              <label className="quotation-desk-wide">Special notes for customer <textarea rows="2" value={form.terms.specialNotes} onChange={event => changeTerm('specialNotes', event.target.value)} placeholder="Accessibility, dietary, medical, festival or timing notes" /></label>
               <label className="quotation-desk-wide">Inclusions · one per line <textarea rows="4" value={form.terms.inclusions} onChange={event => changeTerm('inclusions', event.target.value)} /></label>
               <label className="quotation-desk-wide">Exclusions · one per line <textarea rows="4" value={form.terms.exclusions} onChange={event => changeTerm('exclusions', event.target.value)} /></label>
               <label className="quotation-desk-wide">Route and timing review (required)<textarea rows="2" value={form.terms.routeReviewNote} onChange={event => changeTerm('routeReviewNote', event.target.value)} /></label>
