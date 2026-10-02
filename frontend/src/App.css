@@ -3042,3 +3042,20 @@ textarea.input-field,
     margin-top: 1.5rem;
   }
 }
+/* Staff-entered destination references share the brand's compact working rhythm. */
+.package-reference-editor { margin: 1.25rem 0; padding: 1rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: #f8faff; }
+.package-reference-heading { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
+.package-reference-heading strong { display: block; color: var(--color-ink); }
+.package-reference-heading small { display: block; color: var(--color-muted); font-size: 0.78rem; }
+.package-reference-row { display: grid; grid-template-columns: 1fr 1.7fr 1fr 0.9fr auto; align-items: end; gap: 0.7rem; margin-top: 0.7rem; }
+.package-reference-row label { display: grid; gap: 0.25rem; min-width: 0; font-size: 0.78rem; font-weight: 700; color: var(--color-ink-soft); }
+.package-detail-references { padding: 1.75rem; margin-top: 1.25rem; }
+.package-detail-references h3 { color: var(--color-ink); }
+.package-detail-references p { margin: 0.35rem 0 1rem; color: var(--color-muted); font-size: 0.88rem; }
+.package-detail-references ul { list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.65rem; }
+.package-detail-references li { padding: 0.75rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: #f8faff; }
+.package-detail-references a { color: var(--color-ink); font-weight: 700; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.package-detail-references a:hover { color: var(--color-coral-dark); }
+.package-detail-references small { display: block; margin-top: 0.25rem; color: var(--color-muted); }
+@media (max-width: 1050px) { .package-reference-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .package-reference-row { grid-template-columns: 1fr; } }

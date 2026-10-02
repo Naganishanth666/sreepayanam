@@ -40,11 +40,11 @@ const PUBLIC_FIELDS = [
   'roomViewPreference', 'privatePoolVilla', 'photographyService', 'deityTempleName', 'primaryDestination',
   'specialDarshanPasses', 'ritualPoojaArrangements', 'seniorCitizenAssistance', 'vegetarianJainFood',
   'physicalDisabilityAssistance', 'dressCodeGuidelinesAccepted', 'packageId', 'detailedPreferences',
-  'quoteReference', 'selectedDestinations'
+  'quoteReference', 'selectedDestinations', 'leadSource', 'contactConsent', 'consentVersion'
 ];
 
 const sanitise = (value, depth = 0) => {
-  if (depth > 4) return undefined;
+  if (depth > 8) return undefined;
   if (typeof value === 'string') {
     return value.replace(/[<>\u0000-\u001F]/g, '').trim().slice(0, 4000);
   }
@@ -96,6 +96,9 @@ router.post('/', async (req, res) => {
     if (!validEmail(emailId)) {
       return res.status(400).json({ message: 'Enter a valid email address.' });
     }
+    if (String(body.quoteReference || '').startsWith('SP-DRAFT-') && body.contactConsent !== true) {
+      return res.status(400).json({ message: 'Please allow us to use your contact details for this route enquiry.' });
+    }
 
     if (body.quoteReference) {
       const existing = await Enquiry.findOne({ quoteReference: String(body.quoteReference).slice(0, 80) });
@@ -131,6 +134,10 @@ router.post('/', async (req, res) => {
       customerName,
       mobileNumber,
       emailId: emailId || undefined,
+      leadSource: ['website', 'planner', 'chatbot', 'manual', 'partner'].includes(body.leadSource) ? body.leadSource : 'website',
+      contactConsent: body.contactConsent === true,
+      consentVersion: body.contactConsent === true ? String(body.consentVersion || '').slice(0, 80) : undefined,
+      consentAt: body.contactConsent === true ? new Date() : undefined,
       quoteReference: body.quoteReference ? String(body.quoteReference).slice(0, 80) : undefined,
       selectedDestinations: Array.isArray(body.selectedDestinations) ? body.selectedDestinations.slice(0, 40) : undefined,
       enquiryType: body.enquiryType || 'Tour Package Enquiry'

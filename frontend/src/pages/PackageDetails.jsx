@@ -343,6 +343,11 @@ const PackageDetails = () => {
                   ))}
                 </div>
               </div>
+              {Array.isArray(pkg.destinationReferences) && pkg.destinationReferences.length > 0 && <section className="glass-card package-detail-references" aria-labelledby="package-reference-heading">
+                <h3 id="package-reference-heading">Explore the destinations</h3>
+                <p>Open the source page for more details. Timings and availability should be checked again before travel.</p>
+                <ul>{pkg.destinationReferences.map((reference, index) => <li key={`${reference.name}-${index}`}><a href={reference.url} target="_blank" rel="noopener noreferrer">{reference.name} ↗</a><small>{reference.sourceType || 'Reference'}{reference.lastChecked ? ` · checked ${reference.lastChecked}` : ''}</small></li>)}</ul>
+              </section>}
             </motion.div>
           )}
 

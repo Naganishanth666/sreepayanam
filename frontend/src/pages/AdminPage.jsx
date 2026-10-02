@@ -4,6 +4,7 @@ import { Trash2, Plus, LogIn, ChevronDown, ChevronUp, X, Edit, Eye, EyeOff, User
 import { IMAGE_PRESETS } from '../utils/imagePresets';
 import NicheTravelFields from '../components/NicheTravelFields';
 import ConfirmDialog from '../components/ConfirmDialog';
+import QuotationDesk from '../components/QuotationDesk';
 import { renderRichText } from '../utils/textFormatter';
 import { calculateCosting } from '../utils/costingEngine';
 
@@ -30,7 +31,7 @@ const emptyForm = {
   overview: '', imageUrl: '',
   itinerary: [{ day: 1, title: '', activities: '', hotel: '', mealPlan: '', transport: '' }],
   inclusions: '', exclusions: '', optionalAddons: '',
-  templesList: [], priceBreakdown: '', mealPlan: '', baseCost: '',
+  templesList: [], destinationReferences: [], priceBreakdown: '', mealPlan: '', baseCost: '',
   originalPrice: '', offerPrice: '', isSpecialOffer: false, offerValidity: '',
   termsAndConditions: '', cancellationPolicy: '',
   seoTitle: '', seoMetaDescription: '',
@@ -69,9 +70,9 @@ const emptyForm = {
   insuranceCostPerPax: '',
   miscCost: '',
 
-  bufferPercent: 3,
-  markupPercent: 30,
-  taxPercent: 5,
+  bufferPercent: 10,
+  markupPercent: 25,
+  taxPercent: 0,
   discountPercent: 0,
   discountAmount: 0,
   discountType: 'Percentage',
@@ -113,9 +114,9 @@ const flattenCostingData = (data) => {
     insuranceCostPerPax: cb.insuranceCostPerPax !== undefined && cb.insuranceCostPerPax !== null ? cb.insuranceCostPerPax : '',
     miscCost: cb.miscCost !== undefined && cb.miscCost !== null ? cb.miscCost : '',
     
-    bufferPercent: cb.bufferPercent !== undefined && cb.bufferPercent !== null ? cb.bufferPercent : 3,
-    markupPercent: cb.markupPercent !== undefined && cb.markupPercent !== null ? cb.markupPercent : 30,
-    taxPercent: cb.taxPercent !== undefined && cb.taxPercent !== null ? cb.taxPercent : 5,
+    bufferPercent: cb.bufferPercent !== undefined && cb.bufferPercent !== null ? cb.bufferPercent : 10,
+    markupPercent: cb.markupPercent !== undefined && cb.markupPercent !== null ? cb.markupPercent : 25,
+    taxPercent: cb.taxPercent !== undefined && cb.taxPercent !== null ? cb.taxPercent : 0,
     discountPercent: cb.discountPercent !== undefined && cb.discountPercent !== null ? cb.discountPercent : 0,
     discountAmount: cb.discountAmount !== undefined && cb.discountAmount !== null ? cb.discountAmount : 0,
     discountType: cb.discountType !== undefined && cb.discountType !== null ? cb.discountType : 'Percentage',
@@ -1210,6 +1211,7 @@ const AdminPage = () => {
       exclusions: Array.isArray(pkg.exclusions) ? pkg.exclusions.join('\n') : (pkg.exclusions || ''),
       optionalAddons: Array.isArray(pkg.optionalAddons) ? pkg.optionalAddons.join('\n') : (pkg.optionalAddons || ''),
       templesList: pkg.templesList || [],
+      destinationReferences: Array.isArray(pkg.destinationReferences) ? pkg.destinationReferences.map(item => ({ name: item.name || '', url: item.url || '', sourceType: item.sourceType || '', lastChecked: item.lastChecked || '' })) : [],
       priceBreakdown: pkg.priceBreakdown || '',
       mealPlan: pkg.mealPlan || '',
       baseCost: pkg.baseCost || '',
@@ -1264,6 +1266,17 @@ const AdminPage = () => {
     e.preventDefault();
     setLoading(true); setError(''); setSuccess('');
     try {
+      for (const reference of formData.destinationReferences || []) {
+        if (!reference.name?.trim() || !reference.url?.trim() || !reference.sourceType || !reference.lastChecked) {
+          throw new Error('Complete or remove each destination reference before saving.');
+        }
+        try {
+          const url = new URL(reference.url);
+          if (url.protocol !== 'https:' || url.username || url.password) throw new Error();
+        } catch {
+          throw new Error(`Use an HTTPS detail link for ${reference.name.trim()}.`);
+        }
+      }
       const costingParams = {
         adultCount: Number(formData.adultCount) || 2,
         childWithBedCount: Number(formData.childWithBedCount) || 0,
@@ -1315,6 +1328,7 @@ const AdminPage = () => {
         inclusions: formData.inclusions.split('\n').map(s => s.trim()).filter(Boolean),
         exclusions: formData.exclusions.split('\n').map(s => s.trim()).filter(Boolean),
         optionalAddons: formData.optionalAddons.split('\n').map(s => s.trim()).filter(Boolean),
+        destinationReferences: (formData.destinationReferences || []).map(item => ({ name: item.name.trim(), url: item.url.trim(), sourceType: item.sourceType, lastChecked: item.lastChecked })),
         status: formData.status || 'Approved',
         costingBreakdown: calculated
       };
@@ -2237,6 +2251,16 @@ const AdminPage = () => {
                       <input name="endingCity" className="input-field" placeholder="e.g. Kochi" value={formData.endingCity} onChange={handleChange} />
                     </Field>
                   </Row>
+                  <div className="package-reference-editor">
+                    <div className="package-reference-heading"><div><strong>Destination detail references</strong><small>Add relevant official or tourism links, with the last date checked.</small></div><button type="button" className="btn btn-outline" onClick={() => setFormData(previous => ({ ...previous, destinationReferences: [...(previous.destinationReferences || []), { name: '', url: '', sourceType: 'Official', lastChecked: '' }] }))}>Add reference</button></div>
+                    {(formData.destinationReferences || []).map((item, index) => <div className="package-reference-row" key={index}>
+                      <label htmlFor={`package-ref-name-${index}`}>Place<input id={`package-ref-name-${index}`} className="input-field" value={item.name} onChange={event => setFormData(previous => ({ ...previous, destinationReferences: (previous.destinationReferences || []).map((reference, itemIndex) => itemIndex === index ? { ...reference, name: event.target.value } : reference) }))} /></label>
+                      <label htmlFor={`package-ref-url-${index}`}>HTTPS link<input id={`package-ref-url-${index}`} className="input-field" type="url" value={item.url} onChange={event => setFormData(previous => ({ ...previous, destinationReferences: (previous.destinationReferences || []).map((reference, itemIndex) => itemIndex === index ? { ...reference, url: event.target.value } : reference) }))} /></label>
+                      <label htmlFor={`package-ref-type-${index}`}>Source type<select id={`package-ref-type-${index}`} className="input-field" value={item.sourceType} onChange={event => setFormData(previous => ({ ...previous, destinationReferences: (previous.destinationReferences || []).map((reference, itemIndex) => itemIndex === index ? { ...reference, sourceType: event.target.value } : reference) }))}>{['Official', 'Tourism board', 'Government', 'Maps', 'Third party'].map(type => <option key={type}>{type}</option>)}</select></label>
+                      <label htmlFor={`package-ref-date-${index}`}>Checked<input id={`package-ref-date-${index}`} className="input-field" type="date" value={item.lastChecked} onChange={event => setFormData(previous => ({ ...previous, destinationReferences: (previous.destinationReferences || []).map((reference, itemIndex) => itemIndex === index ? { ...reference, lastChecked: event.target.value } : reference) }))} /></label>
+                      <button type="button" className="btn btn-ghost" aria-label={`Remove reference ${item.name || index + 1}`} onClick={() => setFormData(previous => ({ ...previous, destinationReferences: (previous.destinationReferences || []).filter((_, itemIndex) => itemIndex !== index) }))}>Remove</button>
+                    </div>)}
+                  </div>
                   <Row>
                     <Field label="Duration (Days) *">
                       <input required type="number" name="durationDays" className="input-field" min="1" value={formData.durationDays} onChange={handleChange} />
@@ -2554,16 +2578,16 @@ const AdminPage = () => {
                           name="markupPercent" 
                           min="10" 
                           max="35" 
-                          value={formData.markupPercent || 30}
+                          value={formData.markupPercent ?? 25}
                           onChange={handleChange} 
                           style={{ flex: 1, height: '8px', borderRadius: '4px', accentColor: 'var(--primary)', cursor: 'pointer' }}
                         />
                         <span style={{ fontWeight: 'bold', fontSize: '0.95rem', minWidth: '40px', color: 'var(--primary)' }}>
-                          {formData.markupPercent || 30}%
+                          {formData.markupPercent ?? 25}%
                         </span>
                       </div>
                     </Field>
-                    <Field label="Tax / GST (%)">
+                    <Field label="Accountant-approved Tax / GST (%)">
                       <input type="number" name="taxPercent" className="input-field" min="0" max="100" value={formData.taxPercent} onChange={handleChange} />
                     </Field>
                   </Row>
@@ -2896,7 +2920,7 @@ const AdminPage = () => {
             </div>
           </div>
         ) : activeTab === 'enquiries' ? (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 30, alignItems: 'start' }}>
+          <div className="admin-enquiries-layout" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 380px', gap: 30, alignItems: 'start' }}>
             {/* Enquiries List */}
             <div className="glass-card" style={{ padding: 32 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
@@ -3046,6 +3070,8 @@ const AdminPage = () => {
                             <strong>Remarks:</strong> {enq.remarks}
                           </div>
                         )}
+
+                        {enq.detailedPreferences?.plannerVersion >= 4 && <QuotationDesk enquiry={enq} adminPassword={password} />}
 
                         {(enq.detailedPreferences || enq.companyName || enq.patientName || enq.cruiseLinePreference || enq.institutionName || enq.coupleNames || enq.deityTempleName) && (
                           <div style={{ marginTop: 10, marginBottom: 14 }}>

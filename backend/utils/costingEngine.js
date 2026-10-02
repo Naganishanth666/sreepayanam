@@ -160,19 +160,19 @@ function calculateCosting(params) {
 
   const bufferPercent = params.bufferPercent !== undefined && params.bufferPercent !== null && params.bufferPercent !== ''
     ? Number(params.bufferPercent)
-    : 3;
+    : 10;
   const bufferAmount = Math.round(supplierCost * (bufferPercent / 100));
   const landedCost = supplierCost + bufferAmount;
 
   const markupPercent = params.markupPercent !== undefined && params.markupPercent !== null && params.markupPercent !== ''
     ? Number(params.markupPercent)
-    : 30;
+    : 25;
   const markupAmount = Math.round(landedCost * (markupPercent / 100));
   const sellingPrice = landedCost + markupAmount;
 
   const taxPercent = params.taxPercent !== undefined && params.taxPercent !== null && params.taxPercent !== ''
     ? Number(params.taxPercent)
-    : 5;
+    : 0;
   const taxAmount = Math.round(sellingPrice * (taxPercent / 100));
 
   const discountType = params.discountType || 'Percentage';

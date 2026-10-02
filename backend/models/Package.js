@@ -40,6 +40,21 @@ const packageSchema = new mongoose.Schema({
   optionalAddons: [String],
   
   templesList: [String],
+  destinationReferences: [{
+    name: { type: String, required: true, trim: true, maxlength: 160 },
+    url: { type: String, required: true, trim: true, maxlength: 700, validate: {
+      validator(value) {
+        if (!value) return true;
+        try {
+          const parsed = new URL(value);
+          return parsed.protocol === 'https:' && !parsed.username && !parsed.password;
+        } catch { return false; }
+      },
+      message: 'Destination links must use HTTPS.'
+    } },
+    sourceType: { type: String, required: true, enum: ['Official', 'Tourism board', 'Government', 'Maps', 'Third party'] },
+    lastChecked: { type: String, required: true, match: /^\d{4}-\d{2}-\d{2}$/ }
+  }],
   priceBreakdown: { type: String },
   mealPlan: { type: String }, // e.g., "CP - Breakfast", "MAP - Breakfast + Dinner"
   
@@ -47,7 +62,7 @@ const packageSchema = new mongoose.Schema({
   cancellationPolicy: { type: String },
   
   baseCost: { type: Number }, // Raw wholesale cost price to SreePayanam
-  profitMarginPercent: { type: Number, default: 30 }, // Target markup percent used by the costing engine
+  profitMarginPercent: { type: Number, default: 25 }, // Legacy display field; the costing snapshot owns the actual calculation.
   
   originalPrice: { type: Number, required: true },
   offerPrice: { type: Number },
@@ -101,13 +116,13 @@ const packageSchema = new mongoose.Schema({
     miscCost: { type: Number, default: 0 },
 
     supplierCost: { type: Number, default: 0 },
-    bufferPercent: { type: Number, default: 3 },
+    bufferPercent: { type: Number, default: 10 },
     bufferAmount: { type: Number, default: 0 },
     landedCost: { type: Number, default: 0 },
-    markupPercent: { type: Number, default: 30 },
+    markupPercent: { type: Number, default: 25 },
     markupAmount: { type: Number, default: 0 },
     sellingPrice: { type: Number, default: 0 },
-    taxPercent: { type: Number, default: 5 },
+    taxPercent: { type: Number, default: 0 },
     taxAmount: { type: Number, default: 0 },
     discountPercent: { type: Number, default: 0 },
     discountAmount: { type: Number, default: 0 },
@@ -153,13 +168,13 @@ packageSchema.pre('save', function() {
     if (this.baseCost && this.offerPrice) {
       this.profitMarginPercent = Math.round(((this.offerPrice - this.baseCost) / this.baseCost) * 100);
     } else if (this.baseCost) {
-      const margin = this.profitMarginPercent || 30;
+      const margin = this.profitMarginPercent || 25;
       this.offerPrice = Math.round(this.baseCost * (1 + margin / 100));
     } else if (this.offerPrice) {
-      const margin = this.profitMarginPercent || 30;
+      const margin = this.profitMarginPercent || 25;
       this.baseCost = Math.round(this.offerPrice / (1 + margin / 100));
     } else if (this.originalPrice) {
-      const margin = this.profitMarginPercent || 30;
+      const margin = this.profitMarginPercent || 25;
       this.offerPrice = this.originalPrice;
       this.baseCost = Math.round(this.offerPrice / (1 + margin / 100));
     }

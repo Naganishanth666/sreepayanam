@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-const ConfirmDialog = ({ open, title, message, confirmLabel = 'Confirm', onConfirm, onCancel, busy = false }) => {
+const ConfirmDialog = ({ open, title, message, confirmLabel = 'Confirm', cancelLabel = 'Keep it', onConfirm, onCancel, busy = false }) => {
   const cancelRef = useRef(null);
 
   useEffect(() => {
@@ -30,7 +30,7 @@ const ConfirmDialog = ({ open, title, message, confirmLabel = 'Confirm', onConfi
         <p id="app-dialog-description">{message}</p>
         <div className="app-dialog-actions">
           <button ref={cancelRef} type="button" className="btn btn-ghost" onClick={onCancel} disabled={busy}>
-            Keep it
+            {cancelLabel}
           </button>
           <button type="button" className="btn btn-danger" onClick={onConfirm} disabled={busy}>
             {busy ? 'Working…' : confirmLabel}

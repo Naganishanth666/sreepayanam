@@ -666,8 +666,8 @@ router.post('/plan-structured', async (req, res) => {
       - Authoritative trip length: ${safePreferences.durationDays} days / ${safePreferences.durationNights} nights
 
       Instructions:
-      1. Perform realistic travel research. Suggest genuine local hotels/resorts matching the requested accommodation level (${hotelCategory || 'Premium'}).
-      2. Suggest authentic local dining options, meal plans, and cuisines to try based on the client's meal requirements and preferences. Be highly creative and recommend specific popular local dishes, street food, or well-known restaurants.
+      1. You have no live supplier or attraction source in this request. Suggest a hotel category or equivalent matching ${hotelCategory || 'the stated preference'}; do not name a property or claim availability without supplied verified evidence.
+      2. Suggest suitable meal styles and local dishes matching the customer's food preferences. Do not name a restaurant, guarantee a menu, or ignore allergies; these need staff and supplier confirmation.
       3. Strict Transport Constraint Enforcement:
          - Flight/Airplane: Check if Flight Ticket ('flight_ticket') is true. If 'flight_ticket' is true, suggest flight transfers/airplane travel between cities where applicable. If 'flight_ticket' is false (or not provided), you MUST NOT suggest or mention flight travel, airplane tickets, or airport transfers.
          - Train: Check if Train Ticket ('train_ticket') is true. If 'train_ticket' is true, suggest train travel/train numbers. If 'train_ticket' is false (or not provided), you MUST NOT suggest or mention train travel.
@@ -680,8 +680,8 @@ router.post('/plan-structured', async (req, res) => {
       8. For every itinerary day, the places array MUST contain the plain names of the actual places assigned to that day. Keep the places array limited to realistic stops for the day and preserve the customer's selections whenever feasible.
       9. Include specific sightseeing spots, pace (e.g. slow, moderate, active) and entry tickets matching their sightseeing choices. Make the daily itinerary descriptions extremely descriptive, informative, and engaging:
          - The "activities" field must be a detailed, rich paragraph (at least 4-5 sentences) describing the scenic beauty, historical significance, local culture, and specific sightseeing places visited, explaining why they are special.
-         - The "meal" field must be highly descriptive, recommending specific local dishes, culinary highlights, street foods, or well-known restaurants.
-         - The "transit" field must describe local transfer instructions, routes, vehicle types, approximate travel time, and driving distances in detail.
+         - The "meal" field should describe appropriate meals and rest stops without inventing a restaurant or confirmed menu.
+         - The "transit" field should describe route order and vehicle type. Do not invent numerical times or distances without verified routing data.
       10. The output MUST be a valid JSON object ONLY. Do not write any markdown wrappers (like \`\`\`json), explanations, prices or trailing characters.
 
       The JSON object MUST strictly conform to the following schema:
@@ -710,7 +710,7 @@ router.post('/plan-structured', async (req, res) => {
             "places": ["Exact plain place name"],
             "activities": "Detailed description of activities for this day.",
             "hotel": {
-              "name": "Name of a specific realistic hotel/resort matching the requested tier",
+              "name": "Requested hotel category or equivalent; property pending supplier confirmation",
               "rating": "Star rating details",
               "desc": "1-2 sentence description of the stay experience."
             },
@@ -1083,7 +1083,7 @@ router.post('/generate-package', checkAdmin, async (req, res) => {
         "isSpecialOffer": true,
         "priceBreakdown": "Hotel: ₹3500\\nTransport: ₹6000\\nTolls & Driver: ₹3000\\nMeals: ₹2000",
         "termsAndConditions": "Standard package booking terms, advance payments, and document needs.",
-        "cancellationPolicy": "Cancellation timeline: 30 days prior: 100% refund, 15 days prior: 50% refund, less than 7 days: no refund.",
+        "cancellationPolicy": "Cancellation terms require travel-desk and supplier review.",
         "seoTitle": "Premium SEO optimized title (max 60 chars)",
         "seoMetaDescription": "Captivating meta description for Google search (max 155 chars)"
       }
@@ -1112,8 +1112,8 @@ router.post('/generate-package', checkAdmin, async (req, res) => {
     const hotelCategory = req.body.hotelCategory || '3 Star';
     const vehicleType = req.body.vehicleType || req.body.carType || null;
     const mealPlan = req.body.mealRequired || 'MAP';
-    const markupPercent = Number(req.body.markupPercent) || 30;
-    const bufferPercent = Number(req.body.bufferPercent) || 3;
+    const markupPercent = Number(req.body.markupPercent) || 25;
+    const bufferPercent = Number(req.body.bufferPercent) || 10;
 
     const costingParams = {
       adultCount,
@@ -1493,8 +1493,8 @@ router.post('/compile-draft', checkAdmin, async (req, res) => {
       vehicleType: selectedCar ? selectedCar.type : null,
       vehicleDailyRate,
       miscCost: flightTrainCost,
-      markupPercent: Number(req.body.markupPercent) || 30,
-      bufferPercent: Number(req.body.bufferPercent) || 3
+      markupPercent: Number(req.body.markupPercent) || 25,
+      bufferPercent: Number(req.body.bufferPercent) || 10
     };
 
     const costing = calculateCosting(costingParams);
@@ -1612,7 +1612,7 @@ router.post('/compile-draft', checkAdmin, async (req, res) => {
         "isSpecialOffer": true,
         "priceBreakdown": "${breakdownText.replace(/\n/g, '\\n')}",
         "termsAndConditions": "Standard package booking terms, advance payments, and document needs.",
-        "cancellationPolicy": "Cancellation timeline: 30 days prior: 100% refund, 15 days prior: 50% refund, less than 7 days: no refund.",
+        "cancellationPolicy": "Cancellation terms require travel-desk and supplier review.",
         "seoTitle": "Premium SEO optimized title (max 60 chars)",
         "seoMetaDescription": "Captivating meta description for Google search (max 155 chars)"
       }

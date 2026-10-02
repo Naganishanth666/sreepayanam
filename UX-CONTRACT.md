@@ -7,7 +7,8 @@ This contract covers the public planner/route-brief workflow, the shared public 
 | Concern | Source | Consequence in the UI |
 |---|---|---|
 | Destination guide and customer-selected places | Current task and public AI destination guide route (`backend/routes/aiRoutes.js`, `frontend/src/pages/AiAssistant.jsx`) | The customer enters any city, region or country; the planner requests a broad, searchable grouped guide for that destination and nearby vicinity. Published packages do not constrain discovery: customers can select any listed place or add their own before the travel desk curates the final route. |
-| Time-aware route draft and route brief | Current task and structured planner route (`backend/routes/aiRoutes.js`, `frontend/src/pages/AiAssistant.jsx`, `frontend/src/utils/quotationPdf.js`) | The browser shows a geographic/time review with day/night totals, unplaced stops and suggestions; the PDF records the route brief and never includes commercial totals. |
+| Time-aware route draft and route brief | Revised SRS 1.1 and structured planner route (`backend/routes/aiRoutes.js`, `frontend/src/pages/AiAssistant.jsx`, `frontend/src/utils/quotationPdf.js`) | The browser shows a geographic/time review with day/night totals, unplaced stops and suggestions; the public PDF records the route brief and never includes commercial totals. |
+| Approved route quotation | Revised SRS 1.1, attached four-page route brief, and quotation route (`backend/routes/quotationRoutes.js`) | Admin staff copy the saved enquiry route, edit the day plan, record destination links and verified tier costs, and enter approved commercial wording. A named Admin account approves and locks the version before its commercial PDF can be downloaded. |
 | Internal commercial costing | Admin-only quotation route and costing engine (`backend/routes/quotationRoutes.js`, `backend/utils/costingEngine.js`) | Commercial previews are protected by admin authorization and are not requested by the public planner. |
 | Customer enquiries | `backend/routes/enquiryRoutes.js`, `backend/models/Enquiry.js` | Public POST is rate-limited, validated and idempotent by route reference; reads and updates require admin authorization. |
 | Admin/package changes | `backend/middleware/auth.js`, package routes | Admin-only mutations require `ADMIN_PASSWORD` or a valid admin JWT; no hard-coded fallback credential is accepted. |
@@ -16,11 +17,13 @@ This contract covers the public planner/route-brief workflow, the shared public 
 ## Canonical owners
 
 - Navigation: `frontend/src/components/Navbar.jsx` and `.site-nav` styles.
+- Package destination references: `backend/models/Package.js` stores staff-entered HTTPS source links, and `frontend/src/pages/PackageDetails.jsx` presents their type and last-check date.
 - Home hero: `frontend/src/pages/LandingPage.jsx`, `frontend/src/data/heroSlides.js` and `.hero-carousel` styles. It is a twelve-slide package-style carousel with pause-on-hover/focus and manual controls.
 - Form fields and validation: each product form owns the same `noValidate` + inline error + summary pattern; the new planner is the canonical customer route-brief flow.
 - Select/date controls: native controls are intentional for standard browser-owned popup behavior. The destination list is a checkbox group, not a native multi-select.
 - Toasts/status: persistent inline `role="status"`/`role="alert"` regions are used for the current app; no browser dialogs are allowed.
 - Route brief mutation: pessimistic route-draft confirmation, then enquiry submission, then PDF download.
+- Quotation mutation: an Admin console may save a draft from the enquiry snapshot. Approval requires a named Admin JWT, complete reference and supplier evidence, explicit source verification, and a review note. The approved version is immutable; a later revision receives a new version number. Only approved quotation data can reach the quotation PDF generator, and it excludes direct supplier costs.
 - Admin account directory: server-paginated account list with committed search and role/approval filters. Agent approval is a server-confirmed, pessimistic mutation; Customer/Admin roles are displayed read-only until a separate role-management policy exists.
 
 ## Planner flow ledger
@@ -48,5 +51,7 @@ This contract covers the public planner/route-brief workflow, the shared public 
 - Date-derived days and nights are calculated from date-only values, stored in the planner payload and sent in `detailedPreferences` with the route review status. The public planner does not display or request commercial totals.
 - `quoteReference` makes a repeated enquiry submission idempotent; it prevents accidental duplicate leads after an uncertain response.
 - Supplier cost, markup amount, customer price, tax, internal notes, raw backend errors, authentication tokens and payment secrets are never placed in the customer UI or route-brief PDF. Internal quotation previews require admin authorization.
+- Planner enquiries record the consent version and source; their saved route draft provides the day plan for staff review. The route draft is unverified AI/customer input. A quote approval requires staff to review timing and any unplaced stops.
+- Default new-quote pricing is direct verified cost plus 10% contingency, then 25% markup. GST remains separate and requires accountant-approved wording. Existing historical package snapshots are not silently repriced.
 - Date-only values remain date-only; no timezone conversion is applied to travel dates.
 - Package cancellation/terms copy remains package-controlled. The planner does not invent legal wording.

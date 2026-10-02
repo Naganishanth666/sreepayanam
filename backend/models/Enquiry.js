@@ -122,6 +122,10 @@ const enquirySchema = new mongoose.Schema({
   // Optional reference to a specific package
   packageId: { type: String, default: null },
   quoteReference: { type: String, unique: true, sparse: true, index: true },
+  leadSource: { type: String, enum: ['website', 'planner', 'chatbot', 'manual', 'partner'], default: 'website' },
+  contactConsent: { type: Boolean, default: false },
+  consentVersion: { type: String },
+  consentAt: { type: Date },
   quotedAmount: { type: Number, min: 0 },
   quoteIssuedAt: { type: Date },
   selectedDestinations: [{ type: String, maxlength: 160 }],

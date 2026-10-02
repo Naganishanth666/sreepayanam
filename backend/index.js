@@ -65,7 +65,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: '100kb' }));
+app.use(express.json({ limit: '250kb' }));
 app.use(express.urlencoded({ extended: false, limit: '50kb' }));
 
 const rateLimit = ({ windowMs, max, message }) => {

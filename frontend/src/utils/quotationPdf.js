@@ -91,15 +91,16 @@ const loadLogoJpeg = () => new Promise((resolve, reject) => {
 
 const bytesToAsciiHex = bytes => `${Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')}>`;
 
-const buildPage = (pageLines, pageNumber, totalPages, logoImage) => {
+const buildPage = (pageLines, pageNumber, totalPages, logoImage, kind = 'brief') => {
   const commands = [];
+  const links = [];
   addRect(commands, 0, 0, PAGE_WIDTH, PAGE_HEIGHT, '0.98 0.97 0.93');
   addRect(commands, 0, PAGE_HEIGHT - 116, PAGE_WIDTH, 116, '1 1 1');
   const logoWidth = 238;
   const logoHeight = logoImage ? logoWidth * (logoImage.height / logoImage.width) : 80;
   addImage(commands, logoImage, MARGIN, PAGE_HEIGHT - 98, logoWidth, logoHeight);
-  addText(commands, 'CUSTOM ROUTE BRIEF', PAGE_WIDTH - 194, PAGE_HEIGHT - 39, 10, 'F2', '0.08 0.24 0.57');
-  addText(commands, 'PREPARED FOR TRAVEL-DESK REVIEW', PAGE_WIDTH - 194, PAGE_HEIGHT - 57, 7, 'F2', '0.95 0.36 0.11');
+  addText(commands, kind === 'quotation' ? 'TRAVEL QUOTATION' : 'CUSTOM ROUTE BRIEF', PAGE_WIDTH - 194, PAGE_HEIGHT - 39, 10, 'F2', '0.08 0.24 0.57');
+  addText(commands, kind === 'quotation' ? 'APPROVED BY TRAVEL DESK' : 'PREPARED FOR TRAVEL-DESK REVIEW', PAGE_WIDTH - 194, PAGE_HEIGHT - 57, 7, 'F2', '0.95 0.36 0.11');
   addLine(commands, MARGIN, PAGE_HEIGHT - 116, PAGE_WIDTH - MARGIN, PAGE_HEIGHT - 116, '0.95 0.36 0.11', 1.5);
 
   let y = PAGE_HEIGHT - 143;
@@ -116,14 +117,15 @@ const buildPage = (pageLines, pageNumber, totalPages, logoImage) => {
       y -= 14;
       return;
     }
-    addText(commands, line.text, MARGIN, y, line.size || 9.5, line.bold ? 'F2' : 'F1', line.color || '0.16 0.19 0.22');
+    addText(commands, line.text, MARGIN, y, line.size || 9.5, line.bold || line.link ? 'F2' : 'F1', line.color || (line.link ? '0.08 0.24 0.57' : '0.16 0.19 0.22'));
+    if (line.link) links.push({ url: line.link, x: MARGIN, y: y - 3, width: Math.min(PAGE_WIDTH - MARGIN * 2, Math.max(55, toAscii(line.text).length * (line.size || 9.5) * 0.52)) });
     y -= line.leading || 14;
   });
 
   addLine(commands, MARGIN, 45, PAGE_WIDTH - MARGIN, 45, '0.86 0.82 0.73', 0.8);
   addText(commands, `Prepared by SreePayanam travel desk | Page ${pageNumber} of ${totalPages}`, MARGIN, 28, 8, 'F1', '0.42 0.45 0.44');
-  addText(commands, 'Commercial details shared separately', PAGE_WIDTH - 190, 28, 8, 'F1', '0.42 0.45 0.44');
-  return commands.join('\n');
+  addText(commands, kind === 'quotation' ? 'GST extra/as applicable' : 'Commercial details shared separately', PAGE_WIDTH - 190, 28, 8, 'F1', '0.42 0.45 0.44');
+  return { stream: commands.join('\n'), links };
 };
 
 const buildPdf = (pageStreams, logoImage) => {
@@ -138,10 +140,12 @@ const buildPdf = (pageStreams, logoImage) => {
   const fontBoldId = addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
   const logoHex = bytesToAsciiHex(logoImage.bytes);
   const logoId = addObject(`<< /Type /XObject /Subtype /Image /Width ${logoImage.width} /Height ${logoImage.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter [/ASCIIHexDecode /DCTDecode] /Length ${logoHex.length} >>\nstream\n${logoHex}\nendstream`);
-  const pageIds = pageStreams.map(stream => {
+  const pageIds = pageStreams.map(({ stream, links }) => {
     const streamLength = new TextEncoder().encode(stream).length;
     const contentId = addObject(`<< /Length ${streamLength} >>\nstream\n${stream}\nendstream`);
-    return addObject(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /F1 ${fontRegularId} 0 R /F2 ${fontBoldId} 0 R >> /XObject << /Im1 ${logoId} 0 R >> >> /Contents ${contentId} 0 R >>`);
+    const annotationIds = links.map(link => addObject(`<< /Type /Annot /Subtype /Link /Rect [${link.x} ${link.y} ${link.x + link.width} ${link.y + 12}] /Border [0 0 0] /A << /S /URI /URI (${escapePdf(link.url)}) >> >>`));
+    const annotations = annotationIds.length ? ` /Annots [${annotationIds.map(id => `${id} 0 R`).join(' ')}]` : '';
+    return addObject(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /F1 ${fontRegularId} 0 R /F2 ${fontBoldId} 0 R >> /XObject << /Im1 ${logoId} 0 R >> >> /Contents ${contentId} 0 R${annotations} >>`);
   });
   objects[pagesId - 1] = `<< /Type /Pages /Kids [${pageIds.map(id => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`;
   const catalogId = addObject(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
@@ -237,19 +241,91 @@ const createLines = ({ form, draft, selectedPackage, selectedDestinations }) => 
   return lines;
 };
 
-export const downloadQuotationPdf = async ({ form, draft, selectedPackage, selectedDestinations }) => {
-  if (!draft) return false;
-  const logoImage = await loadLogoJpeg();
-  const lines = createLines({ form, draft, selectedPackage, selectedDestinations });
+const addWrapped = (lines, value, maxChars = 90) => {
+  wrapText(value, maxChars).forEach(text => lines.push({ text }));
+  lines.push({ text: '', leading: 6 });
+};
+
+const createApprovedQuoteLines = quote => {
+  const lines = [];
+  const route = quote.route || {};
+  const review = route.planningReview || {};
+  const terms = quote.terms || {};
+  const places = quote.selectedPlaces || [];
+  const customer = quote.customer || {};
+  const days = route.itinerary || [];
+  const date = quote.approvedAt ? String(quote.approvedAt).slice(0, 10) : '';
+
+  lines.push({ type: 'meta', text: `Quotation ${quote.reference} | Version ${quote.version} | Approved ${formatDate(date)}` });
+  if (quote.approvedBy) lines.push({ type: 'meta', text: `Approved by ${quote.approvedBy}` });
+  lines.push({ type: 'meta', text: `Enquiry ${quote.enquiryReference} | Prepared for ${customer.name || 'Traveller'}` });
+  lines.push({ type: 'meta', text: `${customer.email || 'Email to be confirmed'} | ${customer.mobile || 'Mobile to be confirmed'}` });
+  lines.push({ text: '', leading: 10 });
+
+  lines.push({ type: 'heading', text: 'Route overview' });
+  addWrapped(lines, `${route.startingCity || 'Flexible departure'} -> ${route.endingCity || route.destination || 'Destination to be confirmed'}`);
+  addWrapped(lines, `Travel window: ${formatDate(route.travelStartDate)} to ${formatDate(route.returnDate)} | ${route.durationDays} days / ${route.durationNights} nights | ${customer.adults || 0} adults, ${customer.children || 0} children`);
+  addWrapped(lines, `${places.length} selected places: ${places.join(', ')}`);
+  if (route.overview) addWrapped(lines, route.overview);
+
+  lines.push({ type: 'heading', text: 'Planning review' });
+  lines.push({ text: `Status: ${review.status === 'not_feasible' ? 'Route changes needed' : review.status === 'tight' ? 'Ambitious timing' : 'Reviewed for selected timing'}`, bold: true });
+  if (review.summary) addWrapped(lines, review.summary);
+  lines.push({ text: `Selected places: ${places.length} | Planned stops: ${days.flatMap(day => day.places || []).length} | ${route.durationDays} days / ${route.durationNights} nights` });
+  if (review.unplacedPlaces?.length) addWrapped(lines, `Places needing review: ${review.unplacedPlaces.join(', ')}`);
+  if (terms.routeReviewNote) addWrapped(lines, `Travel-desk review: ${terms.routeReviewNote}`);
+
+  lines.push({ type: 'heading', text: 'Day-by-day route' });
+  days.forEach(day => {
+    lines.push({ text: `Day ${day.day} - ${day.title || 'Discover the route'}`, bold: true, leading: 16, keepWithNext: true });
+    if (day.base) lines.push({ text: `Area: ${day.base}` });
+    addWrapped(lines, `Stops: ${day.places?.length ? day.places.join(' | ') : 'Flexible local discovery'}`, 88);
+    if (day.activities) addWrapped(lines, `Plan: ${day.activities}`, 88);
+    if (day.transit) addWrapped(lines, `Travel: ${day.transit}`, 88);
+    if (day.meal) addWrapped(lines, `Meals: ${day.meal}`, 88);
+    if (day.hotel?.name) addWrapped(lines, `Stay planning: ${day.hotel.name}${day.hotel.rating ? ` | ${day.hotel.rating}` : ''}${day.hotel.desc ? ` - ${day.hotel.desc}` : ''}`, 88);
+  });
+
+  lines.push({ type: 'heading', text: 'Destination detail references' });
+  (quote.destinationReferences || []).forEach(reference => {
+    const label = `${reference.name} - ${reference.sourceType}; checked ${formatDate(reference.lastChecked)} (open details)`;
+    wrapText(label, 88).forEach(text => lines.push({ text, link: reference.url }));
+  });
+  lines.push({ text: '', leading: 8 });
+
+  lines.push({ type: 'heading', text: 'Economic, Deluxe and Premium' });
+  (quote.tiers || []).forEach(tier => {
+    const money = amount => `INR ${Number(amount || 0).toLocaleString('en-IN')}`;
+    lines.push({ text: `${tier.name}: ${money(tier.price?.total)} group | ${money(tier.price?.perPerson)} per person`, bold: true, leading: 17, keepWithNext: true });
+    addWrapped(lines, `Stay: ${tier.accommodation}. Transport: ${tier.transport}. Meals: ${tier.meals}.`, 88);
+    if (tier.activities) addWrapped(lines, `Activities: ${tier.activities}`, 88);
+    lines.push({ text: `Supplier source checked: ${formatDate(tier.sourceCheckedAt)} | Category/equivalent subject to availability`, size: 8.5, leading: 16 });
+  });
+
+  lines.push({ type: 'heading', text: 'Inclusions and exclusions' });
+  (terms.inclusions || []).forEach(item => addWrapped(lines, `Included: ${item}`, 88));
+  (terms.exclusions || []).forEach(item => addWrapped(lines, `Excluded: ${item}`, 88));
+
+  lines.push({ type: 'heading', text: 'Commercial terms' });
+  addWrapped(lines, `Price validity: ${formatDate(terms.validUntil)}. Subject to availability and supplier confirmation.`);
+  addWrapped(lines, `Tax: ${terms.taxNote}`);
+  addWrapped(lines, `Payment schedule: ${terms.paymentSchedule}`);
+  addWrapped(lines, `Cancellation terms: ${terms.cancellationTerms}`);
+  addWrapped(lines, `Assumptions: ${terms.assumptions}`);
+  return lines;
+};
+
+const paginateLines = lines => {
   const pages = [];
   let page = [];
   let pageHeight = 0;
   const maxContentHeight = 610;
-  lines.forEach(line => {
+  lines.forEach((line, index) => {
     const lineHeight = line.type === 'heading' ? 33 : line.type === 'meta' ? 14 : line.leading || 14;
-    const needsNewPage = page.length && pageHeight + lineHeight > maxContentHeight && line.type !== 'heading';
-    const headingNeedsNewPage = page.length && line.type === 'heading' && pageHeight > maxContentHeight - 60;
-    if (needsNewPage || headingNeedsNewPage) {
+    const next = lines[index + 1];
+    const nextHeight = next ? next.type === 'heading' ? 33 : next.leading || 14 : 0;
+    const needsNewPage = page.length && pageHeight + lineHeight + ((line.type === 'heading' || line.keepWithNext) ? nextHeight : 0) > maxContentHeight;
+    if (needsNewPage) {
       pages.push(page);
       page = [];
       pageHeight = 0;
@@ -258,6 +334,14 @@ export const downloadQuotationPdf = async ({ form, draft, selectedPackage, selec
     pageHeight += lineHeight;
   });
   if (page.length) pages.push(page);
+  return pages;
+};
+
+export const downloadQuotationPdf = async ({ form, draft, selectedPackage, selectedDestinations }) => {
+  if (!draft) return false;
+  const logoImage = await loadLogoJpeg();
+  const lines = createLines({ form, draft, selectedPackage, selectedDestinations });
+  const pages = paginateLines(lines);
   const streams = pages.map((pageLines, index) => buildPage(pageLines, index + 1, pages.length, logoImage));
   const blob = buildPdf(streams, logoImage);
   const url = URL.createObjectURL(blob);
@@ -265,6 +349,27 @@ export const downloadQuotationPdf = async ({ form, draft, selectedPackage, selec
   const safeName = toAscii(selectedPackage?.name || draft.destination || 'custom-route').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'custom-route';
   link.href = url;
   link.download = `SreePayanam_Route_Brief_${safeName}_${draft.planReference || 'draft'}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return true;
+};
+
+export const buildApprovedQuotationPdfBlob = (quote, logoImage) => {
+  if (!quote || quote.status !== 'Approved') throw new Error('The quotation has not been approved.');
+  const pages = paginateLines(createApprovedQuoteLines(quote));
+  const streams = pages.map((pageLines, index) => buildPage(pageLines, index + 1, pages.length, logoImage, 'quotation'));
+  return buildPdf(streams, logoImage);
+};
+
+export const downloadApprovedQuotationPdf = async quote => {
+  const logoImage = await loadLogoJpeg();
+  const blob = buildApprovedQuotationPdfBlob(quote, logoImage);
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `SreePayanam_Quotation_${toAscii(quote.reference).replace(/[^a-zA-Z0-9-]/g, '')}.pdf`;
   document.body.appendChild(link);
   link.click();
   link.remove();

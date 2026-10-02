@@ -31,6 +31,14 @@ const DEFAULT_FORM = {
   childWithBedCount: 0,
   childNoBedCount: 0,
   infantCount: 0,
+  childAges: '',
+  preferredTier: 'Compare all',
+  travelPace: 'Balanced',
+  interests: '',
+  accessibilityNeeds: '',
+  mealPreference: 'Either',
+  foodRestrictions: '',
+  budget: '',
   hotelCategory: '3 Star',
   hotelRooms: '',
   mealPlan: 'MAP',
@@ -48,6 +56,7 @@ const DEFAULT_FORM = {
 
 const PLANNING_FIELDS = new Set([
   'adultCount', 'childWithBedCount', 'childNoBedCount', 'infantCount',
+  'childAges', 'preferredTier', 'travelPace', 'interests', 'accessibilityNeeds', 'mealPreference', 'foodRestrictions', 'budget',
   'hotelCategory', 'hotelRooms', 'mealPlan', 'vehicleType', 'guideRequired', 'entryTickets',
   'durationDays', 'durationNights'
 ]);
@@ -325,6 +334,14 @@ const AiAssistant = () => {
     childWithBedCount: Number(form.childWithBedCount) || 0,
     childNoBedCount: Number(form.childNoBedCount) || 0,
     infantCount: Number(form.infantCount) || 0,
+    childAges: form.childAges,
+    preferredTier: form.preferredTier,
+    travelPace: form.travelPace,
+    interests: form.interests,
+    accessibilityNeeds: form.accessibilityNeeds,
+    mealPreference: form.mealPreference,
+    foodRestrictions: form.foodRestrictions,
+    budget: form.budget,
     hotelCategory: form.hotelCategory,
     hotelRooms: form.hotelRooms,
     mealPlan: form.mealPlan,
@@ -332,7 +349,7 @@ const AiAssistant = () => {
     guideRequired: form.guideRequired,
     entryTickets: form.entryTickets,
     planningFingerprint: ''
-  }), [allDestinations, dateDuration, form.adultCount, form.childNoBedCount, form.childWithBedCount, form.destination, form.departureCity, form.entryTickets, form.guideRequired, form.hotelCategory, form.hotelRooms, form.infantCount, form.mealPlan, form.returnDate, form.travelStartDate, form.vehicleType, form.durationDays, form.durationNights, selectedLabels]);
+  }), [allDestinations, dateDuration, form.adultCount, form.budget, form.childAges, form.childNoBedCount, form.childWithBedCount, form.destination, form.departureCity, form.entryTickets, form.foodRestrictions, form.guideRequired, form.hotelCategory, form.hotelRooms, form.infantCount, form.interests, form.accessibilityNeeds, form.mealPlan, form.mealPreference, form.preferredTier, form.returnDate, form.travelPace, form.travelStartDate, form.vehicleType, form.durationDays, form.durationNights, selectedLabels]);
 
   const planningFingerprint = useMemo(
     () => JSON.stringify({ ...planningPayload, planningFingerprint: undefined }),
@@ -526,6 +543,10 @@ const AiAssistant = () => {
     if (step === 3) {
       if (!Number(form.adultCount) || Number(form.adultCount) < 1) errors.adultCount = 'At least one adult is required.';
       if (Number(form.durationNights) < 0) errors.durationNights = 'Nights cannot be negative.';
+      const children = Number(form.childWithBedCount || 0) + Number(form.childNoBedCount || 0);
+      const ages = form.childAges.split(',').map(age => age.trim()).filter(Boolean);
+      if (children > 0 && (ages.length !== children || ages.some(age => !/^\d{1,2}$/.test(age) || Number(age) > 17))) errors.childAges = 'Add one age from 0 to 17 for each child, separated by commas.';
+      if (form.budget && (!Number.isFinite(Number(form.budget)) || Number(form.budget) <= 0)) errors.budget = 'Enter a positive total budget or leave it blank.';
     }
     if (step === 4) {
       if (!form.fullName.trim()) errors.fullName = 'Add your full name.';
@@ -614,15 +635,19 @@ const AiAssistant = () => {
           numberOfPassengers: totalTravellers,
           adultCount: Number(form.adultCount),
           childCount: Number(form.childWithBedCount || 0) + Number(form.childNoBedCount || 0),
+          budget: form.budget ? Number(form.budget) : undefined,
           preferredCategory: selectedPackage?.tourType,
           hotelCategory: form.hotelCategory,
           hotelRooms: Number(form.hotelRooms) || undefined,
           carType: form.vehicleType,
           quoteReference: draftReference,
+          leadSource: 'planner',
+          contactConsent: form.consent,
+          consentVersion: 'route-enquiry-2026-10',
           selectedDestinations: selectedLabels,
           remarks: form.notes.trim(),
           detailedPreferences: {
-            plannerVersion: 3,
+            plannerVersion: 4,
             planningMode: 'time-aware route draft',
             destination: form.destination.trim(),
             packageName: selectedPackage?.name,
@@ -632,12 +657,36 @@ const AiAssistant = () => {
             returnDate: form.returnDate,
             durationSource: dateDuration ? 'travel dates' : 'manual duration fallback',
             planningStatus: nextDraft?.planningReview?.status || 'workable',
+            routeDraft: nextDraft ? {
+              planReference: draftReference,
+              title: nextDraft.title,
+              destination: nextDraft.destination,
+              startingCity: nextDraft.startingCity,
+              endingCity: nextDraft.endingCity,
+              travelStartDate: nextDraft.travelStartDate,
+              returnDate: nextDraft.returnDate,
+              durationDays: nextDraft.durationDays,
+              durationNights: nextDraft.durationNights,
+              overview: nextDraft.overview,
+              planningReview: nextDraft.planningReview,
+              itinerary: nextDraft.itinerary,
+              inclusions: nextDraft.inclusions,
+              exclusions: nextDraft.exclusions
+            } : null,
             unplacedPlaces: nextDraft?.planningReview?.unplacedPlaces || [],
             suggestedRemovals: nextDraft?.planningReview?.suggestedRemovals || [],
             suggestedReplacements: nextDraft?.planningReview?.suggestedReplacements || [],
             contactMethod: form.contactMethod,
             guideRequired: form.guideRequired,
             mealPlan: form.mealPlan,
+            mealPreference: form.mealPreference,
+            foodRestrictions: form.foodRestrictions,
+            childAges: form.childAges.split(',').map(age => age.trim()).filter(Boolean).map(Number),
+            preferredTier: form.preferredTier,
+            travelPace: form.travelPace,
+            interests: form.interests,
+            accessibilityNeeds: form.accessibilityNeeds,
+            budget: form.budget ? Number(form.budget) : null,
             entryTickets: form.entryTickets,
             city: form.city.trim()
           }
@@ -916,12 +965,22 @@ const AiAssistant = () => {
                             <Field id="childWithBedCount" label="Children with bed"><input id="childWithBedCount" className="planner-field" type="number" min="0" max="30" inputMode="numeric" value={form.childWithBedCount} onChange={event => updateField('childWithBedCount', event.target.value)} /></Field>
                             <Field id="childNoBedCount" label="Children without bed"><input id="childNoBedCount" className="planner-field" type="number" min="0" max="30" inputMode="numeric" value={form.childNoBedCount} onChange={event => updateField('childNoBedCount', event.target.value)} /></Field>
                             <Field id="infantCount" label="Infants"><input id="infantCount" className="planner-field" type="number" min="0" max="20" inputMode="numeric" value={form.infantCount} onChange={event => updateField('infantCount', event.target.value)} /></Field>
+                            {(Number(form.childWithBedCount || 0) + Number(form.childNoBedCount || 0)) > 0 && <Field id="childAges" label="Children's ages" required error={fieldErrors.childAges} help="One age per child, separated by commas."><input id="childAges" className="planner-field" inputMode="text" value={form.childAges} onChange={event => updateField('childAges', event.target.value)} placeholder="e.g. 7, 11" {...getAria('childAges', fieldErrors.childAges, 'childAges-help')} /></Field>}
                           </div>
                           <div className="planner-field-grid" style={{ marginTop: '1rem' }}>
                             <Field id="hotelCategory" label="Hotel comfort"><select id="hotelCategory" className="planner-select" value={form.hotelCategory} onChange={event => updateField('hotelCategory', event.target.value)}><option>Budget</option><option>3 Star</option><option>4 Star</option><option>5 Star</option></select></Field>
                             <Field id="hotelRooms" label="Rooms"><input id="hotelRooms" className="planner-field" type="number" min="0" max="30" inputMode="numeric" placeholder="Auto-size from adults" value={form.hotelRooms} onChange={event => updateField('hotelRooms', event.target.value)} /></Field>
                             <Field id="mealPlan" label="Meal preference"><select id="mealPlan" className="planner-select" value={form.mealPlan} onChange={event => updateField('mealPlan', event.target.value)}><option value="EP">EP — room only</option><option value="CP">CP — breakfast</option><option value="MAP">MAP — breakfast + dinner</option><option value="AP">AP — all meals</option></select></Field>
                             <Field id="vehicleType" label="Local transport"><select id="vehicleType" className="planner-select" value={form.vehicleType} onChange={event => updateField('vehicleType', event.target.value)}><option>Sedan</option><option>Ertiga</option><option>Innova</option><option>Tempo Traveller</option><option>Mini Coach</option><option>Coach</option></select></Field>
+                            <Field id="preferredTier" label="Preferred option"><select id="preferredTier" className="planner-select" value={form.preferredTier} onChange={event => updateField('preferredTier', event.target.value)}><option>Compare all</option><option>Economic</option><option>Deluxe</option><option>Premium</option></select></Field>
+                            <Field id="travelPace" label="Travel pace"><select id="travelPace" className="planner-select" value={form.travelPace} onChange={event => updateField('travelPace', event.target.value)}><option>Relaxed</option><option>Balanced</option><option>Active</option></select></Field>
+                            <Field id="mealPreference" label="Food preference"><select id="mealPreference" className="planner-select" value={form.mealPreference} onChange={event => updateField('mealPreference', event.target.value)}><option>Either</option><option>Vegetarian</option><option>Non-vegetarian</option><option>Jain</option></select></Field>
+                            <Field id="budget" label="Target group budget (₹)" error={fieldErrors.budget} help="Optional planning target, not a quoted price."><input id="budget" className="planner-field" type="number" min="1" inputMode="decimal" value={form.budget} onChange={event => updateField('budget', event.target.value)} {...getAria('budget', fieldErrors.budget, 'budget-help')} /></Field>
+                          </div>
+                          <div className="planner-field-grid" style={{ marginTop: '1rem' }}>
+                            <Field id="interests" label="Interests" help="Optional. Temples, food, nature, history or anything important to you."><input id="interests" className="planner-field" value={form.interests} onChange={event => updateField('interests', event.target.value)} /></Field>
+                            <Field id="foodRestrictions" label="Allergies or food restrictions" help="Tell the travel desk what must be checked with suppliers."><input id="foodRestrictions" className="planner-field" value={form.foodRestrictions} onChange={event => updateField('foodRestrictions', event.target.value)} /></Field>
+                            <Field id="accessibilityNeeds" label="Mobility or accessibility needs" help="Optional. The travel desk will confirm what can be arranged."><input id="accessibilityNeeds" className="planner-field" value={form.accessibilityNeeds} onChange={event => updateField('accessibilityNeeds', event.target.value)} /></Field>
                           </div>
                           <div style={{ marginTop: '1rem' }}><span className="field-label">Add-ons for the route draft</span><div className="choice-row"><label className={`choice-card${form.guideRequired === 'Yes' ? ' selected' : ''}`}><input type="radio" name="guideRequired" checked={form.guideRequired === 'Yes'} onChange={() => updateField('guideRequired', 'Yes')} /><strong><Hotel size={16} aria-hidden="true" /> Local guide</strong><span>Include guide support in the route brief.</span></label><label className={`choice-card${form.guideRequired === 'No' ? ' selected' : ''}`}><input type="radio" name="guideRequired" checked={form.guideRequired === 'No'} onChange={() => updateField('guideRequired', 'No')} /><strong><MapPin size={16} aria-hidden="true" /> Self-guided</strong><span>Keep the route flexible.</span></label><label className={`choice-card${form.entryTickets === 'Yes' ? ' selected' : ''}`}><input type="checkbox" checked={form.entryTickets === 'Yes'} onChange={event => updateField('entryTickets', event.target.checked ? 'Yes' : 'No')} /><strong><FileText size={16} aria-hidden="true" /> Entry tickets</strong><span>Keep activity preferences visible to the travel desk.</span></label></div></div>
                         </div>
