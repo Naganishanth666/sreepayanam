@@ -104,7 +104,7 @@ The navigation is a sticky white bar with a visible mobile menu button and blue 
 
 ### Forms and overlays
 
-Product forms use `noValidate`, real labels, app-owned errors and first-error focus. Native select/date controls are intentional where platform-owned popups are acceptable; the destination picker is a searchable, grouped checkbox primitive because its broad guide, selection count, “select recommended” action and custom-place fallback are part of the product contract. A routebook is a starting point, not a restriction on customer requests. The route brief PDF is generated from the time-aware draft and keeps commercial details separate for the travel desk. The admin enquiry view contains the approved quotation and a collapsed twelve-section document-pack editor. The editor preserves the supplied DOCX's section order and table wording, shows completion counts, and only unlocks the combined PDF after named-admin finalization.
+Product forms use `noValidate`, real labels, app-owned errors and first-error focus. Native select/date controls are intentional where platform-owned popups are acceptable; the destination picker is a searchable, grouped checkbox primitive because its broad guide, selection count, “select recommended” action and custom-place fallback are part of the product contract. A routebook is a starting point, not a restriction on customer requests. The public route draft uses the supplied DOCX quotation's headings and blue-header tables, displays day-by-day hotel requests, and keeps commercial fields pending for the travel desk. The admin enquiry view contains the approved quotation and a collapsed twelve-section document-pack editor. The editor preserves the supplied DOCX's section order and table wording, shows completion counts, and only unlocks the combined PDF after named-admin finalization.
 
 ### Iconography
 
@@ -116,7 +116,7 @@ Motion has one job: make the route reveal feel like a journey. The home hero adv
 
 ### Content and data visualization
 
-Use plain travel language: “Choose a destination”, “Add places”, “Review the route”, “Download route brief”. Dates are stored as date-only input values and displayed as local calendar dates; both dates derive the day/night count and the server owns any internal commercial calculation.
+Use plain travel language: “Choose a destination”, “Add places”, “Review the route”, “Download route draft”. Dates are stored as date-only input values and displayed as local calendar dates; both dates derive the day/night count and the server owns any internal commercial calculation.
 
 ## Do's and Don'ts
 

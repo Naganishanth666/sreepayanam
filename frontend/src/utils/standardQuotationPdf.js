@@ -1,5 +1,5 @@
 // The combined pack follows all sections of the Standard Travel Documents Pack.
-// The route brief remains a separate, unpriced planning document.
+// The public route brief uses its quotation layout with unpriced draft content.
 import travelPackTemplate from '../../../shared/standardTravelPack.json';
 const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
@@ -107,7 +107,8 @@ const drawFooter = (page, number, count) => {
   ctx.fillText(label, RIGHT - ctx.measureText(label).width, 806);
 };
 
-const renderQuotationPages = (quote, pack = null) => {
+const renderQuotationPages = (quote, pack = null, options = {}) => {
+  const isDraft = options.unpricedDraft === true;
   const pages = [createPage()];
   const current = () => pages[pages.length - 1];
   const nextPage = () => pages.push(createPage());
@@ -275,10 +276,13 @@ const renderQuotationPages = (quote, pack = null) => {
     nextPage();
   }
   heading('01  Tour Package Quotation', true);
-  paragraph('Customer-facing estimate and quotation template. Use one enquiry reference across CRM, quotation, booking and accounting records.', { after: 12 });
+  paragraph(isDraft
+    ? 'UNPRICED PLANNING DRAFT  |  Travel-desk review required before a quotation or booking can be issued.'
+    : 'Customer-facing estimate and quotation template. Use one enquiry reference across CRM, quotation, booking and accounting records.',
+  { after: 12, bold: isDraft, color: isDraft ? BLUE : INK });
   table(
     ['CUSTOMER INQUIRY REFERENCE', 'QUOTATION NUMBER', 'ISSUE DATE', 'VALID UNTIL'],
-    [[short(quote.enquiryReference), short(quote.reference), formatDate(quote.approvedAt), formatDate(terms.validUntil)]],
+    [[short(quote.enquiryReference), isDraft ? 'Pending staff approval' : short(quote.reference), formatDate(isDraft ? quote.createdAt : quote.approvedAt), isDraft ? 'Set after approval' : formatDate(terms.validUntil)]],
     [130, 133, 108, 136], { fontSize: 7.1, after: 13 }
   );
   table(['Field', 'Details'], [
@@ -287,7 +291,8 @@ const renderQuotationPages = (quote, pack = null) => {
     ['Route overview', `${short(route.startingCity)} → ${short(route.destination)} → ${short(route.endingCity)}`],
     ['Travel window', `${formatDate(route.travelStartDate)} to ${formatDate(route.returnDate)}  |  ${route.durationDays || days.length} days / ${route.durationNights ?? Math.max(days.length - 1, 0)} nights`],
     ['Travellers', `${customer.adults || 0} adults  |  ${customer.children || 0} children${ageText}${customer.infants ? `  |  ${customer.infants} infants` : ''}  |  ${customer.rooms ? `${customer.rooms} rooms` : 'Rooms to confirm'}`],
-    ['Travel preferences', `${short(customer.preferredTier, 'Compare all options')}  |  Meals: ${short(customer.mealPreference)}  |  Vehicle: ${short(customer.vehicleType)}`]
+    ['Travel preferences', `${short(customer.preferredTier, 'Compare all options')}  |  Meals: ${short(customer.mealPreference)}  |  Vehicle: ${short(customer.vehicleType)}`],
+    ...(isDraft ? [['Hotel request', short(quote.hotelRequest, 'Property and room details pending staff review')]] : [])
   ], [119, 388]);
 
   heading('Planning review');
@@ -297,8 +302,8 @@ const renderQuotationPages = (quote, pack = null) => {
       const ref = references.get(clean(name).toLowerCase());
       const day = dayForPlace(name);
       return [
-        { text: `${name}\n${ref?.url || 'Reference pending'}`, link: ref?.url },
-        `${day ? `Included on Day ${day.day}` : 'Needs route confirmation'}  |  ${day && needsTimingConfirmation(day) ? 'Entry timing to confirm; ' : ''}${ref?.sourceType || 'Source pending'}; checked ${formatDate(ref?.lastChecked)}`
+        { text: `${name}\n${isDraft && ref?.url ? 'Map search reference (unverified)' : ref?.url || 'Reference pending'}`, link: ref?.url },
+        `${day ? `Included on Day ${day.day}` : 'Needs route confirmation'}  |  ${day && needsTimingConfirmation(day) ? 'Entry timing to confirm; ' : ''}${ref?.sourceType || 'Source pending'}${ref?.lastChecked ? `; checked ${formatDate(ref.lastChecked)}` : '; not yet verified'}`
       ];
     }),
     ...(terms.routeReviewNote ? [['Travel-desk review', terms.routeReviewNote]] : [])
@@ -317,7 +322,7 @@ const renderQuotationPages = (quote, pack = null) => {
         text: `Day ${day.day} — ${short(day.base, 'Area to confirm')}\nStops:\n${stopText}`,
         lineLinks: stops.map(name => ({ label: name, url: references.get(clean(name).toLowerCase())?.url }))
       },
-      `Visit plan: ${short(day.activities)}\nTravel: ${short(day.transit)}\nDarshan/entry window: ${status}\nMeals: ${short(day.meal)}\nStay: ${stay}`
+      `Visit plan: ${short(day.activities)}\nTravel: ${short(day.transit)}\nDarshan/entry window: ${status}\nMeals: ${short(day.meal)}\nStay: ${stay}${day.hotel?.rating ? `; ${day.hotel.rating}` : ''}`
     ];
   }), [157, 350]);
 
@@ -326,11 +331,14 @@ const renderQuotationPages = (quote, pack = null) => {
     (quote.tiers || []).map(tier => [
       tier.name,
       `${short(tier.accommodation)}\n${short(tier.transport)}\n${short(tier.meals)}`,
-      money(tier.price?.total),
-      money(tier.price?.perPerson),
-      short(terms.taxNote)
+      isDraft ? 'Pending staff quote' : money(tier.price?.total),
+      isDraft ? 'Pending staff quote' : money(tier.price?.perPerson),
+      isDraft ? 'To be confirmed' : short(terms.taxNote)
     ]), [58, 182, 88, 84, 95], { fontSize: 7.1, lineHeight: 10.2, after: 10 });
-  paragraph('Quote statement: Prices are subject to supplier availability and final confirmation. Confirmed properties, meal services, tickets, darshan slots and transport will be stated in the approved booking confirmation.', { size: 8, after: 11 });
+  paragraph(isDraft
+    ? 'Planning statement: This draft has no approved prices, tax or supplier bookings. The travel desk will confirm hotel properties, rooms, meals, tickets, darshan slots and transport before issuing a quotation.'
+    : 'Quote statement: Prices are subject to supplier availability and final confirmation. Confirmed properties, meal services, tickets, darshan slots and transport will be stated in the approved booking confirmation.',
+  { size: 8, after: 11 });
 
   heading('Inclusions, exclusions and payment', false, 245);
   table(['Included', 'Not included / payable directly'], [[
@@ -338,11 +346,14 @@ const renderQuotationPages = (quote, pack = null) => {
     (terms.exclusions || []).join('\n') || 'To be confirmed'
   ]], [252, 255]);
   table(['Field', 'Details'], [
-    ['Payment schedule', short(terms.paymentSchedule)],
-    ['Cancellation / change', short(terms.cancellationTerms)],
+    ['Payment schedule', isDraft ? 'To be provided in the staff-approved quotation' : short(terms.paymentSchedule)],
+    ['Cancellation / change', isDraft ? 'To be provided in the staff-approved quotation' : short(terms.cancellationTerms)],
     ['Special notes', short(notes, 'None recorded')]
   ], [119, 388], { after: 12 });
-  paragraph('For SreePayanam InterNational Pvt. Ltd.   |   Authorized signatory: ____________________   |   Customer acceptance: ____________________', { size: 7.7, after: 0 });
+  paragraph(isDraft
+    ? 'For SreePayanam InterNational Pvt. Ltd.   |   Travel-desk review: Pending   |   Customer acceptance: After approved quotation'
+    : 'For SreePayanam InterNational Pvt. Ltd.   |   Authorized signatory: ____________________   |   Customer acceptance: ____________________',
+  { size: 7.7, after: 0 });
 
   if (pack) {
     for (let section = 2; section <= 13; section += 1) templateBlocks(section);
@@ -399,6 +410,11 @@ const buildPdf = pages => {
 export const buildStandardQuotationPdfBlob = quote => {
   if (!quote || quote.status !== 'Approved') throw new Error('The quotation has not been approved.');
   return buildPdf(renderQuotationPages(quote));
+};
+
+export const buildStandardRouteBriefPdfBlob = draftQuote => {
+  if (!draftQuote || !draftQuote.route?.itinerary?.length) throw new Error('A route draft is required.');
+  return buildPdf(renderQuotationPages(draftQuote, null, { unpricedDraft: true }));
 };
 
 export const buildStandardTravelPackPdfBlob = (quote, pack) => {

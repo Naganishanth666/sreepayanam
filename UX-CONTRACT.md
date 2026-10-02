@@ -34,7 +34,7 @@ This contract covers the public planner/route-brief workflow, the shared public 
 | Advance step | Continue | Stable button with busy-free local transition | Next named step | Inline step error and first-invalid focus | First field in next step |
 | Prepare route draft | Continue from comfort | Stable busy button, preserve form | Time-aware route review with day/night totals and suggested changes | Degraded local draft remains visible; keep fields and retry | Route review |
 | Send enquiry | Send route enquiry / retry | Stable busy button | Confirmation copy and route-brief download | Draft remains available; retry send without rebuilding | Success heading |
-| Download PDF | Download route brief | Logo preparation and file generation | Structured `.pdf` route brief with no commercial totals | Keep draft visible; offer download again | Download button |
+| Download PDF | Download standard-format route draft | Font preparation and file generation | Unpriced `.pdf` in the DOCX quotation table layout, with day-by-day hotel planning | Keep draft visible; offer download again | Download button |
 | Back step | Back | None | Prior step with selections retained | N/A | Prior step heading |
 
 ## Required states
@@ -54,7 +54,7 @@ This contract covers the public planner/route-brief workflow, the shared public 
 - Supplier cost, markup amount, customer price, tax, internal notes, raw backend errors, authentication tokens and payment secrets are never placed in the customer UI or route-brief PDF. Internal quotation previews require admin authorization.
 - Planner enquiries record the consent version and source; their saved route draft provides the day plan for staff review. The route draft is unverified AI/customer input. A quote approval requires staff to review timing and any unplaced stops.
 - The planner captures a return point and requested darshan or entry windows. AI labels opening hours and slots as needing official-source confirmation; staff can edit each day's entry-window status before approval. The approved PDF carries traveller ages, rooms, meal and vehicle preferences from the enquiry snapshot.
-- The supplied DOCX is the visual and wording source for the combined pack. Staff must replace bracketed fields with verified values; the app does not infer GST treatment, received funds, supplier confirmation or bank matches from AI output. A PDF remains unavailable while required fields or section checks are unfinished.
+- The supplied DOCX is the visual and wording source for the public draft, approved quotation and combined pack. The public draft uses the quotation layout with explicit pending commercial fields; its map-search links are marked unverified. Staff must replace bracketed fields with verified values in the pack; the app does not infer GST treatment, received funds, supplier confirmation or bank matches from AI output. The combined PDF remains unavailable while required fields or section checks are unfinished.
 - Default new-quote pricing is direct verified cost plus 10% contingency, then 25% markup. GST remains separate and requires accountant-approved wording. Existing historical package snapshots are not silently repriced.
 - Date-only values remain date-only; no timezone conversion is applied to travel dates.
 - Package cancellation/terms copy remains package-controlled. The planner does not invent legal wording.

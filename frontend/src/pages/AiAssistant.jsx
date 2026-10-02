@@ -775,7 +775,7 @@ const AiAssistant = () => {
       });
       return true;
     } catch {
-      setRequestError('We could not prepare the route brief PDF. Please try again.');
+      setRequestError('We could not prepare the route draft PDF. Please try again.');
       return false;
     } finally {
       setPdfState('idle');
@@ -892,7 +892,7 @@ const AiAssistant = () => {
                 <div className="draft-private-note"><ShieldCheck size={16} aria-hidden="true" /><span>Commercial details are shared separately after the travel desk reviews availability, timing and suppliers.</span></div>
                 <div className="quote-result-actions">
                   {requestState === 'ready' && <button type="button" className="btn btn-primary" onClick={() => submitEnquiry(submittedDraft)} disabled={requestState === 'sending'} aria-busy={requestState === 'sending'}><RefreshCw size={16} aria-hidden="true" /> Send enquiry again</button>}
-                  <button type="button" className="btn btn-secondary" onClick={downloadPdf} disabled={pdfState === 'loading'} aria-busy={pdfState === 'loading'}><Download size={16} aria-hidden="true" /> {pdfState === 'loading' ? 'Preparing route brief...' : 'Download route brief PDF'}</button>
+                  <button type="button" className="btn btn-secondary" onClick={downloadPdf} disabled={pdfState === 'loading'} aria-busy={pdfState === 'loading'}><Download size={16} aria-hidden="true" /> {pdfState === 'loading' ? 'Preparing route draft...' : 'Download standard-format route draft PDF'}</button>
                   <button type="button" className="btn btn-outline" onClick={() => { setSubmittedDraft(null); setEnquirySuccess(false); setRequestError(''); setRequestState('idle'); }}>Edit route</button>
                   <button type="button" className="btn btn-ghost" onClick={startOver}>Start a new route</button>
                 </div>
@@ -1021,8 +1021,8 @@ const AiAssistant = () => {
 
                       {currentStep === 4 && (
                         <div>
-                          <div className="planner-section-title"><h2>Review your route</h2><p>Send the enquiry to download your route brief PDF. The travel desk will then verify suppliers and prepare the Economic, Deluxe and Premium quotation.</p></div>
-                          <div className="planner-document-note"><FileText size={19} aria-hidden="true" /><div><strong>Two different documents</strong><p>Your route brief records the day plan without prices. A priced quotation with destination links, tax wording and terms becomes available only after staff approval.</p></div></div>
+                          <div className="planner-section-title"><h2>Review your route</h2><p>Send the enquiry to download your standard-format route draft PDF. The travel desk will then verify suppliers and prepare the Economic, Deluxe and Premium quotation.</p></div>
+                          <div className="planner-document-note"><FileText size={19} aria-hidden="true" /><div><strong>Two different documents</strong><p>Your unpriced route draft uses the standard quotation layout and records the day plan, hotel request and places for staff review. The completed document pack becomes available after staff fills every section and approves it.</p></div></div>
                           <div className={`planning-review status-${reviewStatus}`} aria-live="polite">
                             <div className="planning-review-header"><span className="planning-review-icon"><Route size={18} aria-hidden="true" /></span><div><span className="planning-review-kicker">AI route review</span><h3>{reviewStatusCopy[reviewStatus]}</h3></div></div>
                             <p className="planning-review-summary">{activeReview.summary}</p>
