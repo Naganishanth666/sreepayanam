@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Download, FileCheck2, FilePenLine } from 'lucide-react';
 import ConfirmDialog from './ConfirmDialog';
 import { useAuth } from '../context/useAuth';
@@ -210,6 +211,7 @@ const QuotationDesk = ({ enquiry, adminPassword }) => {
               <Download size={16} aria-hidden="true" /> {busy === `download-${item._id}` ? 'Preparing quotation PDF…' : 'Download approved quotation PDF'}
             </button>
             {isAdmin && <TravelDocumentPackDesk quoteId={item._id} token={token} />}
+            {!isAdmin && <p className="quotation-desk-note">The combined final document pack requires a named Admin account. <Link to="/login">Sign in as Admin</Link> to complete and download it.</p>}
           </div>)}
           {!loading && <div className="quotation-desk-form">
             <div className="quotation-desk-section-head"><h5>{draft ? `Draft ${draft.reference} · Version ${draft.version}` : 'New quotation draft'}</h5><span>10% contingency, then 25% markup</span></div>

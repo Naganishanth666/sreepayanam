@@ -57,6 +57,7 @@
 .quotation-desk-section-head h5 { color: var(--color-ink); font-size: 1.05rem; }
 .quotation-desk-section-head span { color: var(--color-muted); font-size: 0.78rem; }
 .quotation-desk-note { margin-top: 0.6rem; }
+.quotation-desk-note a { color: var(--color-ink); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
 
 .quotation-desk-reference-list,
 .quotation-desk-day-list,
