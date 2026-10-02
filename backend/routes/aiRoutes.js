@@ -123,6 +123,7 @@ const sanitizeStructuredPlan = (payload, preferences) => {
   const durationDays = numberInRange(preferences.durationDays, 5, 1, 60);
   const durationNights = numberInRange(preferences.durationNights, Math.max(durationDays - 1, 0), 0, 59);
   const selectedPlaces = cleanPlaceList(preferences.selectedDestinations, 40);
+  const selectedNames = new Map(selectedPlaces.map(place => [normalizePlaceKey(place), place]));
   const rawItinerary = Array.isArray(payload?.itinerary) ? payload.itinerary : [];
   const itinerary = Array.from({ length: durationDays }, (_, index) => {
     const day = rawItinerary.find(item => Number(item?.day) === index + 1) || rawItinerary[index] || {};
@@ -131,7 +132,7 @@ const sanitizeStructuredPlan = (payload, preferences) => {
       day: index + 1,
       title: cleanPlanningText(day.title, 120) || (index === 0 ? 'Arrival & settle in' : index === durationDays - 1 ? 'Last light & return' : 'Discover the route'),
       base: cleanPlanningText(day.base || day.location, 120),
-      places: cleanPlaceList(day.places, 10),
+      places: cleanPlaceList(day.places, 10).map(place => selectedNames.get(normalizePlaceKey(place))).filter(Boolean),
       activities: cleanPlanningText(day.activities, 900) || 'Flexible time for local discovery.',
       hotel: {
         name: cleanPlanningText(hotel.name, 160),
@@ -146,14 +147,15 @@ const sanitizeStructuredPlan = (payload, preferences) => {
   const plannedPlaceKeys = new Set(itinerary.flatMap(day => day.places).map(normalizePlaceKey).filter(Boolean));
   const inferredUnplaced = selectedPlaces.filter(place => !plannedPlaceKeys.has(normalizePlaceKey(place)));
   const review = payload?.planningReview && typeof payload.planningReview === 'object' ? payload.planningReview : {};
-  const reportedUnplaced = cleanPlaceList(review.unplacedPlaces, 20);
+  const selectedPlaceKeys = new Set(selectedPlaces.map(normalizePlaceKey));
+  const reportedUnplaced = cleanPlaceList(review.unplacedPlaces, 20).filter(place => selectedPlaceKeys.has(normalizePlaceKey(place)));
   const unplacedPlaces = [...new Map([...reportedUnplaced, ...inferredUnplaced].map(place => [normalizePlaceKey(place), place])).values()];
   const reportedStatus = ['workable', 'tight', 'not_feasible'].includes(review.status) ? review.status : '';
-  const selectedPlaceKeys = new Set(selectedPlaces.map(normalizePlaceKey));
   const plannedSelectedPlaceKeys = new Set([...plannedPlaceKeys].filter(place => selectedPlaceKeys.has(place)));
+  const practicalCapacity = Math.max(1, durationDays * 2 - (durationDays > 1 ? 2 : 0));
   const status = unplacedPlaces.length
     ? (plannedSelectedPlaceKeys.size >= Math.max(1, selectedPlaces.length - 2) ? 'tight' : 'not_feasible')
-    : reportedStatus || (selectedPlaces.length > durationDays * 4 ? 'tight' : 'workable');
+    : selectedPlaces.length > practicalCapacity ? 'tight' : reportedStatus || 'workable';
   const defaultSummary = status === 'workable'
     ? 'The selected places can be shaped into this time window with sensible daily clusters.'
     : status === 'tight'
@@ -173,7 +175,7 @@ const sanitizeStructuredPlan = (payload, preferences) => {
     overview: cleanPlanningText(payload?.overview, 900) || 'A time-aware route draft arranged around the places you selected.',
     planningReview: {
       status,
-      summary: cleanPlanningText(review.summary, 500) || defaultSummary,
+      summary: reportedStatus === status ? cleanPlanningText(review.summary, 500) || defaultSummary : defaultSummary,
       selectedPlaceCount: selectedPlaces.length,
       plannedPlaceCount: plannedSelectedPlaceKeys.size,
       unplacedPlaces,
@@ -217,25 +219,6 @@ const sanitizeDestinationGuide = (payload, destination) => {
     destination: cleanAiText(payload?.destination, 180) || destination,
     groups
   };
-};
-
-const mergeDestinationGuides = (guide, additions) => {
-  const groups = guide.groups.map(group => ({ ...group, places: [...group.places] }));
-  const seenPlaces = new Set(groups.flatMap(group => group.places).map(place => place.toLowerCase()));
-
-  additions.groups.forEach(group => {
-    const target = groups.find(existing => existing.kind === group.kind) || groups[groups.length - 1];
-    if (!target) return;
-
-    group.places.forEach(place => {
-      const key = place.toLowerCase();
-      if (!key || seenPlaces.has(key) || target.places.length >= 40) return;
-      seenPlaces.add(key);
-      target.places.push(place);
-    });
-  });
-
-  return { ...guide, groups };
 };
 
 const requestDestinationGuideJson = async (openai, prompt) => {
@@ -528,16 +511,16 @@ router.post('/destination-guide', async (req, res) => {
     if (!openai) return;
 
     const destinationPrompt = `
-      Build a broad, practical sightseeing guide for the customer-entered destination: ${JSON.stringify(destination)}.
+      Build a practical sightseeing shortlist for the customer-entered destination: ${JSON.stringify(destination)}.
 
-      This is for a custom AI travel planner. Do not limit the results to any company's existing packages or brochure. Include well-known landmarks, cultural sites, nature spots, beaches, museums, viewpoints, family attractions, local experiences and realistic nearby day-trip destinations in the vicinity. Be comprehensive, but only include real places you know with reasonable confidence. Do not invent attractions, prices, distances or opening hours.
+      This is for a custom AI travel planner. Do not limit the results to any company's existing packages or brochure. Include well-known landmarks, cultural sites, nature spots, museums, viewpoints, family attractions and realistic nearby day trips where applicable. Include only specific real places you know with reasonable confidence. Return fewer places when uncertain. Do not invent attractions, prices, distances or opening hours. Avoid aliases and repeated names for the same place.
 
       Group the places into exactly these kinds where possible:
       - recommended: must-see highlights in or very close to the destination
       - nearby: other attractions in the destination or nearby vicinity
       - optional: realistic day trips or slower-travel additions
 
-      Return ONLY valid JSON in this shape. For a destination with enough real options, you MUST return at least 20 and ideally 25 to 40 unique plain place-name strings in EACH group (up to 120 places total). Do not stop after a short shortlist. Cover different neighbourhoods, landmark types, local experiences and realistic nearby day trips. If a destination genuinely has fewer options, use the nearby and optional groups to include realistic places in the surrounding region rather than inventing anything:
+      Return ONLY valid JSON in this shape. Aim for 4 to 8 recommended highlights, 6 to 15 nearby choices and up to 8 optional day trips when the destination genuinely supports them. Do not fill a quota with doubtful or distant places. Keep recommended places in or very close to the destination; use optional for longer detours:
       {
         "destination": ${JSON.stringify(destination)},
         "groups": [
@@ -549,39 +532,8 @@ router.post('/destination-guide', async (req, res) => {
     `;
 
     const payload = await requestDestinationGuideJson(openai, destinationPrompt);
-    let guide = sanitizeDestinationGuide(payload, destination);
+    const guide = sanitizeDestinationGuide(payload, destination);
     if (!guide.groups.length) throw new Error('The destination guide did not contain any places.');
-
-    const totalPlaceCount = guide.groups.reduce((total, group) => total + group.places.length, 0);
-    const needsExpansion = totalPlaceCount < 60 || guide.groups.some(group => group.places.length < 20);
-    if (needsExpansion) {
-      const existingPlaces = guide.groups.map(group => ({ kind: group.kind, places: group.places }));
-      const expansionPrompt = `
-        Expand the sightseeing guide for ${JSON.stringify(destination)} with additional real places. This is a second pass: return NEW places only and do not repeat any name from the existing list below.
-
-        Add 12 to 20 useful, distinct place names to EACH of these groups where the destination and surrounding region have enough genuine options: recommended highlights, nearby attractions, and optional day trips. Cover different neighbourhoods, museums, markets, viewpoints, gardens, cultural sites, nature spots, family activities and realistic day trips. Do not invent attractions, prices, distances or opening hours. If a group genuinely has fewer safe options, return only the real options you know.
-
-        Existing places to exclude:
-        ${JSON.stringify(existingPlaces)}
-
-        Return ONLY valid JSON in this shape:
-        {
-          "destination": ${JSON.stringify(destination)},
-          "groups": [
-            { "label": "Additional must-see landmarks", "kind": "recommended", "places": ["New place name"] },
-            { "label": "Additional nearby attractions", "kind": "nearby", "places": ["New place name"] },
-            { "label": "Additional optional day trips", "kind": "optional", "places": ["New place name"] }
-          ]
-        }
-      `;
-
-      try {
-        const expansionPayload = await requestDestinationGuideJson(openai, expansionPrompt);
-        guide = mergeDestinationGuides(guide, sanitizeDestinationGuide(expansionPayload, destination));
-      } catch (expansionError) {
-        console.warn('AI Destination Guide Expansion Error:', expansionError.message);
-      }
-    }
 
     res.json(guide);
   } catch (error) {
@@ -677,7 +629,7 @@ router.post('/plan-structured', async (req, res) => {
       5. Use exactly ${safePreferences.durationDays} itinerary entries and ${safePreferences.durationNights} hotel nights. Treat the supplied dates and duration as authoritative; never silently change them.
       6. Optimize the route geographically and by time. Keep places in the same neighbourhood, corridor or nearby area on the same day where practical; order each day and the overall trip to minimize backtracking; allow realistic travel, meal and rest time; do not force every selected place into the plan when the time window cannot support it.
       7. Detect feasibility honestly. If the selection is too large or geographically spread out, set planningReview.status to "tight" or "not_feasible", explain the constraint in planningReview.summary, list every selected place that could not fit in planningReview.unplacedPlaces, and suggest specific removals in planningReview.suggestedRemovals. Suggest replacements only from the available guide places or credible nearby alternatives in planningReview.suggestedReplacements. Never invent exact distances or travel times when uncertain.
-      8. For every itinerary day, the places array MUST contain the plain names of the actual places assigned to that day. Keep the places array limited to realistic stops for the day and preserve the customer's selections whenever feasible.
+      8. For every itinerary day, the places array MUST contain only exact names from the customer-selected places above. Do not silently add other guide places to the itinerary. Put any alternative in planningReview.suggestedReplacements for staff/customer review. An arrival or rest day may use an empty places array. Preserve the customer's selections whenever feasible.
       9. Include specific sightseeing spots, pace (e.g. slow, moderate, active) and entry tickets matching their sightseeing choices. Make the daily itinerary descriptions extremely descriptive, informative, and engaging:
          - The "activities" field must be a detailed, rich paragraph (at least 4-5 sentences) describing the scenic beauty, historical significance, local culture, and specific sightseeing places visited, explaining why they are special.
          - The "meal" field should describe appropriate meals and rest stops without inventing a restaurant or confirmed menu.

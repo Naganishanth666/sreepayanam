@@ -1609,6 +1609,36 @@ textarea.input-field,
   font-size: 0.92rem;
 }
 
+.planner-intro-output {
+  flex: 0 0 min(36%, 390px);
+}
+
+.planner-output-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.42rem;
+  margin-top: 0.8rem;
+}
+
+.planner-output-labels span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.42rem 0.65rem;
+  color: var(--color-ink);
+  background: rgba(11, 61, 145, 0.055);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  font-family: var(--font-utility);
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.planner-output-labels svg {
+  flex: 0 0 auto;
+  color: var(--color-coral-dark);
+}
+
 .planner-tabs {
   display: flex;
   gap: 0.25rem;
@@ -2668,6 +2698,36 @@ textarea.input-field,
   border-radius: var(--radius-md);
 }
 
+.planner-document-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.9rem 1rem;
+  color: var(--color-ink);
+  background: rgba(11, 61, 145, 0.045);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.planner-document-note svg {
+  flex: 0 0 auto;
+  color: var(--color-peacock);
+}
+
+.planner-document-note strong {
+  display: block;
+  font-family: var(--font-utility);
+  font-size: 0.82rem;
+}
+
+.planner-document-note p {
+  margin-top: 0.25rem;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
 .planning-review.status-tight {
   background: #fffaf0;
   border-color: #efdda7;
@@ -2942,6 +3002,10 @@ textarea.input-field,
   .planner-intro p,
   .section-heading p {
     margin-top: 1rem;
+  }
+
+  .planner-intro-output {
+    max-width: 36rem;
   }
 
   .route-strip,

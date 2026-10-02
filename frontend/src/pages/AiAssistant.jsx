@@ -15,9 +15,11 @@ import { downloadQuotationPdf } from '../utils/quotationPdf';
 const STEPS = [
   { id: 1, name: 'Route', detail: 'Destination & dates' },
   { id: 2, name: 'Explore', detail: 'Nearby places' },
-  { id: 3, name: 'Comfort', detail: 'Stay & movement' },
-  { id: 4, name: 'Contact', detail: 'Send enquiry' }
+  { id: 3, name: 'Preferences', detail: 'Travellers & comfort' },
+  { id: 4, name: 'Review', detail: 'Enquiry & PDF' }
 ];
+
+const suggestedStopLimit = days => Math.min(8, Math.max(2, (Number(days) || 1) + 1));
 
 const DEFAULT_FORM = {
   packageId: 'custom-destination',
@@ -114,7 +116,8 @@ const createDraftReference = () => {
 };
 
 const buildLocalPlanningReview = (selectedPlaces, durationDays) => {
-  const capacity = Math.max(Number(durationDays) || 1, (Number(durationDays) || 1) * 4);
+  const days = Math.max(1, Number(durationDays) || 1);
+  const capacity = Math.max(1, days * 2 - (days > 1 ? 2 : 0));
   const unplacedPlaces = selectedPlaces.slice(capacity);
   const status = unplacedPlaces.length ? 'tight' : 'workable';
   return {
@@ -134,12 +137,13 @@ const normalizePlannerDraft = (payload, preferences) => {
   const durationDays = Math.max(1, Number(payload?.durationDays || preferences.durationDays) || 1);
   const durationNights = Math.max(0, Number(payload?.durationNights ?? preferences.durationNights) || 0);
   const selectedPlaces = Array.isArray(preferences.selectedDestinations) ? preferences.selectedDestinations : [];
+  const selectedNames = new Map(selectedPlaces.map(place => [place.toLowerCase(), place]));
   const rawItinerary = Array.isArray(payload?.itinerary) ? payload.itinerary : [];
   const fallbackReview = buildLocalPlanningReview(selectedPlaces, durationDays);
   const rawReview = payload?.planningReview && typeof payload.planningReview === 'object' ? payload.planningReview : {};
   const itinerary = Array.from({ length: durationDays }, (_, index) => {
     const day = rawItinerary.find(item => Number(item?.day) === index + 1) || rawItinerary[index] || {};
-    const places = Array.isArray(day.places) ? day.places.filter(place => typeof place === 'string' && place.trim()).map(place => place.trim()).slice(0, 10) : [];
+    const places = Array.isArray(day.places) ? day.places.filter(place => typeof place === 'string' && place.trim()).map(place => selectedNames.get(place.trim().toLowerCase())).filter(Boolean).slice(0, 10) : [];
     const hotel = day.hotel && typeof day.hotel === 'object' ? day.hotel : {};
     return {
       day: index + 1,
@@ -157,10 +161,12 @@ const normalizePlannerDraft = (payload, preferences) => {
     };
   });
   const planned = new Set(itinerary.flatMap(day => day.places.map(place => place.toLowerCase())));
+  const placedSelectedCount = selectedPlaces.filter(place => planned.has(place.toLowerCase())).length;
   const inferredUnplaced = selectedPlaces.filter(place => !planned.has(place.toLowerCase()));
-  const reportedUnplaced = Array.isArray(rawReview.unplacedPlaces) ? rawReview.unplacedPlaces.filter(place => typeof place === 'string' && place.trim()).map(place => place.trim()).slice(0, 20) : [];
+  const selectedKeys = new Set(selectedPlaces.map(place => place.toLowerCase()));
+  const reportedUnplaced = Array.isArray(rawReview.unplacedPlaces) ? rawReview.unplacedPlaces.filter(place => typeof place === 'string' && selectedKeys.has(place.trim().toLowerCase())).map(place => place.trim()).slice(0, 20) : [];
   const unplacedPlaces = [...new Map([...reportedUnplaced, ...inferredUnplaced].map(place => [place.toLowerCase(), place])).values()];
-  const status = unplacedPlaces.length ? (planned.size >= Math.max(1, selectedPlaces.length - 2) ? 'tight' : 'not_feasible') : ['workable', 'tight', 'not_feasible'].includes(rawReview.status) ? rawReview.status : fallbackReview.status;
+  const status = unplacedPlaces.length ? (placedSelectedCount >= Math.max(1, selectedPlaces.length - 2) ? 'tight' : 'not_feasible') : ['workable', 'tight', 'not_feasible'].includes(rawReview.status) ? rawReview.status : fallbackReview.status;
   const fallbackSummary = status === 'workable'
     ? 'The selected places can be shaped into this time window with practical daily clusters.'
     : status === 'tight'
@@ -184,7 +190,7 @@ const normalizePlannerDraft = (payload, preferences) => {
       status,
       summary: typeof rawReview.summary === 'string' && rawReview.summary.trim() ? rawReview.summary.trim().slice(0, 700) : fallbackSummary,
       selectedPlaceCount: selectedPlaces.length,
-      plannedPlaceCount: planned.size,
+      plannedPlaceCount: placedSelectedCount,
       unplacedPlaces,
       suggestedRemovals: cleanSuggestions(rawReview.suggestedRemovals),
       suggestedReplacements: cleanSuggestions(rawReview.suggestedReplacements)
@@ -454,6 +460,7 @@ const AiAssistant = () => {
       if (!guide.groups.length) throw new Error('No nearby places were returned. Try a more specific destination.');
       const recommended = flattenDestinationGroups(guide.groups)
         .filter(place => place.kind === 'recommended')
+        .slice(0, suggestedStopLimit(form.durationDays))
         .map(place => place.id);
       setDestinationGuide(guide);
       setSelectedDestinations(recommended);
@@ -482,7 +489,7 @@ const AiAssistant = () => {
   };
 
   const selectRecommended = () => {
-    const recommended = allDestinations.filter(place => place.kind === 'recommended').map(place => place.id);
+    const recommended = allDestinations.filter(place => place.kind === 'recommended').slice(0, suggestedStopLimit(form.durationDays)).map(place => place.id);
     setSelectedDestinations(recommended);
     setPlanningDraft(null);
     setPlanningState('idle');
@@ -805,7 +812,13 @@ const AiAssistant = () => {
             <span className="eyebrow" style={{ color: 'var(--color-coral-dark)' }}>SreePayanam route desk</span>
             <h1>Make room for the <em>good parts.</em></h1>
           </div>
-          <p>Choose a destination, mark the places that matter, and get a time-aware route brief you can save as a PDF.</p>
+          <div className="planner-intro-output">
+            <p>Choose your places and preferences. We’ll shape a day-by-day route, then our travel desk can prepare three verified ways to travel.</p>
+            <div className="planner-output-labels" aria-label="Planner documents">
+              <span><FileText size={15} aria-hidden="true" /> Route brief PDF</span>
+              <span><ShieldCheck size={15} aria-hidden="true" /> Approved three-tier quotation</span>
+            </div>
+          </div>
         </div>
 
         <div className="planner-tabs" role="tablist" aria-label="Planner modes">
@@ -892,8 +905,8 @@ const AiAssistant = () => {
                     <motion.div key={currentStep} initial={reduceMotion ? false : { opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={reduceMotion ? false : { opacity: 0, x: -10 }} transition={{ duration: reduceMotion ? 0 : 0.18 }}>
                       {currentStep === 1 && (
                         <div>
-                          <div className="planner-section-title"><h2>Start with a route</h2><p>Enter any city, region or country. The AI planner will discover places nearby for you to choose.</p></div>
-                          <Field id="destination" label="Where do you want to explore?" required error={fieldErrors.destination || guideError} help={guideState === 'loading' ? 'Finding real places in and around this destination…' : guideState === 'error' ? 'Try again, or enter a more specific city or region.' : 'You are not limited to our published packages.'}>
+                          <div className="planner-section-title"><h2>Start with a route</h2><p>Enter any city, region or country. Choose a practical shortlist from the suggested places; the travel desk checks details before a final quotation.</p></div>
+                          <Field id="destination" label="Where do you want to explore?" required error={fieldErrors.destination || guideError} help={guideState === 'loading' ? 'Finding places to consider in and around this destination…' : guideState === 'error' ? 'Try again, or enter a more specific city or region.' : 'You are not limited to our published packages.'}>
                             <input id="destination" className="planner-field" value={form.destination} onChange={handleDestinationChange} placeholder="e.g. Kyoto, Japan or Munnar, Kerala" autoComplete="address-level2" {...getAria('destination', fieldErrors.destination || guideError)} />
                           </Field>
                           <div className="package-select-card" style={{ marginTop: '1rem' }}>
@@ -922,7 +935,7 @@ const AiAssistant = () => {
 
                       {currentStep === 2 && (
                         <div id="destinationPicker" tabIndex="-1" aria-invalid={fieldErrors.destinationPicker ? 'true' : undefined} aria-describedby={fieldErrors.destinationPicker ? 'destinationPicker-error' : undefined}>
-                          <div className="planner-section-title"><h2>Discover nearby places</h2><p>Here are real attractions in and around {destinationGuide?.destination || form.destination}. Pick anything you want our travel desk to shape into a route.</p></div>
+                          <div className="planner-section-title"><h2>Discover nearby places</h2><p>Start with this suggested shortlist for {destinationGuide?.destination || form.destination}. Pick the places that matter; the travel desk will verify locations and timing.</p></div>
                           <div className="destination-search-wrap">
                             <Search className="destination-search-icon" size={18} aria-hidden="true" />
                             <label className="sr-only" htmlFor="destination-search">Search every place near this destination</label>
@@ -937,10 +950,10 @@ const AiAssistant = () => {
                             />
                             {destinationSearch && <button type="button" className="destination-search-clear" onClick={() => setDestinationSearch('')} aria-label="Clear place search"><X size={16} aria-hidden="true" /></button>}
                           </div>
-                          <p className="destination-guide-note" role="status">Showing {visiblePlaceCount} of {totalPlaceCount} available places near {destinationGuide?.destination || form.destination}{destinationSearch ? ` matching “${destinationSearch}”` : ''}. Not finding it? Add it below.</p>
+                          <p className="destination-guide-note" role="status">Showing {visiblePlaceCount} of {totalPlaceCount} suggested places for {destinationGuide?.destination || form.destination}{destinationSearch ? ` matching “${destinationSearch}”` : ''}. Check locations and opening times with the travel desk. Not finding a place? Add it below.</p>
                           <div className="destination-toolbar">
                             <div className="destination-count"><span>{selectedDestinations.length}</span> of {totalPlaceCount} places selected</div>
-                            <div className="destination-actions"><button type="button" className="text-action" onClick={selectRecommended}>Select recommended</button><button type="button" className="text-action" onClick={clearDestinations}>Clear selection</button></div>
+                            <div className="destination-actions"><button type="button" className="text-action" onClick={selectRecommended}>Select suggested shortlist</button><button type="button" className="text-action" onClick={clearDestinations}>Clear selection</button></div>
                           </div>
                           {fieldErrors.destinationPicker && <div id="destinationPicker-error" className="field-error" role="alert" style={{ marginBottom: '0.7rem' }}>{fieldErrors.destinationPicker}</div>}
                           <div className="destination-groups">
@@ -959,7 +972,7 @@ const AiAssistant = () => {
 
                       {currentStep === 3 && (
                         <div>
-                          <div className="planner-section-title"><h2>Set the comfort level</h2><p>These choices help the AI shape a realistic route draft around your pace, stay and movement preferences.</p></div>
+                          <div className="planner-section-title"><h2>Travellers & preferences</h2><p>Tell us who is travelling and what matters for the route. These details carry into the travel desk’s quotation review.</p></div>
                           <div className="planner-field-grid">
                             <Field id="adultCount" label="Adults" required error={fieldErrors.adultCount}><input id="adultCount" className="planner-field" type="number" min="1" max="50" inputMode="numeric" value={form.adultCount} onChange={event => updateField('adultCount', event.target.value)} {...getAria('adultCount', fieldErrors.adultCount)} /></Field>
                             <Field id="childWithBedCount" label="Children with bed"><input id="childWithBedCount" className="planner-field" type="number" min="0" max="30" inputMode="numeric" value={form.childWithBedCount} onChange={event => updateField('childWithBedCount', event.target.value)} /></Field>
@@ -988,11 +1001,12 @@ const AiAssistant = () => {
 
                       {currentStep === 4 && (
                         <div>
-                          <div className="planner-section-title"><h2>Where should we send it?</h2><p>We use these details to prepare the enquiry and keep the route brief reference connected to your draft.</p></div>
+                          <div className="planner-section-title"><h2>Review your route</h2><p>Send the enquiry to download your route brief PDF. The travel desk will then verify suppliers and prepare the Economic, Deluxe and Premium quotation.</p></div>
+                          <div className="planner-document-note"><FileText size={19} aria-hidden="true" /><div><strong>Two different documents</strong><p>Your route brief records the day plan without prices. A priced quotation with destination links, tax wording and terms becomes available only after staff approval.</p></div></div>
                           <div className={`planning-review status-${reviewStatus}`} aria-live="polite">
                             <div className="planning-review-header"><span className="planning-review-icon"><Route size={18} aria-hidden="true" /></span><div><span className="planning-review-kicker">AI route review</span><h3>{reviewStatusCopy[reviewStatus]}</h3></div></div>
                             <p className="planning-review-summary">{activeReview.summary}</p>
-                            <div className="planning-review-stats"><div><span>Selected places</span><strong>{activeReview.selectedPlaceCount}</strong></div><div><span>Planned stops</span><strong>{activeReview.plannedPlaceCount}</strong></div><div><span>Timing</span><strong>{form.durationDays}D / {form.durationNights}N</strong></div></div>
+                            <div className="planning-review-stats"><div><span>Selected places</span><strong>{activeReview.selectedPlaceCount}</strong></div><div><span>Your places in plan</span><strong>{activeReview.plannedPlaceCount}</strong></div><div><span>Timing</span><strong>{form.durationDays}D / {form.durationNights}N</strong></div></div>
                             {planningError && <div className="planning-review-warning" role="status"><CircleHelp size={16} aria-hidden="true" />{planningError}</div>}
                             {!!activeReview.unplacedPlaces?.length && <div className="planning-review-items"><div className="planning-review-list"><strong>Consider removing</strong><ul>{(activeReview.suggestedRemovals?.length ? activeReview.suggestedRemovals : activeReview.unplacedPlaces.map(place => ({ place }))).map(item => <li key={`unplaced-${item.place}`}><span>{item.place}</span>{item.reason && <small>{item.reason}</small>}</li>)}</ul></div>{!!activeReview.suggestedReplacements?.length && <div className="planning-review-list"><strong>Possible alternatives</strong><ul>{activeReview.suggestedReplacements.map(item => <li key={`replacement-${item.place}-${item.replacement || ''}`}><span>{item.replacement ? `${item.place} → ${item.replacement}` : item.place}</span>{item.reason && <small>{item.reason}</small>}</li>)}</ul></div>}</div>}
                             {!!activeItinerary.length && <div className="planning-review-itinerary"><strong>Draft day order</strong><ol>{activeItinerary.map(day => <li key={`draft-day-${day.day}`}><span>D{day.day}</span><div><b>{day.title}</b><small>{day.places?.length ? day.places.join(' · ') : 'Flexible local discovery'}</small></div></li>)}</ol></div>}
@@ -1029,7 +1043,7 @@ const AiAssistant = () => {
                     <div className="route-draft-copy"><span>Route draft</span><strong>{planningState === 'loading' ? 'Mapping your days...' : planningDraft ? 'Clustered by place' : 'Ready to map'}</strong><p>{planningDraft ? 'Nearby stops are being shaped into a calmer day-by-day brief.' : 'Your selected places will become a considered travel-desk brief.'}</p></div>
                     <div className="route-draft-signals"><span><Route size={13} aria-hidden="true" /> Time aware</span><span><Compass size={13} aria-hidden="true" /> Less backtracking</span><span><CalendarDays size={13} aria-hidden="true" /> {form.durationDays} days</span></div>
                   </div>
-                  <p className="summary-note"><ShieldCheck size={14} aria-hidden="true" /> Commercial details are handled separately by the travel desk.</p>
+                  <p className="summary-note"><ShieldCheck size={14} aria-hidden="true" /> Route brief PDF first. Three priced options follow staff review and approval.</p>
                 </div>
               </aside>
             </div>

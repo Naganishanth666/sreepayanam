@@ -5,6 +5,7 @@ This file tracks the revised 2 October 2026 SRS as a product specification. It d
 ## Delivered in this code change
 
 - The public planner saves its day-by-day route with the enquiry, alongside contact consent version and lead source. Intake now includes child ages, tier preference, pace, interests, dietary restrictions, accessibility needs and a target budget.
+- The planner now explains the route-brief versus approved-quotation handoff on its first screen and review step. Its suggested destination shortlist is sized to the trip, and the itinerary counts and lists only customer-selected places; extra AI suggestions remain separate for review.
 - The customer route-brief PDF keeps the supplied four-page sample's visual structure and remains commercial-free.
 - Staff can edit a saved route and prepare Economic, Deluxe and Premium quotations from verified direct costs. The quotation calculation uses 10% contingency followed by 25% markup; the SRS example of INR 100,000 becomes INR 137,500 before applicable GST.
 - Staff enter destination reference URLs, source type/check dates, supplier evidence, validity, tax wording, payment and cancellation terms, assumptions, inclusions and exclusions. Approval requires a named Admin account, source attestation and a review note. Approved versions lock and are downloadable in the sample's branded layout with clickable destination references. Download data omits direct cost and internal supplier references.
