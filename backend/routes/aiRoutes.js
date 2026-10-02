@@ -191,22 +191,24 @@ const sanitizeStructuredPlan = (payload, preferences) => {
 const sanitizeDestinationGuide = (payload, destination) => {
   const fallbackLabels = ['Must-see landmarks', 'Nearby attractions', 'Optional day trips'];
   const fallbackKinds = ['recommended', 'nearby', 'optional'];
+  const limits = { recommended: 8, nearby: 12, optional: 6 };
+  const counts = { recommended: 0, nearby: 0, optional: 0 };
   const seenPlaces = new Set();
   const groups = Array.isArray(payload?.groups) ? payload.groups.slice(0, 4).map((group, index) => {
+    const kind = fallbackKinds.includes(group?.kind) ? group.kind : fallbackKinds[Math.min(index, fallbackKinds.length - 1)];
     const rawPlaces = Array.isArray(group?.places) ? group.places : [];
     const places = rawPlaces
       .map(place => typeof place === 'string' ? place : place?.name)
       .map(place => cleanPlanningText(place, 160))
       .filter(place => {
         const key = place.toLowerCase();
-        if (!key || seenPlaces.has(key)) return false;
+        if (!key || seenPlaces.has(key) || counts[kind] >= limits[kind]) return false;
         seenPlaces.add(key);
+        counts[kind] += 1;
         return true;
-      })
-      .slice(0, 40);
+      });
     if (!places.length) return null;
 
-    const kind = fallbackKinds.includes(group?.kind) ? group.kind : fallbackKinds[Math.min(index, fallbackKinds.length - 1)];
     return {
       id: `ai-${kind}-${index + 1}`,
       label: cleanAiText(group?.label, 90) || fallbackLabels[index] || 'More places to consider',
@@ -520,7 +522,7 @@ router.post('/destination-guide', async (req, res) => {
       - nearby: other attractions in the destination or nearby vicinity
       - optional: realistic day trips or slower-travel additions
 
-      Return ONLY valid JSON in this shape. Aim for 4 to 8 recommended highlights, 6 to 15 nearby choices and up to 8 optional day trips when the destination genuinely supports them. Do not fill a quota with doubtful or distant places. Keep recommended places in or very close to the destination; use optional for longer detours:
+      Return ONLY valid JSON in this shape. Aim for 4 to 8 recommended highlights, 6 to 12 nearby choices and up to 6 optional day trips when the destination genuinely supports them. Do not fill a quota with doubtful or distant places. Keep recommended places in or very close to the destination; use optional for longer detours:
       {
         "destination": ${JSON.stringify(destination)},
         "groups": [
