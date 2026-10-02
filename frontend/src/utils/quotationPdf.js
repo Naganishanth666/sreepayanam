@@ -1,4 +1,6 @@
-import logoSrc from '../assets/sreepayanam-official-logo.png';
+import { createStayDetails, createStaySummary } from './stayPlan.js';
+
+const logoSrc = new URL('../assets/sreepayanam-official-logo.png', import.meta.url).href;
 
 const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
@@ -173,10 +175,13 @@ const formatDate = value => {
 
 const createLines = ({ form, draft, selectedPackage, selectedDestinations }) => {
   const lines = [];
+  let blockId = 0;
+  let activeSection = '';
   const addParagraph = (value, options = {}) => {
     const { maxChars = 92, ...lineOptions } = options;
-    wrapText(value, maxChars).forEach(text => lines.push({ text, ...lineOptions }));
-    lines.push({ text: '', leading: 6 });
+    const block = ++blockId;
+    wrapText(value, maxChars).forEach(text => lines.push({ text, block, section: activeSection, ...lineOptions }));
+    lines.push({ text: '', leading: 6, block, section: activeSection });
   };
   const durationDays = Number(draft?.durationDays || form.durationDays || 1);
   const durationNights = Number(draft?.durationNights ?? form.durationNights ?? Math.max(durationDays - 1, 0));
@@ -196,6 +201,7 @@ const createLines = ({ form, draft, selectedPackage, selectedDestinations }) => 
   addParagraph(`${form.departureCity || draft?.startingCity || 'Flexible departure'} -> ${draft?.destination || selectedPackage?.destination || 'Curated SreePayanam route'}`);
   addParagraph(`Travel window: ${formatDate(draft?.travelStartDate || form.travelStartDate)} to ${formatDate(draft?.returnDate || form.returnDate)}`);
   addParagraph(`${places.length} selected places: ${places.length ? places.join(', ') : 'The travel desk will help refine the stop list.'}`);
+  addParagraph(`Stay plan: ${createStaySummary({ ...form, destination: draft?.destination || form.destination }, durationNights)}`);
   if (draft?.overview) addParagraph(draft.overview);
 
   lines.push({ type: 'heading', text: 'Planning review' });
@@ -207,15 +213,22 @@ const createLines = ({ form, draft, selectedPackage, selectedDestinations }) => 
   if (Array.isArray(review.suggestedReplacements) && review.suggestedReplacements.length) addParagraph(`Possible alternatives: ${review.suggestedReplacements.map(item => typeof item === 'string' ? item : item.replacement ? `${item.place} -> ${item.replacement}` : item.place).filter(Boolean).join(', ')}`, { maxChars: 92 });
 
   lines.push({ type: 'heading', text: 'Day-by-day route' });
-  itinerary.forEach(day => {
-    lines.push({ text: `Day ${day.day} - ${day.title || 'Discover the route'}`, bold: true, leading: 15 });
-    if (day.base) lines.push({ text: `Area: ${day.base}`, leading: 13 });
+  itinerary.forEach((day, index) => {
+    activeSection = `day-${index + 1}`;
+    const headerBlock = ++blockId;
+    lines.push({ text: `Day ${day.day} - ${day.title || 'Discover the route'}`, bold: true, leading: 15, block: headerBlock, section: activeSection });
+    if (day.base) lines.push({ text: `Area: ${day.base}`, leading: 13, keepWithNext: true, block: headerBlock, section: activeSection });
+    else lines[lines.length - 1].keepWithNext = true;
     addParagraph(`Stops: ${Array.isArray(day.places) && day.places.length ? day.places.join(' | ') : 'Flexible local discovery'}`, { maxChars: 88 });
     if (day.activities) addParagraph(`Plan: ${day.activities}`, { maxChars: 88 });
     if (day.transit) addParagraph(`Travel: ${day.transit}`, { maxChars: 88 });
     if (day.meal) addParagraph(`Meals: ${day.meal}`, { maxChars: 88 });
-    if (day.hotel?.name) addParagraph(`Stay planning: ${day.hotel.name}${day.hotel.rating ? ` | ${day.hotel.rating}` : ''}${day.hotel.desc ? ` - ${day.hotel.desc}` : ''}`, { maxChars: 88 });
+    const stay = createStayDetails({ ...form, destination: draft?.destination || form.destination }, day, index, durationNights);
+    addParagraph(index < durationNights
+      ? `Stay planning: ${stay.name}${stay.rating ? ` | ${stay.rating}` : ''} - ${stay.desc}`
+      : `Stay planning: ${stay.desc}`, { maxChars: 88 });
   });
+  activeSection = '';
 
   lines.push({ type: 'heading', text: 'Route brief notes' });
   [
@@ -224,20 +237,23 @@ const createLines = ({ form, draft, selectedPackage, selectedDestinations }) => 
     'The route may be adjusted to protect practical travel time, opening hours, rest and local conditions.'
   ].forEach(item => lines.push({ text: `- ${item}`, leading: 14 }));
 
-  const inclusions = Array.isArray(draft?.inclusions) && draft.inclusions.length ? draft.inclusions : [
-    'Time-aware route planning for the selected places',
-    `${form.hotelCategory || 'Preferred'} stay planning for ${durationNights} nights`,
-    `${form.vehicleType || 'Local'} movement planning`,
-    `${form.mealPlan || 'Preferred'} meal preference noted for review`
+  const inclusions = [
+    'Day-by-day route planning for the selected places',
+    ...(durationNights ? [`${durationNights} nights of ${form.hotelCategory || 'preferred-category'} hotel planning${form.preferredHotelName?.trim() ? `; ${form.preferredHotelName.trim()} preferred` : ''}`] : []),
+    `${form.mealPlan || 'Selected'} meal plan requested for review`,
+    `${form.vehicleType || 'Local'} transport requested for route planning`,
+    ...(form.entryTickets === 'Yes' ? ['Entry tickets requested for the selected attractions'] : []),
+    ...(form.guideRequired === 'Yes' ? ['Local guide requested for the route'] : [])
   ];
-  const exclusions = Array.isArray(draft?.exclusions) && draft.exclusions.length ? draft.exclusions : [
-    'Room, vehicle, ticket and attraction availability until confirmed by the travel desk',
+  const exclusions = [
+    'Hotel property, room count and availability until checked with a supplier',
+    'Meal, vehicle, guide and attraction arrangements until confirmed by the travel desk',
     'Final booking terms and commercial confirmation'
   ];
   lines.push({ type: 'heading', text: 'Planning scope' });
-  inclusions.forEach(item => lines.push({ text: `- ${item}`, leading: 14 }));
+  inclusions.forEach(item => addParagraph(`- ${item}`, { maxChars: 88 }));
   lines.push({ text: 'Noted for separate confirmation:', bold: true, leading: 16 });
-  exclusions.forEach(item => lines.push({ text: `- ${item}`, leading: 14 }));
+  exclusions.forEach(item => addParagraph(`- ${item}`, { maxChars: 88 }));
   return lines;
 };
 
@@ -320,30 +336,53 @@ const paginateLines = lines => {
   let page = [];
   let pageHeight = 0;
   const maxContentHeight = 610;
-  lines.forEach((line, index) => {
-    const lineHeight = line.type === 'heading' ? 33 : line.type === 'meta' ? 14 : line.leading || 14;
-    const next = lines[index + 1];
-    const nextHeight = next ? next.type === 'heading' ? 33 : next.leading || 14 : 0;
-    const needsNewPage = page.length && pageHeight + lineHeight + ((line.type === 'heading' || line.keepWithNext) ? nextHeight : 0) > maxContentHeight;
+  const lineHeight = line => line.type === 'heading' ? 33 : line.type === 'meta' ? 14 : line.leading || 14;
+  for (let index = 0; index < lines.length;) {
+    const section = lines[index].section;
+    if (section && (index === 0 || lines[index - 1].section !== section)) {
+      let sectionEnd = index + 1;
+      while (sectionEnd < lines.length && lines[sectionEnd].section === section) sectionEnd += 1;
+      const sectionHeight = lines.slice(index, sectionEnd).reduce((total, line) => total + lineHeight(line), 0);
+      if (sectionHeight <= maxContentHeight && page.length && pageHeight + sectionHeight > maxContentHeight) {
+        pages.push(page);
+        page = [];
+        pageHeight = 0;
+      }
+    }
+    const block = lines[index].block;
+    let end = index + 1;
+    if (block) while (end < lines.length && lines[end].block === block) end += 1;
+    const group = lines.slice(index, end);
+    const groupHeight = group.reduce((total, line) => total + lineHeight(line), 0);
+    const last = group[group.length - 1];
+    const next = lines[end];
+    const nextHeight = next && (last.type === 'heading' || last.keepWithNext) ? lineHeight(next) : 0;
+    const needsNewPage = page.length && pageHeight + groupHeight + nextHeight > maxContentHeight;
     if (needsNewPage) {
       pages.push(page);
       page = [];
       pageHeight = 0;
     }
-    page.push(line);
-    pageHeight += lineHeight;
-  });
+    page.push(...group);
+    pageHeight += groupHeight;
+    index = end;
+  }
   if (page.length) pages.push(page);
   return pages;
+};
+
+export const buildRouteBriefPdfBlob = ({ form, draft, selectedPackage, selectedDestinations }, logoImage) => {
+  if (!draft) throw new Error('A route draft is required.');
+  const lines = createLines({ form, draft, selectedPackage, selectedDestinations });
+  const pages = paginateLines(lines);
+  const streams = pages.map((pageLines, index) => buildPage(pageLines, index + 1, pages.length, logoImage));
+  return buildPdf(streams, logoImage);
 };
 
 export const downloadQuotationPdf = async ({ form, draft, selectedPackage, selectedDestinations }) => {
   if (!draft) return false;
   const logoImage = await loadLogoJpeg();
-  const lines = createLines({ form, draft, selectedPackage, selectedDestinations });
-  const pages = paginateLines(lines);
-  const streams = pages.map((pageLines, index) => buildPage(pageLines, index + 1, pages.length, logoImage));
-  const blob = buildPdf(streams, logoImage);
+  const blob = buildRouteBriefPdfBlob({ form, draft, selectedPackage, selectedDestinations }, logoImage);
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   const safeName = toAscii(selectedPackage?.name || draft.destination || 'custom-route').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'custom-route';

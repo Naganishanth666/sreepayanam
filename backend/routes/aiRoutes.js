@@ -127,18 +127,30 @@ const sanitizeStructuredPlan = (payload, preferences) => {
   const rawItinerary = Array.isArray(payload?.itinerary) ? payload.itinerary : [];
   const itinerary = Array.from({ length: durationDays }, (_, index) => {
     const day = rawItinerary.find(item => Number(item?.day) === index + 1) || rawItinerary[index] || {};
-    const hotel = day.hotel && typeof day.hotel === 'object' ? day.hotel : {};
+    const base = cleanPlanningText(day.base || day.location, 120);
+    const hotelCategory = cleanPlanningText(preferences.hotelCategory, 50) || 'Preferred category';
+    const preferredHotelName = cleanPlanningText(preferences.preferredHotelName, 120);
+    const stayArea = cleanPlanningText(preferences.preferredHotelArea, 120) || base || cleanPlanningText(preferences.destination, 120);
+    const requestedRooms = numberInRange(preferences.hotelRooms, 0, 0, 30);
+    const rooms = requestedRooms > 0 ? `${requestedRooms} ${requestedRooms === 1 ? 'room' : 'rooms'} requested` : 'Room count to be confirmed';
+    const hotel = index < durationNights ? {
+      name: preferredHotelName || `${hotelCategory} hotel${stayArea ? ` in ${stayArea}` : ''}`,
+      rating: preferredHotelName ? `${hotelCategory} requested` : '',
+      desc: `${index === 0 ? 'Check in after arrival' : "Return after the day's visits"}; ${stayArea ? `${stayArea} area; ` : ''}${rooms}. ${preferredHotelName ? 'Traveller-preferred property' : 'Property selection'} and availability pending travel-desk confirmation.`
+    } : {
+      name: '',
+      rating: '',
+      desc: durationNights > 0
+        ? 'Check out after the last planned hotel night; no overnight stay is planned for this day.'
+        : 'No overnight hotel stay is planned for this route.'
+    };
     return {
       day: index + 1,
       title: cleanPlanningText(day.title, 120) || (index === 0 ? 'Arrival & settle in' : index === durationDays - 1 ? 'Last light & return' : 'Discover the route'),
-      base: cleanPlanningText(day.base || day.location, 120),
+      base,
       places: cleanPlaceList(day.places, 10).map(place => selectedNames.get(normalizePlaceKey(place))).filter(Boolean),
       activities: cleanPlanningText(day.activities, 900) || 'Flexible time for local discovery.',
-      hotel: {
-        name: cleanPlanningText(hotel.name, 160),
-        rating: cleanPlanningText(hotel.rating, 80),
-        desc: cleanPlanningText(hotel.desc || hotel.description, 320)
-      },
+      hotel,
       meal: cleanPlanningText(day.meal, 500),
       transit: cleanPlanningText(day.transit, 500)
     };
@@ -586,6 +598,10 @@ router.post('/plan-structured', async (req, res) => {
       returnDate: safeReturnDate,
       durationDays: safeDurationDays,
       durationNights: safeDurationNights,
+      hotelCategory: cleanPlanningText(hotelCategory, 50),
+      hotelRooms: preferences.hotelRooms === '' || preferences.hotelRooms == null ? '' : numberInRange(preferences.hotelRooms, 0, 0, 30),
+      preferredHotelName: cleanPlanningText(preferences.preferredHotelName, 120),
+      preferredHotelArea: cleanPlanningText(preferences.preferredHotelArea, 120),
       selectedDestinations: cleanPlaceList(selectedDestinations, 40),
       availableDestinations: cleanPlaceList(availableDestinations, 120)
     };
@@ -620,7 +636,7 @@ router.post('/plan-structured', async (req, res) => {
       - Authoritative trip length: ${safePreferences.durationDays} days / ${safePreferences.durationNights} nights
 
       Instructions:
-      1. You have no live supplier or attraction source in this request. Suggest a hotel category or equivalent matching ${hotelCategory || 'the stated preference'}; do not name a property or claim availability without supplied verified evidence.
+      1. You have no live supplier or attraction source in this request. Plan overnight stays around the requested ${safePreferences.hotelCategory || 'hotel'} category and ${safePreferences.preferredHotelArea || 'route area'}. ${safePreferences.preferredHotelName ? `The traveller named ${safePreferences.preferredHotelName} as a hotel preference; treat it only as a preference and do not claim it is available or booked.` : 'Do not invent a named property.'} The server will apply the traveller's hotel fields to the route brief after generation.
       2. Suggest suitable meal styles and local dishes matching the customer's food preferences. Do not name a restaurant, guarantee a menu, or ignore allergies; these need staff and supplier confirmation.
       3. Strict Transport Constraint Enforcement:
          - Flight/Airplane: Check if Flight Ticket ('flight_ticket') is true. If 'flight_ticket' is true, suggest flight transfers/airplane travel between cities where applicable. If 'flight_ticket' is false (or not provided), you MUST NOT suggest or mention flight travel, airplane tickets, or airport transfers.
@@ -664,9 +680,9 @@ router.post('/plan-structured', async (req, res) => {
             "places": ["Exact plain place name"],
             "activities": "Detailed description of activities for this day.",
             "hotel": {
-              "name": "Requested hotel category or equivalent; property pending supplier confirmation",
-              "rating": "Star rating details",
-              "desc": "1-2 sentence description of the stay experience."
+              "name": "Hotel preference or category for an overnight day; empty on checkout day",
+              "rating": "Requested category, not a verified property rating",
+              "desc": "Check-in or return plan and supplier-confirmation status"
             },
             "meal": "Recommended local meals, cuisines, or hotel dining for the day",
             "transit": "Concrete transit recommendation for this day matching the transport preferences"

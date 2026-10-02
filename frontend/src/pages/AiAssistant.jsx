@@ -11,6 +11,7 @@ import {
   flattenDestinationGroups
 } from '../data/destinationCatalog';
 import { downloadQuotationPdf } from '../utils/quotationPdf';
+import { createStayDetails, createStaySummary } from '../utils/stayPlan';
 
 const STEPS = [
   { id: 1, name: 'Route', detail: 'Destination & dates' },
@@ -43,6 +44,8 @@ const DEFAULT_FORM = {
   budget: '',
   hotelCategory: '3 Star',
   hotelRooms: '',
+  preferredHotelName: '',
+  preferredHotelArea: '',
   mealPlan: 'MAP',
   vehicleType: 'Sedan',
   guideRequired: 'No',
@@ -59,7 +62,7 @@ const DEFAULT_FORM = {
 const PLANNING_FIELDS = new Set([
   'adultCount', 'childWithBedCount', 'childNoBedCount', 'infantCount',
   'childAges', 'preferredTier', 'travelPace', 'interests', 'accessibilityNeeds', 'mealPreference', 'foodRestrictions', 'budget',
-  'hotelCategory', 'hotelRooms', 'mealPlan', 'vehicleType', 'guideRequired', 'entryTickets',
+  'hotelCategory', 'hotelRooms', 'preferredHotelName', 'preferredHotelArea', 'mealPlan', 'vehicleType', 'guideRequired', 'entryTickets',
   'durationDays', 'durationNights'
 ]);
 
@@ -144,18 +147,14 @@ const normalizePlannerDraft = (payload, preferences) => {
   const itinerary = Array.from({ length: durationDays }, (_, index) => {
     const day = rawItinerary.find(item => Number(item?.day) === index + 1) || rawItinerary[index] || {};
     const places = Array.isArray(day.places) ? day.places.filter(place => typeof place === 'string' && place.trim()).map(place => selectedNames.get(place.trim().toLowerCase())).filter(Boolean).slice(0, 10) : [];
-    const hotel = day.hotel && typeof day.hotel === 'object' ? day.hotel : {};
+    const base = typeof day.base === 'string' ? day.base.trim().slice(0, 120) : '';
     return {
       day: index + 1,
       title: typeof day.title === 'string' && day.title.trim() ? day.title.trim().slice(0, 140) : index === 0 ? 'Arrival & settle in' : index === durationDays - 1 ? 'Last light & return' : 'Discover the route',
-      base: typeof day.base === 'string' ? day.base.trim().slice(0, 120) : '',
+      base,
       places,
       activities: typeof day.activities === 'string' && day.activities.trim() ? day.activities.trim().slice(0, 1200) : places.length ? `A considered day around ${places.join(', ')} with time for local travel, meals and rest.` : 'Flexible time for local discovery.',
-      hotel: {
-        name: typeof hotel.name === 'string' ? hotel.name.trim().slice(0, 160) : '',
-        rating: typeof hotel.rating === 'string' ? hotel.rating.trim().slice(0, 80) : '',
-        desc: typeof (hotel.desc || hotel.description) === 'string' ? (hotel.desc || hotel.description).trim().slice(0, 360) : ''
-      },
+      hotel: createStayDetails(preferences, { base }, index, durationNights),
       meal: typeof day.meal === 'string' ? day.meal.trim().slice(0, 600) : '',
       transit: typeof day.transit === 'string' ? day.transit.trim().slice(0, 600) : ''
     };
@@ -350,12 +349,14 @@ const AiAssistant = () => {
     budget: form.budget,
     hotelCategory: form.hotelCategory,
     hotelRooms: form.hotelRooms,
+    preferredHotelName: form.preferredHotelName.trim(),
+    preferredHotelArea: form.preferredHotelArea.trim(),
     mealPlan: form.mealPlan,
     vehicleType: form.vehicleType,
     guideRequired: form.guideRequired,
     entryTickets: form.entryTickets,
     planningFingerprint: ''
-  }), [allDestinations, dateDuration, form.adultCount, form.budget, form.childAges, form.childNoBedCount, form.childWithBedCount, form.destination, form.departureCity, form.entryTickets, form.foodRestrictions, form.guideRequired, form.hotelCategory, form.hotelRooms, form.infantCount, form.interests, form.accessibilityNeeds, form.mealPlan, form.mealPreference, form.preferredTier, form.returnDate, form.travelPace, form.travelStartDate, form.vehicleType, form.durationDays, form.durationNights, selectedLabels]);
+  }), [allDestinations, dateDuration, form.adultCount, form.budget, form.childAges, form.childNoBedCount, form.childWithBedCount, form.destination, form.departureCity, form.entryTickets, form.foodRestrictions, form.guideRequired, form.hotelCategory, form.hotelRooms, form.preferredHotelName, form.preferredHotelArea, form.infantCount, form.interests, form.accessibilityNeeds, form.mealPlan, form.mealPreference, form.preferredTier, form.returnDate, form.travelPace, form.travelStartDate, form.vehicleType, form.durationDays, form.durationNights, selectedLabels]);
 
   const planningFingerprint = useMemo(
     () => JSON.stringify({ ...planningPayload, planningFingerprint: undefined }),
@@ -553,6 +554,7 @@ const AiAssistant = () => {
       const children = Number(form.childWithBedCount || 0) + Number(form.childNoBedCount || 0);
       const ages = form.childAges.split(',').map(age => age.trim()).filter(Boolean);
       if (children > 0 && (ages.length !== children || ages.some(age => !/^\d{1,2}$/.test(age) || Number(age) > 17))) errors.childAges = 'Add one age from 0 to 17 for each child, separated by commas.';
+      if (form.hotelRooms && (!Number.isInteger(Number(form.hotelRooms)) || Number(form.hotelRooms) < 1 || Number(form.hotelRooms) > 30)) errors.hotelRooms = 'Enter 1 to 30 rooms, or leave this blank for the travel desk.';
       if (form.budget && (!Number.isFinite(Number(form.budget)) || Number(form.budget) <= 0)) errors.budget = 'Enter a positive total budget or leave it blank.';
     }
     if (step === 4) {
@@ -686,6 +688,8 @@ const AiAssistant = () => {
             contactMethod: form.contactMethod,
             guideRequired: form.guideRequired,
             mealPlan: form.mealPlan,
+            preferredHotelName: form.preferredHotelName.trim(),
+            preferredHotelArea: form.preferredHotelArea.trim(),
             mealPreference: form.mealPreference,
             foodRestrictions: form.foodRestrictions,
             childAges: form.childAges.split(',').map(age => age.trim()).filter(Boolean).map(Number),
@@ -982,7 +986,9 @@ const AiAssistant = () => {
                           </div>
                           <div className="planner-field-grid" style={{ marginTop: '1rem' }}>
                             <Field id="hotelCategory" label="Hotel comfort"><select id="hotelCategory" className="planner-select" value={form.hotelCategory} onChange={event => updateField('hotelCategory', event.target.value)}><option>Budget</option><option>3 Star</option><option>4 Star</option><option>5 Star</option></select></Field>
-                            <Field id="hotelRooms" label="Rooms"><input id="hotelRooms" className="planner-field" type="number" min="0" max="30" inputMode="numeric" placeholder="Auto-size from adults" value={form.hotelRooms} onChange={event => updateField('hotelRooms', event.target.value)} /></Field>
+                            <Field id="hotelRooms" label="Rooms" error={fieldErrors.hotelRooms} help="Optional. Leave blank if you need the travel desk to confirm the room count."><input id="hotelRooms" className="planner-field" type="number" min="1" max="30" inputMode="numeric" placeholder="e.g. 1" value={form.hotelRooms} onChange={event => updateField('hotelRooms', event.target.value)} {...getAria('hotelRooms', fieldErrors.hotelRooms, 'hotelRooms-help')} /></Field>
+                            <Field id="preferredHotelName" label="Preferred hotel" help="Optional. Enter a property you would like us to check; this is not a booking."><input id="preferredHotelName" className="planner-field" maxLength="120" value={form.preferredHotelName} onChange={event => updateField('preferredHotelName', event.target.value)} placeholder="e.g. Hotel Sangam" {...getAria('preferredHotelName', null, 'preferredHotelName-help')} /></Field>
+                            <Field id="preferredHotelArea" label="Preferred stay area" help="Optional. Helps place the hotel near your route."><input id="preferredHotelArea" className="planner-field" maxLength="120" value={form.preferredHotelArea} onChange={event => updateField('preferredHotelArea', event.target.value)} placeholder="e.g. Tiruchirappalli" {...getAria('preferredHotelArea', null, 'preferredHotelArea-help')} /></Field>
                             <Field id="mealPlan" label="Meal preference"><select id="mealPlan" className="planner-select" value={form.mealPlan} onChange={event => updateField('mealPlan', event.target.value)}><option value="EP">EP — room only</option><option value="CP">CP — breakfast</option><option value="MAP">MAP — breakfast + dinner</option><option value="AP">AP — all meals</option></select></Field>
                             <Field id="vehicleType" label="Local transport"><select id="vehicleType" className="planner-select" value={form.vehicleType} onChange={event => updateField('vehicleType', event.target.value)}><option>Sedan</option><option>Ertiga</option><option>Innova</option><option>Tempo Traveller</option><option>Mini Coach</option><option>Coach</option></select></Field>
                             <Field id="preferredTier" label="Preferred option"><select id="preferredTier" className="planner-select" value={form.preferredTier} onChange={event => updateField('preferredTier', event.target.value)}><option>Compare all</option><option>Economic</option><option>Deluxe</option><option>Premium</option></select></Field>
@@ -1007,6 +1013,7 @@ const AiAssistant = () => {
                             <div className="planning-review-header"><span className="planning-review-icon"><Route size={18} aria-hidden="true" /></span><div><span className="planning-review-kicker">AI route review</span><h3>{reviewStatusCopy[reviewStatus]}</h3></div></div>
                             <p className="planning-review-summary">{activeReview.summary}</p>
                             <div className="planning-review-stats"><div><span>Selected places</span><strong>{activeReview.selectedPlaceCount}</strong></div><div><span>Your places in plan</span><strong>{activeReview.plannedPlaceCount}</strong></div><div><span>Timing</span><strong>{form.durationDays}D / {form.durationNights}N</strong></div></div>
+                            <p className="planning-review-stay"><Hotel size={16} aria-hidden="true" /><span><strong>Hotel plan</strong>{createStaySummary(form, Number(form.durationNights) || 0)}</span></p>
                             {planningError && <div className="planning-review-warning" role="status"><CircleHelp size={16} aria-hidden="true" />{planningError}</div>}
                             {!!activeReview.unplacedPlaces?.length && <div className="planning-review-items"><div className="planning-review-list"><strong>Consider removing</strong><ul>{(activeReview.suggestedRemovals?.length ? activeReview.suggestedRemovals : activeReview.unplacedPlaces.map(place => ({ place }))).map(item => <li key={`unplaced-${item.place}`}><span>{item.place}</span>{item.reason && <small>{item.reason}</small>}</li>)}</ul></div>{!!activeReview.suggestedReplacements?.length && <div className="planning-review-list"><strong>Possible alternatives</strong><ul>{activeReview.suggestedReplacements.map(item => <li key={`replacement-${item.place}-${item.replacement || ''}`}><span>{item.replacement ? `${item.place} → ${item.replacement}` : item.place}</span>{item.reason && <small>{item.reason}</small>}</li>)}</ul></div>}</div>}
                             {!!activeItinerary.length && <div className="planning-review-itinerary"><strong>Draft day order</strong><ol>{activeItinerary.map(day => <li key={`draft-day-${day.day}`}><span>D{day.day}</span><div><b>{day.title}</b><small>{day.places?.length ? day.places.join(' · ') : 'Flexible local discovery'}</small></div></li>)}</ol></div>}
@@ -1037,7 +1044,7 @@ const AiAssistant = () => {
                   <span className="summary-kicker">Route note / live draft</span>
                   <h2>{selectedPackage?.name || 'Your SreePayanam route'}</h2>
                   <div className="summary-route">{summaryStops.slice(0, 4).map((stop, index) => <div className="summary-stop" key={`${stop}-${index}`}><strong>{stop}</strong>{index === 0 ? 'Departure' : index === summaryStops.length - 1 ? 'Destination' : 'Selected stop'}</div>)}</div>
-                  <div className="summary-metrics"><div className="summary-metric"><span>Travellers</span><strong>{Math.max(1, totalTravellers)}</strong></div><div className="summary-metric"><span>Trip length</span><strong>{form.durationDays}D / {form.durationNights}N</strong></div><div className="summary-metric"><span>Places</span><strong>{selectedDestinations.length}</strong></div><div className="summary-metric"><span>Stay</span><strong>{form.hotelCategory}</strong></div></div>
+                  <div className="summary-metrics"><div className="summary-metric"><span>Travellers</span><strong>{Math.max(1, totalTravellers)}</strong></div><div className="summary-metric"><span>Trip length</span><strong>{form.durationDays}D / {form.durationNights}N</strong></div><div className="summary-metric"><span>Places</span><strong>{selectedDestinations.length}</strong></div><div className="summary-metric"><span>Stay</span><strong>{form.preferredHotelName.trim() || form.hotelCategory}</strong></div></div>
                   <div className="route-draft-visual" aria-label="Route draft status">
                     <div className="route-draft-map" aria-hidden="true"><span className="route-draft-node one" /><span className="route-draft-node two" /><span className="route-draft-node three" /><span className="route-draft-route" /></div>
                     <div className="route-draft-copy"><span>Route draft</span><strong>{planningState === 'loading' ? 'Mapping your days...' : planningDraft ? 'Clustered by place' : 'Ready to map'}</strong><p>{planningDraft ? 'Nearby stops are being shaped into a calmer day-by-day brief.' : 'Your selected places will become a considered travel-desk brief.'}</p></div>
