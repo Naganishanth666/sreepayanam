@@ -410,6 +410,7 @@ router.get('/:id/download-data', checkAdmin, async (req, res) => {
     const quote = await Quotation.findById(req.params.id).lean();
     if (!quote) return res.status(404).json({ message: 'Quotation not found.' });
     if (quote.status !== 'Approved') return res.status(403).json({ message: 'Only approved quotations can be downloaded.' });
+    res.set('Cache-Control', 'private, no-store');
     res.json({ quote: {
       reference: quote.reference,
       version: quote.version,
@@ -530,6 +531,7 @@ router.get('/:id/pack/download-data', authAdmin, currentAdmin, async (req, res) 
     if (!quote || quote.status !== 'Approved') return res.status(404).json({ message: 'Approved quotation not found.' });
     const pack = await TravelDocumentPack.findOne({ quotation: quote._id }).lean();
     if (!pack || pack.status !== 'Finalized') return res.status(403).json({ message: 'Complete and finalize all twelve documents before downloading the pack.' });
+    res.set('Cache-Control', 'private, no-store');
     res.json({ quote: packQuoteData(quote), pack: { status: pack.status, fields: pack.fields, finalizedAt: pack.finalizedAt, finalizedBy: pack.finalizedBy } });
   } catch {
     res.status(400).json({ message: 'Could not prepare the completed document pack.' });

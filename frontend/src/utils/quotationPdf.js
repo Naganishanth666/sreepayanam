@@ -116,7 +116,7 @@ const downloadBlob = (blob, filename) => {
 export const downloadQuotationPdf = async input => {
   if (!input.draft) return false;
   await document.fonts?.ready;
-  downloadBlob(buildRouteBriefPdfBlob(input),
+  downloadBlob(await buildRouteBriefPdfBlob(input),
     `SreePayanam_Standard_Format_Route_Draft_${safeFilePart(input.selectedPackage?.name || input.draft.destination)}_${safeFilePart(input.draft.planReference || 'draft')}.pdf`);
   return true;
 };
@@ -125,7 +125,7 @@ export const buildApprovedQuotationPdfBlob = quote => buildStandardQuotationPdfB
 
 export const downloadApprovedQuotationPdf = async quote => {
   await document.fonts?.ready;
-  downloadBlob(buildApprovedQuotationPdfBlob(quote),
+  downloadBlob(await buildApprovedQuotationPdfBlob(quote),
     `SreePayanam_Quotation_${clean(quote.reference).replace(/[^a-zA-Z0-9-]/g, '')}.pdf`);
   return true;
 };

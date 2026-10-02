@@ -54,7 +54,7 @@ SreePayanam is designed as a confident travel and opportunity desk: route lines,
 
 The supplied logo is the brand anchor: a deep-blue SreePayanam wordmark with a circular route mark and orange, green and blue journey shapes. The same primary blue (`#0B3D91`) and gold (`#D4AF37`) lead navigation, calls to action and brand surfaces; orange (`#F36F21`) and green (`#11854D`) are supporting accents that echo the logo without competing with it.
 
-Approved customer quotations follow the supplied Standard Travel Documents Pack's tour quotation section: a formal company header, deep-blue table headers, thin neutral grid lines, compact field labels and an unpriced route brief kept separate from the approved three-option price table.
+Approved customer quotations follow the supplied Standard Travel Documents Pack's tour quotation section: a formal company header, deep-blue table headers, thin neutral grid lines, compact field labels and an unpriced route brief kept separate from the approved three-option price table. Every PDF page uses the transparent logo extracted from that document, a blue contact block and a gold rule. The customer draft, approved quotation and combined pack share this letterhead.
 
 ### Product context and register
 
@@ -104,7 +104,7 @@ The navigation is a sticky white bar with a visible mobile menu button and blue 
 
 ### Forms and overlays
 
-Product forms use `noValidate`, real labels, app-owned errors and first-error focus. Native select/date controls are intentional where platform-owned popups are acceptable; the destination picker is a searchable, grouped checkbox primitive because its broad guide, selection count, “select recommended” action and custom-place fallback are part of the product contract. A routebook is a starting point, not a restriction on customer requests. The public route draft uses the supplied DOCX quotation's headings and blue-header tables, displays day-by-day hotel requests, and keeps commercial fields pending for the travel desk. The admin enquiry view contains the approved quotation and a collapsed twelve-section document-pack editor. The editor preserves the supplied DOCX's section order and table wording, shows completion counts, and only unlocks the combined PDF after named-admin finalization.
+Product forms use `noValidate`, real labels, app-owned errors and first-error focus. Native select/date controls are intentional where platform-owned popups are acceptable; the destination picker is a searchable, grouped checkbox primitive because its broad guide, selection count, “select recommended” action and custom-place fallback are part of the product contract. A routebook is a starting point, not a restriction on customer requests. The public route draft uses the supplied DOCX quotation's headings and blue-header tables, displays day-by-day hotel requests, and keeps commercial fields pending for the travel desk. The admin enquiry view gives each approved quotation its own PDF download and contains a collapsed twelve-section document-pack editor. The editor preserves the supplied DOCX's section order and table wording, shows completion counts, and only unlocks the combined PDF after named-admin finalization.
 
 ### Iconography
 

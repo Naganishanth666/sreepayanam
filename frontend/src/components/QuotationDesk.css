@@ -126,6 +126,7 @@
 .quotation-desk-approved > div:first-child { justify-content: flex-start; }
 .quotation-desk-approved svg { color: var(--color-success); }
 .quotation-desk-approved span { color: var(--color-ink-soft); font-size: 0.83rem; }
+.quotation-desk-download { display: inline-flex; align-items: center; gap: 0.45rem; margin-top: 0.85rem; }
 .quotation-desk-error,
 .quotation-desk-success { margin-top: 0.8rem; padding: 0.75rem 0.9rem; border-radius: var(--radius-sm); font-size: 0.85rem; }
 .quotation-desk-error { color: #8b2921; background: #fff0ee; border: 1px solid #e7b5ae; }

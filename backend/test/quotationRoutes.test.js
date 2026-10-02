@@ -109,6 +109,7 @@ test('approved download data excludes supplier cost and internal source referenc
       headers: { 'x-admin-password': process.env.ADMIN_PASSWORD }
     });
     assert.equal(response.status, 200);
+    assert.match(response.headers.get('cache-control') || '', /private, no-store/);
     const body = await response.json();
     assert.equal(body.quote.tiers[0].price.total, 137500);
     assert.ok(!JSON.stringify(body).includes('PRIVATE-SUPPLIER-123'));

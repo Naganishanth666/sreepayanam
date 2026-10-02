@@ -1,19 +1,34 @@
 // The combined pack follows all sections of the Standard Travel Documents Pack.
 // The public route brief uses its quotation layout with unpriced draft content.
 import travelPackTemplate from '../../../shared/standardTravelPack.json';
+const logoSrc = new URL('../assets/sreepayanam-letterhead-logo.png', import.meta.url).href;
 const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
 const SCALE = 2.5;
 const LEFT = 44;
 const RIGHT = PAGE_WIDTH - LEFT;
 const CONTENT_WIDTH = RIGHT - LEFT;
-const BODY_TOP = 112;
+const BODY_TOP = 118;
 const BODY_BOTTOM = 781;
 const BLUE = '#0B3D91';
+const GOLD = '#D4AF37';
 const INK = '#27364B';
 const GRID = '#D9D9D9';
 const PALE = '#F3F6FA';
 const FONT = '"Century Gothic", Arial, sans-serif';
+let logoPromise;
+
+const loadLogo = () => {
+  if (!logoPromise) {
+    logoPromise = new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error('Could not load the SreePayanam letterhead logo.'));
+      image.src = logoSrc;
+    }).catch(error => { logoPromise = null; throw error; });
+  }
+  return logoPromise;
+};
 
 const font = (size, bold = false) => `${bold ? '700' : '400'} ${size}px ${FONT}`;
 const clean = value => String(value ?? '').trim();
@@ -67,7 +82,7 @@ const textLines = (ctx, value, width, size, bold = false) => {
   return output.length ? output : [''];
 };
 
-const createPage = () => {
+const createPage = logo => {
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(PAGE_WIDTH * SCALE);
   canvas.height = Math.round(PAGE_HEIGHT * SCALE);
@@ -77,25 +92,31 @@ const createPage = () => {
   ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, PAGE_WIDTH, PAGE_HEIGHT);
   ctx.textBaseline = 'top';
+  const logoWidth = 221;
+  const logoHeight = logoWidth * logo.naturalHeight / logo.naturalWidth;
+  ctx.drawImage(logo, LEFT, 10, logoWidth, logoHeight);
+  const contactLeft = 283;
   ctx.fillStyle = BLUE;
-  ctx.font = font(10, true);
-  ctx.fillText('SreePayanam InterNational Pvt. Ltd.  |  Tours & Travels', LEFT, 24);
+  ctx.font = font(8.7, true);
+  ctx.fillText('SreePayanam InterNational Pvt. Ltd.', contactLeft, 17);
   ctx.fillStyle = INK;
-  ctx.font = font(7.3);
-  ctx.fillText('No. 6, NMR Complex, Bharathipuram, Thiruverumbur, Trichy – 13  |  GSTIN: 33AAZCS3009H1Z5', LEFT, 43);
-  ctx.fillText('Office: 0431-2905117  |  Mobile: +91 92800 77182  |  info@sreepayanamtours.com  |  www.sreepayanamtours.com', LEFT, 58);
-  ctx.strokeStyle = GRID;
-  ctx.lineWidth = 0.8;
+  ctx.font = font(7.2);
+  ctx.fillText('No. 6, NMR Complex, Bharathipuram,', contactLeft, 33);
+  ctx.fillText('Thiruverumbur, Trichy – 13', contactLeft, 45);
+  ctx.fillText('GSTIN: 33AAZCS3009H1Z5  |  +91 92800 77182', contactLeft, 57);
+  ctx.fillText('info@sreepayanamtours.com', contactLeft, 69);
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 1.2;
   ctx.beginPath();
-  ctx.moveTo(LEFT, 82);
-  ctx.lineTo(RIGHT, 82);
+  ctx.moveTo(LEFT, 93);
+  ctx.lineTo(RIGHT, 93);
   ctx.stroke();
   return { canvas, ctx, links: [], y: BODY_TOP };
 };
 
 const drawFooter = (page, number, count) => {
   const { ctx } = page;
-  ctx.strokeStyle = GRID;
+  ctx.strokeStyle = GOLD;
   ctx.beginPath();
   ctx.moveTo(LEFT, 795);
   ctx.lineTo(RIGHT, 795);
@@ -107,11 +128,11 @@ const drawFooter = (page, number, count) => {
   ctx.fillText(label, RIGHT - ctx.measureText(label).width, 806);
 };
 
-const renderQuotationPages = (quote, pack = null, options = {}) => {
+const renderQuotationPages = (quote, pack = null, options = {}, logo) => {
   const isDraft = options.unpricedDraft === true;
-  const pages = [createPage()];
+  const pages = [createPage(logo)];
   const current = () => pages[pages.length - 1];
-  const nextPage = () => pages.push(createPage());
+  const nextPage = () => pages.push(createPage(logo));
   const ensure = height => { if (current().y + height > BODY_BOTTOM) nextPage(); };
   const heading = (label, main = false, reserve = 0) => {
     const size = main ? 15 : 10;
@@ -267,8 +288,7 @@ const renderQuotationPages = (quote, pack = null, options = {}) => {
     return !day || needsTimingConfirmation(day);
   }).length;
   const ageText = customer.childAges?.length ? ` (${customer.childAges.join(', ')} years)` : '';
-  const notes = [terms.specialNotes, customer.accessibilityNeeds, customer.foodRestrictions, customer.visitTimingPreferences,
-    terms.assumptions ? `Assumptions: ${terms.assumptions}` : '']
+  const notes = [terms.specialNotes, customer.accessibilityNeeds, customer.foodRestrictions, customer.visitTimingPreferences]
     .map(clean).filter(Boolean).join(' | ');
 
   if (pack) {
@@ -278,8 +298,8 @@ const renderQuotationPages = (quote, pack = null, options = {}) => {
   heading('01  Tour Package Quotation', true);
   paragraph(isDraft
     ? 'UNPRICED PLANNING DRAFT  |  Travel-desk review required before a quotation or booking can be issued.'
-    : 'Customer-facing estimate and quotation template. Use one enquiry reference across CRM, quotation, booking and accounting records.',
-  { after: 12, bold: isDraft, color: isDraft ? BLUE : INK });
+    : `APPROVED QUOTATION  |  Reviewed by ${short(quote.approvedBy, 'SreePayanam travel desk')}. Prices and arrangements remain subject to the validity and terms below.`,
+  { after: 12, bold: true, color: BLUE });
   table(
     ['CUSTOMER INQUIRY REFERENCE', 'QUOTATION NUMBER', 'ISSUE DATE', 'VALID UNTIL'],
     [[short(quote.enquiryReference), isDraft ? 'Pending staff approval' : short(quote.reference), formatDate(isDraft ? quote.createdAt : quote.approvedAt), isDraft ? 'Set after approval' : formatDate(terms.validUntil)]],
@@ -330,7 +350,7 @@ const renderQuotationPages = (quote, pack = null, options = {}) => {
   table(['Option', 'Stay / transport / meal plan', 'Total for group', 'Per person', 'Tax'],
     (quote.tiers || []).map(tier => [
       tier.name,
-      `${short(tier.accommodation)}\n${short(tier.transport)}\n${short(tier.meals)}`,
+      `${short(tier.accommodation)}\n${short(tier.transport)}\n${short(tier.meals)}${!isDraft && tier.sourceCheckedAt ? `\nRate checked: ${formatDate(tier.sourceCheckedAt)}` : ''}`,
       isDraft ? 'Pending staff quote' : money(tier.price?.total),
       isDraft ? 'Pending staff quote' : money(tier.price?.perPerson),
       isDraft ? 'To be confirmed' : short(terms.taxNote)
@@ -348,6 +368,7 @@ const renderQuotationPages = (quote, pack = null, options = {}) => {
   table(['Field', 'Details'], [
     ['Payment schedule', isDraft ? 'To be provided in the staff-approved quotation' : short(terms.paymentSchedule)],
     ['Cancellation / change', isDraft ? 'To be provided in the staff-approved quotation' : short(terms.cancellationTerms)],
+    ...(!isDraft && terms.assumptions ? [['Assumptions / availability', terms.assumptions]] : []),
     ['Special notes', short(notes, 'None recorded')]
   ], [119, 388], { after: 12 });
   paragraph(isDraft
@@ -407,24 +428,24 @@ const buildPdf = pages => {
   return new Blob(chunks, { type: 'application/pdf' });
 };
 
-export const buildStandardQuotationPdfBlob = quote => {
+export const buildStandardQuotationPdfBlob = async quote => {
   if (!quote || quote.status !== 'Approved') throw new Error('The quotation has not been approved.');
-  return buildPdf(renderQuotationPages(quote));
+  return buildPdf(renderQuotationPages(quote, null, {}, await loadLogo()));
 };
 
-export const buildStandardRouteBriefPdfBlob = draftQuote => {
+export const buildStandardRouteBriefPdfBlob = async draftQuote => {
   if (!draftQuote || !draftQuote.route?.itinerary?.length) throw new Error('A route draft is required.');
-  return buildPdf(renderQuotationPages(draftQuote, null, { unpricedDraft: true }));
+  return buildPdf(renderQuotationPages(draftQuote, null, { unpricedDraft: true }, await loadLogo()));
 };
 
-export const buildStandardTravelPackPdfBlob = (quote, pack) => {
+export const buildStandardTravelPackPdfBlob = async (quote, pack) => {
   if (!quote || quote.status !== 'Approved' || pack?.status !== 'Finalized') throw new Error('The complete document pack is not finalized.');
-  return buildPdf(renderQuotationPages(quote, pack));
+  return buildPdf(renderQuotationPages(quote, pack, {}, await loadLogo()));
 };
 
 export const downloadStandardTravelPackPdf = async (quote, pack) => {
   await document.fonts?.ready;
-  const blob = buildStandardTravelPackPdfBlob(quote, pack);
+  const blob = await buildStandardTravelPackPdfBlob(quote, pack);
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { FileCheck2, FilePenLine } from 'lucide-react';
+import { Download, FileCheck2, FilePenLine } from 'lucide-react';
 import ConfirmDialog from './ConfirmDialog';
 import { useAuth } from '../context/useAuth';
 import TravelDocumentPackDesk from './TravelDocumentPackDesk';
+import { downloadApprovedQuotationPdf } from '../utils/quotationPdf';
 import './QuotationDesk.css';
 
 const TIER_NAMES = ['Economic', 'Deluxe', 'Premium'];
@@ -167,10 +168,26 @@ const QuotationDesk = ({ enquiry, adminPassword }) => {
       setDraft(null);
       setForm(blankForm(enquiry));
       setApprovalNote(''); setVerifiedSources(false);
-      setNotice(`Quotation ${data.quote.reference} approved and locked. Complete its document pack below before downloading the combined PDF.`);
+      setNotice(`Quotation ${data.quote.reference} approved and locked. Its quotation PDF is ready below. Complete the document pack to unlock the combined PDF.`);
     } catch (approvalError) {
       setError(approvalError.message || 'Could not approve the quotation.');
     } finally { setBusy(''); setConfirmApproval(false); }
+  };
+
+  const downloadQuotation = async quote => {
+    setBusy(`download-${quote._id}`); setError(''); setProblems([]); setNotice('');
+    try {
+      const headers = isAdmin && token
+        ? { Authorization: `Bearer ${token}` }
+        : { 'x-admin-password': adminPassword };
+      const response = await fetch(`/api/quotations/${quote._id}/download-data`, { headers });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Could not prepare the approved quotation.');
+      await downloadApprovedQuotationPdf(data.quote);
+      setNotice(`Approved quotation ${data.quote.reference} downloaded.`);
+    } catch (downloadError) {
+      setError(downloadError.message || 'Could not download the quotation PDF.');
+    } finally { setBusy(''); }
   };
 
   return (
@@ -181,7 +198,7 @@ const QuotationDesk = ({ enquiry, adminPassword }) => {
       {open && <div className="quotation-desk-panel">
         <div className="quotation-desk-intro">
           <div><span className="eyebrow">Staff review</span><h4>Quotation from route brief</h4></div>
-          <p>Costs and source evidence stay internal. After quotation approval, staff complete all twelve standard travel documents for one combined PDF.</p>
+          <p>Costs and source evidence stay internal. Download the approved quotation here, then complete all twelve standard travel documents for the combined PDF.</p>
         </div>
         {!hasRoute ? <p role="status" className="quotation-desk-note">This enquiry predates saved route drafts. Ask the customer to submit the route again before creating a quotation.</p> : <>
           {loading && <p role="status" className="quotation-desk-note">Loading quotation versions…</p>}
@@ -189,6 +206,9 @@ const QuotationDesk = ({ enquiry, adminPassword }) => {
           {notice && <p role="status" className="quotation-desk-success">{notice}</p>}
           {quotes.filter(item => item.status === 'Approved').map(item => <div className="quotation-desk-approved" key={item._id}>
             <div><FileCheck2 size={18} aria-hidden="true" /><span><strong>{item.reference}</strong> · Version {item.version} · Approved {new Date(item.approval?.at).toLocaleDateString('en-IN')}</span></div>
+            <button type="button" className="btn btn-primary quotation-desk-download" onClick={() => downloadQuotation(item)} disabled={Boolean(busy)} aria-busy={busy === `download-${item._id}`}>
+              <Download size={16} aria-hidden="true" /> {busy === `download-${item._id}` ? 'Preparing quotation PDF…' : 'Download approved quotation PDF'}
+            </button>
             {isAdmin && <TravelDocumentPackDesk quoteId={item._id} token={token} />}
           </div>)}
           {!loading && <div className="quotation-desk-form">
