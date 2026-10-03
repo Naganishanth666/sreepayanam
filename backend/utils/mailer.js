@@ -11,7 +11,7 @@ const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character =>
 /**
  * Sends an email notification to info@sreepayanamtours.com containing
  * all details of the newly submitted inquiry.
- * Falls back to console logging if SMTP settings are not provided in environment.
+ * Requires configured SMTP credentials; never routes real customer details to a test inbox.
  * 
  * @param {Object} enquiryData Plain JS object containing enquiry fields
  */
@@ -23,42 +23,13 @@ const sendEnquiryEmail = async (enquiryData) => {
   const from = process.env.EMAIL_FROM || 'info@sreepayanamtours.com';
   const to = 'info@sreepayanamtours.com';
 
-  console.log(`[Mailer] Preparing to send enquiry email for: ${enquiryData.customerName || 'Unknown Customer'}`);
-
-  let transporter;
-  let isEthereal = false;
-
   if (!host || !user || !pass) {
-    console.warn('⚠️ [Mailer] SMTP settings are not configured in .env. Creating Ethereal Test Account...');
-    try {
-      const testAccount = await nodemailer.createTestAccount();
-      console.log('✅ [Mailer] Created Ethereal Test Account:', testAccount.user);
-      transporter = nodemailer.createTransport({
-        host: 'smtp.ethereal.email',
-        port: 587,
-        secure: false,
-        auth: {
-          user: testAccount.user,
-          pass: testAccount.pass,
-        },
-      });
-      isEthereal = true;
-    } catch (err) {
-      console.error('❌ [Mailer] Failed to create Ethereal account, falling back to console logging.', err);
-      console.log(JSON.stringify(enquiryData, null, 2));
-      return;
-    }
-  } else {
-    transporter = nodemailer.createTransport({
-      host,
-      port: Number(port),
-      secure: Number(port) === 465,
-      auth: {
-        user,
-        pass,
-      },
-    });
+    throw new Error('SMTP is not configured; enquiry is saved in CRM but the email alert was not sent.');
   }
+  const transporter = nodemailer.createTransport({
+    host, port: Number(port), secure: Number(port) === 465,
+    auth: { user, pass }
+  });
 
   // Dynamically build HTML rows for all standard properties
   let detailsHtml = '';
@@ -84,6 +55,10 @@ const sendEnquiryEmail = async (enquiryData) => {
   addRow('Customer Name', enquiryData.customerName);
   addRow('Mobile Number', enquiryData.mobileNumber);
   addRow('Email Address', enquiryData.emailId);
+  addRow('Enquiry Reference', enquiryData.quoteReference);
+  addRow('Package ID', enquiryData.packageId);
+  addRow('Selected Destinations', (enquiryData.selectedDestinations || []).join(', '));
+  addRow('Lead Source', enquiryData.leadSource);
   addRow('Travel Date', enquiryData.travelDate);
   addRow('Return Date', enquiryData.returnDate);
   addRow('From Location', enquiryData.fromLocation);
@@ -213,7 +188,7 @@ const sendEnquiryEmail = async (enquiryData) => {
         </table>
         
         <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid #f1f5f9; text-align: center;">
-          <a href="http://localhost:5173/admin" style="display: inline-block; background-color: #1e3a8a; color: white; padding: 10px 24px; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 0.88rem; box-shadow: 0 2px 4px rgba(30,58,138,0.2);">
+          <a href="${escapeHtml(process.env.PUBLIC_SITE_URL || 'https://sreepayanam.vercel.app')}/admin" style="display: inline-block; background-color: #1e3a8a; color: white; padding: 10px 24px; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 0.88rem; box-shadow: 0 2px 4px rgba(30,58,138,0.2);">
             Open Admin CRM Dashboard
           </a>
         </div>
@@ -234,12 +209,10 @@ const sendEnquiryEmail = async (enquiryData) => {
   try {
     const info = await transporter.sendMail(mailOptions);
     console.log(`✅ [Mailer] Email sent successfully to ${to}. Message ID: ${info.messageId}`);
-    if (isEthereal) {
-      console.log(`🔗 [Mailer] Ethereal Email Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
-    }
     return info;
   } catch (error) {
-    console.error('❌ [Mailer] SMTP Send Error:', error);
+    console.error('[Mailer] SMTP send failed:', error.message);
+    throw error;
   }
 };
 

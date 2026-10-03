@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, Clock, Search, SlidersHorizontal, ArrowUpDown, RefreshCw } from 'lucide-react';
+import { CATALOG_CATEGORIES, categoriesForPackage } from '../utils/catalogCategories';
 
 const FALLBACK_IMG = 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=600&q=80';
 
@@ -25,6 +26,7 @@ const TOUR_TYPE_INFO = {
   'MICE Tours': { icon: '💼', color: '#3b82f6' },
   'Education Tours': { icon: '📚', color: '#f97316' },
   'Adventure Tours': { icon: '🧗', color: '#f43f5e' }
+  , 'IRCTC Rail Tours': { icon: '🚆', color: '#0b3d91' }
 };
 
 const Packages = () => {
@@ -35,11 +37,11 @@ const Packages = () => {
   const [error, setError] = useState(null);
 
   // Search & Filter State
-  const [maxPrice, setMaxPrice] = useState(150000);
-  const [sortBy, setSortBy] = useState('recommended'); // 'recommended' | 'priceLow' | 'priceHigh' | 'durationShort' | 'durationLong'
+  const [sortBy, setSortBy] = useState('recommended');
 
   const searchQuery = searchParams.get('dest') || '';
   const selectedCategory = searchParams.get('category') || 'All';
+  const selectedCatalog = searchParams.get('catalog') || '';
   const typeParam = searchParams.get('type') || '';
   const selectedType = typeParam
     ? Object.keys(TOUR_TYPE_INFO).find(
@@ -77,26 +79,14 @@ const Packages = () => {
     setSearchParams(params);
   };
 
-  // Helper: Get price of package
-  const getPackagePrice = (pkg) => {
-    return pkg.offerPrice || pkg.originalPrice || pkg.price || 0;
-  };
-
   // Reset all filters
   const resetFilters = () => {
-    setMaxPrice(150000);
     setSortBy('recommended');
     setSearchParams({});
   };
 
-  // Calculate highest package price for dynamic slider limit
-  const maxAvailablePrice = packages.length > 0 
-    ? Math.max(...packages.map(p => getPackagePrice(p))) 
-    : 150000;
-
   // Filter & Sort Logic
   const filteredPackages = packages.filter(pkg => {
-    const price = getPackagePrice(pkg);
     const matchesSearch = 
       pkg.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       pkg.destination.toLowerCase().includes(searchQuery.toLowerCase());
@@ -109,20 +99,17 @@ const Packages = () => {
       !selectedType || 
       pkg.tourType === selectedType ||
       (pkg.tourType && pkg.tourType.toLowerCase().includes(selectedType.toLowerCase()));
+    const matchesCatalog = !selectedCatalog || categoriesForPackage(pkg).includes(selectedCatalog);
 
-    const matchesPrice = price <= maxPrice;
-
-    return matchesSearch && matchesCategory && matchesType && matchesPrice;
+    return matchesSearch && matchesCategory && matchesType && matchesCatalog;
   }).sort((a, b) => {
-    const priceA = getPackagePrice(a);
-    const priceB = getPackagePrice(b);
-
-    if (sortBy === 'priceLow') return priceA - priceB;
-    if (sortBy === 'priceHigh') return priceB - priceA;
     if (sortBy === 'durationShort') return a.durationDays - b.durationDays;
     if (sortBy === 'durationLong') return b.durationDays - a.durationDays;
     return 0; // Default recommended (as returned by DB)
   });
+  const pageCount = Math.max(1, Math.ceil(filteredPackages.length / 12));
+  const currentPage = Math.min(Math.max(1, Number(searchParams.get('page')) || 1), pageCount);
+  const visiblePackages = filteredPackages.slice((currentPage - 1) * 12, currentPage * 12);
 
   // Unique list of types present in loaded packages with counts
   const typeCounts = packages.reduce((acc, pkg) => {
@@ -133,7 +120,7 @@ const Packages = () => {
   }, {});
 
   return (
-    <div className="page-container" style={{ background: '#f8fafc', paddingBottom: 80 }}>
+    <div className="page-container" style={{ background: '#f8fafc', paddingTop: 0, paddingBottom: 80 }}>
       {/* Top Banner / Hero */}
       <section style={{ 
         background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%)', 
@@ -164,14 +151,23 @@ const Packages = () => {
             </span>
             <h1 style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', fontWeight: 800, marginBottom: 12 }}>Explore Tour Packages</h1>
             <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '1.1rem', maxWidth: 600, margin: '0 auto' }}>
-              Discover handcrafted national and international getaways customized to perfection.
+              Explore routes and request a current quotation tailored to your dates and travellers.
             </p>
           </motion.div>
         </div>
       </section>
 
       <div className="container">
-        <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 32, alignItems: 'start' }}>
+        <section className="catalog-category-section" aria-labelledby="catalog-categories-heading">
+          <div><h2 id="catalog-categories-heading">Browse by travel style</h2><p>Explore all SreePayanam tour categories. Ask our team for a tailored quote on any route.</p></div>
+          <div className="catalog-category-grid">{CATALOG_CATEGORIES.map(category => {
+            const count = packages.filter(pkg => categoriesForPackage(pkg).includes(category)).length;
+            return <button type="button" key={category} className={selectedCatalog === category ? 'is-selected' : ''} onClick={() => updateQueryParams({ catalog: selectedCatalog === category ? null : category, category: null, type: null, page: null })} aria-pressed={selectedCatalog === category}>
+              <strong>{category}</strong><span>{count ? `${count} tours` : 'Enquire for options'}</span>
+            </button>;
+          })}</div>
+        </section>
+        <div className="catalog-results-layout" style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 32, alignItems: 'start' }}>
           
           {/* 1. FILTER SIDEBAR (Desktop) */}
           <aside className="glass-card" style={{ 
@@ -251,27 +247,6 @@ const Packages = () => {
                     </button>
                   );
                 })}
-              </div>
-            </div>
-
-            {/* Price Range Slider */}
-            <div style={{ marginBottom: 28 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <label style={{ ...filterLabel, margin: 0 }}>Max Price</label>
-                <span style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--secondary)' }}>₹{maxPrice.toLocaleString()}</span>
-              </div>
-              <input 
-                type="range" 
-                min="5000" 
-                max={maxAvailablePrice > 5000 ? maxAvailablePrice : 150000} 
-                step="2000"
-                value={maxPrice} 
-                onChange={e => setMaxPrice(Number(e.target.value))}
-                style={{ width: '100%', accentColor: 'var(--primary)', cursor: 'pointer' }}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: 4 }}>
-                <span>₹5,000</span>
-                <span>₹{(maxAvailablePrice > 5000 ? maxAvailablePrice : 150000).toLocaleString()}</span>
               </div>
             </div>
 
@@ -388,8 +363,6 @@ const Packages = () => {
                   style={{ width: 180, height: 38, padding: '0 12px', fontSize: '0.88rem', borderRadius: 8, cursor: 'pointer' }}
                 >
                   <option value="recommended">Recommended</option>
-                  <option value="priceLow">Price: Low to High</option>
-                  <option value="priceHigh">Price: High to Low</option>
                   <option value="durationShort">Duration: Shortest</option>
                   <option value="durationLong">Duration: Longest</option>
                 </select>
@@ -437,12 +410,17 @@ const Packages = () => {
                 style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 24 }}
               >
                 <AnimatePresence>
-                  {filteredPackages.map((pkg, i) => (
+                  {visiblePackages.map((pkg, i) => (
                     <PackageCard key={pkg.packageId} pkg={pkg} index={i} />
                   ))}
                 </AnimatePresence>
               </motion.div>
             )}
+            {pageCount > 1 && <nav className="catalog-pagination" aria-label="Package pages">
+              <button type="button" disabled={currentPage === 1} onClick={() => updateQueryParams({ page: currentPage - 1 })}>Previous</button>
+              <span>Page {currentPage} of {pageCount}</span>
+              <button type="button" disabled={currentPage === pageCount} onClick={() => updateQueryParams({ page: currentPage + 1 })}>Next</button>
+            </nav>}
           </main>
         </div>
       </div>
@@ -456,8 +434,6 @@ const Packages = () => {
 // Internal Card Component
 const PackageCard = ({ pkg, index }) => {
   const navigate = useNavigate();
-  const price = pkg.offerPrice || pkg.originalPrice || pkg.price || 0;
-  const discount = pkg.offerPrice && pkg.originalPrice ? Math.round((1 - pkg.offerPrice / pkg.originalPrice) * 100) : 0;
   
   const typeInfo = TOUR_TYPE_INFO[pkg.tourType] || { icon: '🏝️', color: 'var(--primary)' };
 
@@ -496,18 +472,6 @@ const PackageCard = ({ pkg, index }) => {
           }}>
             {pkg.packageCategory || 'National'}
           </span>
-          {discount > 0 && (
-            <span style={{ 
-              background: 'rgba(239,68,68,0.9)', 
-              color: 'white', 
-              padding: '3px 10px', 
-              borderRadius: 20, 
-              fontSize: '0.72rem', 
-              fontWeight: 700 
-            }}>
-              {discount}% OFF
-            </span>
-          )}
         </div>
         <div style={{ position: 'absolute', top: 12, right: 12 }}>
           <span style={{ 
@@ -561,23 +525,13 @@ const PackageCard = ({ pkg, index }) => {
         </div>
 
         <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-              <span style={{ fontWeight: 800, fontSize: '1.25rem', color: 'var(--secondary)' }}>₹{price.toLocaleString()}</span>
-            </div>
-            {pkg.offerPrice && pkg.originalPrice && (
-              <span style={{ textDecoration: 'line-through', color: '#94a3b8', fontSize: '0.8rem', display: 'block', marginTop: -2 }}>
-                ₹{pkg.originalPrice.toLocaleString()}
-              </span>
-            )}
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>per person</div>
-          </div>
+          <span style={{ color: 'var(--color-ink-soft)', fontWeight: 700, fontSize: '0.85rem' }}>Request a tailored quotation</span>
           <button 
             className="btn btn-primary" 
             style={{ padding: '8px 16px', fontSize: '0.85rem', borderRadius: 8 }} 
             onClick={e => { e.stopPropagation(); navigate(`/package/${pkg.packageId}`); }}
           >
-            View Details
+            Explore tour
           </button>
         </div>
       </div>

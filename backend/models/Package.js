@@ -9,6 +9,11 @@ const packageSchema = new mongoose.Schema({
     enum: ['National', 'International'], 
     required: true 
   },
+  catalogCategories: [{ type: String, enum: [
+    'National Tours', 'International Tours', 'Pilgrimage Tours', 'Honeymoon Packages',
+    'Family Holidays', 'Hill Station Tours', 'Educational Tours', 'Medical Tourism',
+    'Corporate & MICE', 'Festival & Cultural Tours', 'Cruise Holidays', 'IRCTC Rail Tours'
+  ] }],
   tourType: { 
     type: String, 
     enum: [
@@ -16,7 +21,7 @@ const packageSchema = new mongoose.Schema({
       'Resort Packages', 'Weekend Tours', 'Group Tours', 'School / College Tours', 
       'Corporate Tours', 'Festival Tours', 'Cultural Tours', 'Medical Tours', 
       'Event / Sports Tours', 'Cruise Packages', 'Luxury Tours', 'Budget Tours', 'MICE Tours',
-      'Education Tours', 'Adventure Tours'
+      'Education Tours', 'Adventure Tours', 'IRCTC Rail Tours'
     ],
     required: true
   },
@@ -62,7 +67,7 @@ const packageSchema = new mongoose.Schema({
   cancellationPolicy: { type: String },
   
   baseCost: { type: Number }, // Raw wholesale cost price to SreePayanam
-  profitMarginPercent: { type: Number, default: 25 }, // Legacy display field; the costing snapshot owns the actual calculation.
+  profitMarginPercent: { type: Number, default: 40 }, // Legacy display field; the costing snapshot owns the actual calculation.
   
   originalPrice: { type: Number, required: true },
   offerPrice: { type: Number },
@@ -71,7 +76,7 @@ const packageSchema = new mongoose.Schema({
   
   status: { 
     type: String, 
-    enum: ['Draft', 'Approved'], 
+    enum: ['Draft', 'Approved', 'Published', 'Expired'],
     default: 'Draft' 
   },
   
@@ -119,12 +124,12 @@ const packageSchema = new mongoose.Schema({
     bufferPercent: { type: Number, default: 10 },
     bufferAmount: { type: Number, default: 0 },
     landedCost: { type: Number, default: 0 },
-    markupPercent: { type: Number, default: 25 },
+    markupPercent: { type: Number, default: 40 },
     markupAmount: { type: Number, default: 0 },
     sellingPrice: { type: Number, default: 0 },
     taxPercent: { type: Number, default: 0 },
     taxAmount: { type: Number, default: 0 },
-    discountPercent: { type: Number, default: 0 },
+    discountPercent: { type: Number, default: 5 },
     discountAmount: { type: Number, default: 0 },
     discountType: { type: String, enum: ['Fixed', 'Percentage'], default: 'Percentage' },
     customerPrice: { type: Number, default: 0 },
@@ -145,6 +150,9 @@ const packageSchema = new mongoose.Schema({
   
   packageId: { type: String, unique: true, required: true },
   isActive: { type: Boolean, default: true },
+  seasonStart: { type: Date },
+  seasonEnd: { type: Date },
+  archivedAt: { type: Date },
   
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
@@ -168,13 +176,13 @@ packageSchema.pre('save', function() {
     if (this.baseCost && this.offerPrice) {
       this.profitMarginPercent = Math.round(((this.offerPrice - this.baseCost) / this.baseCost) * 100);
     } else if (this.baseCost) {
-      const margin = this.profitMarginPercent || 25;
-      this.offerPrice = Math.round(this.baseCost * (1 + margin / 100));
+      this.originalPrice = Math.round(Math.round(this.baseCost * 1.10) * 1.40);
+      this.offerPrice = this.originalPrice - Math.round(this.originalPrice * 0.05);
     } else if (this.offerPrice) {
-      const margin = this.profitMarginPercent || 25;
+      const margin = this.profitMarginPercent || 40;
       this.baseCost = Math.round(this.offerPrice / (1 + margin / 100));
     } else if (this.originalPrice) {
-      const margin = this.profitMarginPercent || 25;
+      const margin = this.profitMarginPercent || 40;
       this.offerPrice = this.originalPrice;
       this.baseCost = Math.round(this.offerPrice / (1 + margin / 100));
     }

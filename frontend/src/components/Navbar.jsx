@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronDown, LogOut, Menu, Settings, Sparkles, UserRound, X } from 'lucide-react';
 import { useAuth } from '../context/useAuth';
-import logoImg from '../assets/sreepayanam-official-logo.png';
+import logoImg from '../assets/sreepayanam-letterhead-logo.png';
 
 const packageLinks = [
   { label: 'National tours', path: '/packages?category=National' },
@@ -33,7 +33,7 @@ const Navbar = () => {
     <header className="site-nav">
       <nav className="container nav-shell" aria-label="Main navigation">
         <Link className="nav-brand" to="/" aria-label="SreePayanam AI Travel Ecosystem home" onClick={() => setMobileOpen(false)}>
-          <img src={logoImg} width="226" height="56" alt="SreePayanam AI Travel Ecosystem home" />
+          <img src={logoImg} width="392" height="110" alt="SreePayanam Tours and Travels" />
         </Link>
 
         <button
@@ -63,7 +63,7 @@ const Navbar = () => {
             </div>
           </details>
 
-          <NavLink to="/bookings" className={linkClass} onClick={() => setMobileOpen(false)}>Book services</NavLink>
+          <NavLink to="/services" className={linkClass} onClick={() => setMobileOpen(false)}>Book services</NavLink>
           <NavLink to="/contact" className={linkClass} onClick={() => setMobileOpen(false)}>Contact</NavLink>
           <NavLink to="/ai-assistant" onClick={() => setMobileOpen(false)} className={({ isActive }) => `${linkClass({ isActive })} ai-link`}>
             <Sparkles size={15} aria-hidden="true" /> Planner

@@ -20,11 +20,16 @@ const quotationSchema = new mongoose.Schema({
     directCost: Number,
     sourceReference: String,
     sourceCheckedAt: String,
+    minimumSellingPrice: Number,
+    benchmarkStatus: { type: String, enum: ['Verified', 'Provisional'], default: 'Provisional' },
+    benchmarkNote: String,
+    benchmarkMedian: Number,
+    marketComparables: [{ url: String, total: Number, currency: String, taxTreatment: String, checkedAt: String, comparisonNote: String }],
     accommodation: String,
     transport: String,
     meals: String,
     activities: String,
-    price: { total: Number, perPerson: Number, currency: String }
+    price: { beforeDiscount: Number, discountAmount: Number, total: Number, perPerson: Number, currency: String }
   }],
   terms: {
     validUntil: String,
@@ -39,7 +44,10 @@ const quotationSchema = new mongoose.Schema({
   },
   pricingRule: {
     bufferPercent: { type: Number, default: 10 },
-    markupPercent: { type: Number, default: 25 }
+    markupPercent: { type: Number, default: 40 },
+    discountPercent: { type: Number, default: 5 },
+    offerStartDate: String,
+    offerEndDate: String
   },
   approval: {
     actor: String,

@@ -166,7 +166,7 @@ function calculateCosting(params) {
 
   const markupPercent = params.markupPercent !== undefined && params.markupPercent !== null && params.markupPercent !== ''
     ? Number(params.markupPercent)
-    : 25;
+    : 40;
   const markupAmount = Math.round(landedCost * (markupPercent / 100));
   const sellingPrice = landedCost + markupAmount;
 
@@ -178,7 +178,7 @@ function calculateCosting(params) {
   const discountType = params.discountType || 'Percentage';
   const discountPercent = params.discountPercent !== undefined && params.discountPercent !== null && params.discountPercent !== ''
     ? Number(params.discountPercent)
-    : 0;
+    : 5;
   
   const discountAmount = discountType === 'Percentage'
     ? Math.round(sellingPrice * (discountPercent / 100))

@@ -1,6 +1,8 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 const Enquiry = require('../models/Enquiry');
+const Package = require('../models/Package');
 const { checkAdmin } = require('../middleware/auth');
 const { sendEnquiryEmail } = require('../utils/mailer');
 
@@ -96,8 +98,11 @@ router.post('/', async (req, res) => {
     if (!validEmail(emailId)) {
       return res.status(400).json({ message: 'Enter a valid email address.' });
     }
-    if (String(body.quoteReference || '').startsWith('SP-DRAFT-') && body.contactConsent !== true) {
+    if ((String(body.quoteReference || '').startsWith('SP-DRAFT-') || String(body.quoteReference || '').startsWith('SP-SVC-') || body.enquiryType === 'Tour Package') && body.contactConsent !== true) {
       return res.status(400).json({ message: 'Please allow us to use your contact details for this route enquiry.' });
+    }
+    if ((body.enquiryType === 'Tour Package' || String(body.quoteReference || '').startsWith('SP-SVC-')) && !emailId) {
+      return res.status(400).json({ message: 'Email is required for a package quotation request.' });
     }
 
     if (body.quoteReference) {
@@ -115,6 +120,36 @@ router.post('/', async (req, res) => {
     }
 
     const publicFields = pickPublicFields(body);
+    if (body.enquiryType === 'Tour Package' && body.packageId) {
+      const pkg = await Package.findOne({ packageId: String(body.packageId).slice(0, 80), status: { $in: ['Approved', 'Published'] }, isActive: true });
+      if (!pkg) return res.status(404).json({ message: 'This package is not currently available for an enquiry.' });
+      const now = new Date();
+      if ((pkg.seasonStart && pkg.seasonStart > now) || (pkg.seasonEnd && pkg.seasonEnd < now)) {
+        return res.status(409).json({ message: 'This package is outside its published travel season.' });
+      }
+      const selectedDestinations = Array.isArray(body.selectedDestinations) ? body.selectedDestinations.slice(0, 40) : [];
+      if (!selectedDestinations.length) selectedDestinations.push(pkg.destination);
+      publicFields.selectedDestinations = selectedDestinations;
+      publicFields.detailedPreferences = {
+        ...(publicFields.detailedPreferences && typeof publicFields.detailedPreferences === 'object' ? publicFields.detailedPreferences : {}),
+        packageName: pkg.title,
+        routeDraft: {
+          planReference: String(body.quoteReference || '').slice(0, 80),
+          title: pkg.title, destination: pkg.destination,
+          startingCity: String(body.fromLocation || pkg.startingCity || '').slice(0, 160),
+          endingCity: String(pkg.endingCity || body.fromLocation || pkg.destination).slice(0, 160),
+          travelStartDate: body.travelDate || '', durationDays: pkg.durationDays,
+          durationNights: pkg.durationNights, overview: pkg.overview,
+          planningReview: { status: 'tight', summary: 'Package route and selected places require travel-desk review.', unplacedPlaces: selectedDestinations },
+          itinerary: ((pkg.itinerary || []).length ? pkg.itinerary : [{ title: 'Route review required', activities: '' }]).map((day, index) => ({
+            day: index + 1, title: day.title || `Day ${index + 1}`,
+            activities: day.activities || '', places: [], transit: day.transport || '',
+            meal: day.mealPlan || '', entryWindow: 'Entry window and availability to be verified by the travel desk.',
+            hotel: { name: day.hotel || '', rating: '', desc: 'Property and room type subject to staff confirmation.' }
+          }))
+        }
+      };
+    }
     if (routeTiming) {
       const existingPreferences = publicFields.detailedPreferences && typeof publicFields.detailedPreferences === 'object'
         ? publicFields.detailedPreferences
@@ -138,8 +173,8 @@ router.post('/', async (req, res) => {
       contactConsent: body.contactConsent === true,
       consentVersion: body.contactConsent === true ? String(body.consentVersion || '').slice(0, 80) : undefined,
       consentAt: body.contactConsent === true ? new Date() : undefined,
-      quoteReference: body.quoteReference ? String(body.quoteReference).slice(0, 80) : undefined,
-      selectedDestinations: Array.isArray(body.selectedDestinations) ? body.selectedDestinations.slice(0, 40) : undefined,
+      quoteReference: body.quoteReference ? String(body.quoteReference).slice(0, 80) : `SP-EQ-${new Date().toISOString().slice(0, 7).replace('-', '')}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`,
+      selectedDestinations: Array.isArray(publicFields.selectedDestinations) ? publicFields.selectedDestinations : undefined,
       enquiryType: body.enquiryType || 'Tour Package Enquiry'
     });
     await newEnquiry.save();

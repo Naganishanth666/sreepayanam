@@ -992,8 +992,8 @@ router.post('/generate-package', checkAdmin, async (req, res) => {
       
       Pricing Instruction:
       Calculate a realistic pricing structure in Indian Rupees (₹) for exactly 2 passengers (2 pax) total:
-      - For domestic/national destinations: base wholesale cost (baseCost) should be ₹3,000 to ₹5,500 per day total (e.g. ~₹14,500 for a 2-day trip for 2 pax). SreePayanam selling price (offerPrice) should include our profit margin of 25-30% (e.g. ~₹18,500 selling price).
-      - For international destinations: base wholesale cost (baseCost) should be ₹8,000 to ₹15,000 per day total. SreePayanam selling price (offerPrice) should include our profit margin of 25-30%.
+      - For domestic/national destinations: estimate direct supplier cost only, clearly provisional until staff verify the source and retrieval time. Staff pricing follows 10% contingency, 40% markup and the approved 5% promotional offer when active.
+      - For international destinations: estimate direct supplier cost only, clearly provisional until staff verify the source and retrieval time. Do not invent confirmed fares or availability.
       Set originalPrice as the retail price (cost * 1.50) and offerPrice as the selling price.
       Both originalPrice and offerPrice MUST be returned as integers, not formatted strings.
       Generate a detailed text block in "priceBreakdown" explaining the wholesale cost breakdown (Hotel, Car transport, tolls/driver, meals).
@@ -1087,7 +1087,7 @@ router.post('/generate-package', checkAdmin, async (req, res) => {
     const hotelCategory = req.body.hotelCategory || '3 Star';
     const vehicleType = req.body.vehicleType || req.body.carType || null;
     const mealPlan = req.body.mealRequired || 'MAP';
-    const markupPercent = Number(req.body.markupPercent) || 25;
+    const markupPercent = Number(req.body.markupPercent) || 40;
     const bufferPercent = Number(req.body.bufferPercent) || 10;
 
     const costingParams = {
@@ -1468,7 +1468,7 @@ router.post('/compile-draft', checkAdmin, async (req, res) => {
       vehicleType: selectedCar ? selectedCar.type : null,
       vehicleDailyRate,
       miscCost: flightTrainCost,
-      markupPercent: Number(req.body.markupPercent) || 25,
+      markupPercent: Number(req.body.markupPercent) || 40,
       bufferPercent: Number(req.body.bufferPercent) || 10
     };
 

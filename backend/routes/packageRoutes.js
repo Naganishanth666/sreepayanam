@@ -21,6 +21,12 @@ const toPublicPackage = packageDocument => {
   delete result.profitMarginPercent;
   delete result.priceBreakdown;
   delete result.costingBreakdown;
+  delete result.originalPrice;
+  delete result.offerPrice;
+  delete result.price;
+  delete result.isSpecialOffer;
+  delete result.offerValidity;
+  delete result.brochureUrl;
   return result;
 };
 
@@ -70,9 +76,12 @@ router.get('/', async (req, res) => {
   try {
     const isAdmin = isAdminRequest(req);
     
-    let query = { isActive: true };
+    let query = {};
     if (!isAdmin) {
-      query.status = { $ne: 'Draft' };
+      const now = new Date();
+      query = { isActive: true, status: { $in: ['Approved', 'Published'] },
+        $and: [{ $or: [{ seasonStart: { $exists: false } }, { seasonStart: null }, { seasonStart: { $lte: now } }] },
+          { $or: [{ seasonEnd: { $exists: false } }, { seasonEnd: null }, { seasonEnd: { $gte: now } }] }] };
     }
     
     const packages = await Package.find(query).sort({ createdAt: -1 });
@@ -91,7 +100,9 @@ router.get('/:id', async (req, res) => {
     const pkg = await Package.findOne({ packageId: req.params.id });
     if (!pkg) return res.status(404).json({ message: 'Package not found' });
     
-    if (!isAdmin && pkg.status === 'Draft') {
+    const now = new Date();
+    if (!isAdmin && (!pkg.isActive || !['Approved', 'Published'].includes(pkg.status)
+      || (pkg.seasonStart && pkg.seasonStart > now) || (pkg.seasonEnd && pkg.seasonEnd < now))) {
       return res.status(403).json({ message: 'Access denied. Package is in draft status.' });
     }
     
@@ -165,17 +176,26 @@ router.put('/:id', checkAdmin, async (req, res) => {
   }
 });
 
-// DELETE a package (Admin only)
+// Archive a package without losing its enquiry and quote history.
 router.delete('/:id', checkAdmin, async (req, res) => {
   try {
-    const pkg = await Package.findOne({ packageId: req.params.id });
+    const pkg = await Package.findOneAndUpdate({ packageId: req.params.id },
+      { isActive: false, archivedAt: new Date(), updatedAt: new Date() }, { new: true });
     if (!pkg) return res.status(404).json({ message: 'Package not found' });
-    await pkg.deleteOne();
-    res.json({ message: 'Package deleted successfully' });
+    res.json({ message: 'Package archived successfully', package: pkg });
   } catch (error) {
-    console.error('[Packages] Delete failed:', error.message);
-    res.status(500).json({ message: 'Package could not be deleted.' });
+    console.error('[Packages] Archive failed:', error.message);
+    res.status(500).json({ message: 'Package could not be archived.' });
   }
+});
+
+router.post('/:id/restore', checkAdmin, async (req, res) => {
+  try {
+    const pkg = await Package.findOneAndUpdate({ packageId: req.params.id },
+      { isActive: true, archivedAt: null, updatedAt: new Date() }, { new: true });
+    if (!pkg) return res.status(404).json({ message: 'Package not found' });
+    res.json({ message: 'Package restored successfully', package: pkg });
+  } catch { res.status(500).json({ message: 'Package could not be restored.' }); }
 });
 
 module.exports = router;

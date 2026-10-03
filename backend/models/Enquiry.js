@@ -10,7 +10,8 @@ const enquirySchema = new mongoose.Schema({
       'Bus Booking', 'Bus Enquiry', 'Car Rental', 'Car Rental Enquiry', 
       'Corporate Travel', 'Corporate Travel Enquiry', 'Education Tour', 
       'Education Tour Enquiry', 'Medical Tour', 'Medical Tour Enquiry', 
-      'MICE', 'MICE Enquiry'
+      'MICE', 'MICE Enquiry', 'Attestation', 'Passport Assistance', 'Travel Insurance',
+      'Bus Rental', 'Van Rental'
     ],
     required: true
   },

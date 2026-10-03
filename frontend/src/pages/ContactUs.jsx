@@ -7,7 +7,7 @@ const ContactUs = () => {
     email: '',
     phone: '',
     type: '',
-    message: ''
+    message: '', consent: false
   });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -16,8 +16,8 @@ const ContactUs = () => {
   const firstErrorRef = useRef(null);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, checked, type } = e.target;
+    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
   const handleSubmit = async (e) => {
@@ -28,6 +28,7 @@ const ContactUs = () => {
     if (!/^[+\d][\d\s-]{7,19}$/.test(formData.phone.trim())) nextErrors.phone = 'Enter a valid phone number.';
     if (!formData.type) nextErrors.type = 'Choose what you need help with.';
     if (formData.message.trim().length < 10) nextErrors.message = 'Add a few details so we can plan a useful reply.';
+    if (!formData.consent) nextErrors.consent = 'Please agree to be contacted about your enquiry.';
     setFieldErrors(nextErrors);
     if (Object.keys(nextErrors).length) {
       firstErrorRef.current = document.getElementById(Object.keys(nextErrors)[0]);
@@ -48,7 +49,8 @@ const ContactUs = () => {
           customerName: formData.name,
           mobileNumber: formData.phone,
           emailId: formData.email,
-          remarks: formData.message
+          remarks: formData.message,
+          contactConsent: true, consentVersion: 'contact-enquiry-v1.3-2026-10-03', leadSource: 'website'
         })
       });
 
@@ -56,7 +58,7 @@ const ContactUs = () => {
       if (!res.ok) throw new Error(data.error || data.message || 'Submission failed');
 
       setSuccess(true);
-      setFormData({ name: '', email: '', phone: '', type: '', message: '' });
+      setFormData({ name: '', email: '', phone: '', type: '', message: '', consent: false });
       setFieldErrors({});
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.');
@@ -138,6 +140,7 @@ const ContactUs = () => {
               <textarea id="message" name="message" placeholder="Tell us about destinations, dates, group size, or anything important to you." className="input-field contact-textarea resize-none" rows="5" value={formData.message} onChange={handleChange} aria-invalid={Boolean(fieldErrors.message)} aria-describedby={fieldErrors.message ? 'message-error' : undefined} />
               {fieldErrors.message && <span id="message-error" className="field-error">{fieldErrors.message}</span>}
             </div>
+            <div className="field-wrap"><label className="service-consent"><input id="consent" name="consent" type="checkbox" checked={formData.consent} onChange={handleChange} /> I agree to be contacted by SreePayanam about this enquiry.</label>{fieldErrors.consent && <span className="field-error">{fieldErrors.consent}</span>}</div>
             <button type="submit" className="btn btn-primary" disabled={loading}>
               {loading ? 'Sending enquiry…' : 'Send enquiry'}
             </button>

@@ -262,7 +262,7 @@ const Bookings = () => {
 
   const getWhatsAppLink = () => {
     if (!submittedData) return '';
-    const number = '919443217654'; // SreePayanam WhatsApp
+    const number = '919280077182'; // SreePayanam WhatsApp
     let text = `Hello SreePayanam! ✈️\n\nI just submitted a booking request on your website:\n`;
     text += `👤 *Name:* ${submittedData.customerName}\n`;
     text += `📞 *Phone:* ${submittedData.mobileNumber}\n`;

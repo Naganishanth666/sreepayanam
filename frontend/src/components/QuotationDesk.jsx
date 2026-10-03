@@ -9,6 +9,7 @@ import './QuotationDesk.css';
 
 const TIER_NAMES = ['Economic', 'Deluxe', 'Premium'];
 const SOURCE_TYPES = ['Official', 'Tourism board', 'Government', 'Maps', 'Third party'];
+const blankComparable = () => ({ url: '', total: '', currency: 'INR', taxTreatment: '', checkedAt: '', comparisonNote: '' });
 
 const blankForm = enquiry => ({
   customer: { rooms: enquiry.hotelRooms || '' },
@@ -18,7 +19,8 @@ const blankForm = enquiry => ({
     hotel: { ...day.hotel }
   })) },
   destinationReferences: (enquiry.selectedDestinations || []).map(name => ({ name, url: '', sourceType: '', lastChecked: '' })),
-  tiers: TIER_NAMES.map(name => ({ name, directCost: '', sourceReference: '', sourceCheckedAt: '', accommodation: '', transport: '', meals: '', activities: '' })),
+  tiers: TIER_NAMES.map(name => ({ name, directCost: '', sourceReference: '', sourceCheckedAt: '', minimumSellingPrice: '', benchmarkNote: '', marketComparables: [blankComparable(), blankComparable(), blankComparable()], accommodation: '', transport: '', meals: '', activities: '' })),
+  pricingRule: { offerStartDate: '', offerEndDate: '' },
   terms: {
     validUntil: '', taxNote: '', paymentSchedule: '', cancellationTerms: '', assumptions: '',
     specialNotes: enquiry.remarks || '',
@@ -38,8 +40,9 @@ const formFromQuote = quote => ({
   destinationReferences: (quote.destinationReferences || []).map(item => ({ ...item })),
   tiers: TIER_NAMES.map(name => {
     const tier = quote.tiers?.find(item => item.name === name) || {};
-    return { name, directCost: tier.directCost || '', sourceReference: tier.sourceReference || '', sourceCheckedAt: tier.sourceCheckedAt || '', accommodation: tier.accommodation || '', transport: tier.transport || '', meals: tier.meals || '', activities: tier.activities || '' };
+    return { name, directCost: tier.directCost || '', sourceReference: tier.sourceReference || '', sourceCheckedAt: tier.sourceCheckedAt || '', minimumSellingPrice: tier.minimumSellingPrice || '', benchmarkNote: tier.benchmarkNote || '', marketComparables: [0, 1, 2].map(index => ({ ...blankComparable(), ...tier.marketComparables?.[index] })), accommodation: tier.accommodation || '', transport: tier.transport || '', meals: tier.meals || '', activities: tier.activities || '' };
   }),
+  pricingRule: { offerStartDate: quote.pricingRule?.offerStartDate || '', offerEndDate: quote.pricingRule?.offerEndDate || '' },
   terms: {
     validUntil: quote.terms?.validUntil || '',
     taxNote: quote.terms?.taxNote || '',
@@ -109,8 +112,18 @@ const QuotationDesk = ({ enquiry, adminPassword }) => {
     setForm(current => ({ ...current, tiers: current.tiers.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: value } : item) }));
     setDirty(true);
   };
+  const changeComparable = (tierIndex, comparableIndex, field, value) => {
+    setForm(current => ({ ...current, tiers: current.tiers.map((tier, index) => index === tierIndex ? {
+      ...tier, marketComparables: tier.marketComparables.map((item, itemIndex) => itemIndex === comparableIndex ? { ...item, [field]: value } : item)
+    } : tier) }));
+    setDirty(true);
+  };
   const changeTerm = (field, value) => {
     setForm(current => ({ ...current, terms: { ...current.terms, [field]: value } }));
+    setDirty(true);
+  };
+  const changePricingRule = (field, value) => {
+    setForm(current => ({ ...current, pricingRule: { ...current.pricingRule, [field]: value } }));
     setDirty(true);
   };
   const changeTripDetail = (scope, field, value) => {
@@ -214,7 +227,7 @@ const QuotationDesk = ({ enquiry, adminPassword }) => {
             {!isAdmin && <p className="quotation-desk-note">The combined final document pack requires a named Admin account. <Link to="/login">Sign in as Admin</Link> to complete and download it.</p>}
           </div>)}
           {!loading && <div className="quotation-desk-form">
-            <div className="quotation-desk-section-head"><h5>{draft ? `Draft ${draft.reference} · Version ${draft.version}` : 'New quotation draft'}</h5><span>10% contingency, then 25% markup</span></div>
+            <div className="quotation-desk-section-head"><h5>{draft ? `Draft ${draft.reference} · Version ${draft.version}` : 'New quotation draft'}</h5><span>10% contingency · 40% markup · 5% offer</span></div>
             <p className="quotation-desk-note">The route and customer details are copied from the enquiry. Check the day plan, supplier evidence, destination links and legal terms before approval.</p>
 
             <div className="quotation-desk-fields">
@@ -250,20 +263,36 @@ const QuotationDesk = ({ enquiry, adminPassword }) => {
 
             <h6>Three tier cost and scope</h6>
             <div className="quotation-desk-tier-list">{form.tiers.map((tier, index) => <section className="quotation-desk-tier" key={tier.name} aria-label={`${tier.name} tier`}>
-              <div className="quotation-desk-tier-title"><strong>{tier.name}</strong><span>{Number(tier.directCost) > 0 ? `Indicative sell price ${money(Math.round(Math.round(Number(tier.directCost) * 1.1) * 1.25))} + GST as applicable` : 'Enter verified direct cost'}</span></div>
+              <div className="quotation-desk-tier-title"><strong>{tier.name}</strong><span>{Number(tier.directCost) > 0 ? `Offer price ${money(Math.round(Math.round(Number(tier.directCost) * 1.1) * 1.4 * 0.95))} + GST as applicable` : 'Enter verified direct cost'}</span></div>
               <div className="quotation-desk-fields">
                 <label>Direct supplier cost (internal) <input type="number" min="0" step="1" value={tier.directCost} onChange={event => changeTier(index, 'directCost', event.target.value)} /></label>
                 <label>Supplier quote or contracted rate reference <input value={tier.sourceReference} onChange={event => changeTier(index, 'sourceReference', event.target.value)} placeholder="Supplier quote ID or contract reference" /></label>
                 <label>Source checked <input type="date" max={today()} value={tier.sourceCheckedAt} onChange={event => changeTier(index, 'sourceCheckedAt', event.target.value)} /></label>
+                <label>Management-approved minimum selling price <input type="number" min="1" step="1" value={tier.minimumSellingPrice} onChange={event => changeTier(index, 'minimumSellingPrice', event.target.value)} /></label>
                 <label>Stay property/category and room type <input value={tier.accommodation} onChange={event => changeTier(index, 'accommodation', event.target.value)} placeholder="e.g. 3 Star equivalent, double room" /></label>
                 <label>Transport class <input value={tier.transport} onChange={event => changeTier(index, 'transport', event.target.value)} /></label>
                 <label>Meal plan <input value={tier.meals} onChange={event => changeTier(index, 'meals', event.target.value)} /></label>
                 <label className="quotation-desk-wide">Activity differences <input value={tier.activities} onChange={event => changeTier(index, 'activities', event.target.value)} /></label>
               </div>
+              <details className="quotation-desk-benchmarks"><summary>Market benchmark evidence</summary>
+                <p>Compare three similar packages when available. If they are unavailable, explain why the estimate remains provisional for staff review.</p>
+                {tier.marketComparables.filter(item => Number(item.total) > 0).length === 3 && <p><strong>Median comparable amount:</strong> {money([...tier.marketComparables].map(item => Number(item.total)).sort((a, b) => a - b)[1])} (review tax and occupancy basis before using this comparison)</p>}
+                {tier.marketComparables.map((source, sourceIndex) => <fieldset key={sourceIndex}><legend>Comparable {sourceIndex + 1}</legend><div className="quotation-desk-fields">
+                  <label>Source URL <input type="url" value={source.url} onChange={event => changeComparable(index, sourceIndex, 'url', event.target.value)} /></label>
+                  <label>Total amount <input type="number" min="0" value={source.total} onChange={event => changeComparable(index, sourceIndex, 'total', event.target.value)} /></label>
+                  <label>Currency <input value={source.currency} onChange={event => changeComparable(index, sourceIndex, 'currency', event.target.value)} /></label>
+                  <label>Taxes and fees included? <input value={source.taxTreatment} onChange={event => changeComparable(index, sourceIndex, 'taxTreatment', event.target.value)} /></label>
+                  <label>Checked on <input type="date" max={today()} value={source.checkedAt} onChange={event => changeComparable(index, sourceIndex, 'checkedAt', event.target.value)} /></label>
+                  <label>Route, duration, group, room and inclusion comparison <input value={source.comparisonNote} onChange={event => changeComparable(index, sourceIndex, 'comparisonNote', event.target.value)} /></label>
+                </div></fieldset>)}
+                <label>Why three comparable sources are unavailable <textarea rows="2" value={tier.benchmarkNote} onChange={event => changeTier(index, 'benchmarkNote', event.target.value)} /></label>
+              </details>
             </section>)}</div>
 
             <h6>Approved wording and travel scope</h6>
             <div className="quotation-desk-fields">
+              <label>5% offer starts <input type="date" value={form.pricingRule.offerStartDate} onChange={event => changePricingRule('offerStartDate', event.target.value)} /></label>
+              <label>5% offer ends <input type="date" value={form.pricingRule.offerEndDate} onChange={event => changePricingRule('offerEndDate', event.target.value)} /></label>
               <label>Price valid until <input type="date" min={today()} value={form.terms.validUntil} onChange={event => changeTerm('validUntil', event.target.value)} /></label>
               <label>Accountant-approved GST wording <input value={form.terms.taxNote} onChange={event => changeTerm('taxNote', event.target.value)} placeholder="Price + GST as applicable" /></label>
               <label className="quotation-desk-wide">Payment schedule <textarea rows="2" value={form.terms.paymentSchedule} onChange={event => changeTerm('paymentSchedule', event.target.value)} /></label>

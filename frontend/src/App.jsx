@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import Chatbot from './components/Chatbot';
@@ -14,7 +14,7 @@ import ContactUs from './pages/ContactUs';
 import Login from './pages/Login';
 import PackageDetails from './pages/PackageDetails';
 import Bookings from './pages/Bookings';
-import Checkout from './pages/Checkout';
+import Services from './pages/Services';
 import { NotFoundPage } from './pages/AccessPages';
 
 const routeTitles = {
@@ -25,7 +25,7 @@ const routeTitles = {
   '/ai-assistant': 'Trip planner | SreePayanam',
   '/login': 'Log in | SreePayanam',
   '/bookings': 'Book services | SreePayanam',
-  '/checkout': 'Checkout | SreePayanam',
+  '/services': 'Travel services | SreePayanam',
   '/admin': 'Admin dashboard | SreePayanam'
 };
 
@@ -33,7 +33,7 @@ const PageTitle = () => {
   const location = useLocation();
 
   useEffect(() => {
-    const baseTitle = routeTitles[location.pathname] || (location.pathname.startsWith('/package/') ? 'Package details | SreePayanam' : 'Page not found | SreePayanam');
+    const baseTitle = routeTitles[location.pathname] || (location.pathname.startsWith('/package/') ? 'Package details | SreePayanam' : location.pathname.startsWith('/services/') ? 'Travel service | SreePayanam' : 'Page not found | SreePayanam');
     document.title = baseTitle;
   }, [location.pathname]);
 
@@ -53,15 +53,13 @@ function App() {
           <Route path="/packages"     element={<Packages />} />
           <Route path="/package/:id"  element={<PackageDetails />} />
           <Route path="/contact"      element={<ContactUs />} />
+          <Route path="/services"     element={<Services />} />
+          <Route path="/services/:slug" element={<Services />} />
           <Route path="/ai-assistant" element={<AiAssistant />} />
           <Route path="/login"        element={<Login />} />
 
           {/* Protected: Any logged-in user */}
-          <Route path="/checkout" element={
-            <ProtectedRoute>
-              <Checkout />
-            </ProtectedRoute>
-          } />
+          <Route path="/checkout" element={<Navigate to="/packages" replace />} />
           <Route path="/bookings" element={
             <ProtectedRoute>
               <Bookings />

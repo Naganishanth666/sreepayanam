@@ -6,7 +6,7 @@ const Enquiry = require('../models/Enquiry');
 const Quotation = require('../models/Quotation');
 const TravelDocumentPack = require('../models/TravelDocumentPack');
 const User = require('../models/User');
-const { BUFFER_PERCENT, MARKUP_PERCENT, priceTier } = require('../utils/quotationPricing');
+const { BUFFER_PERCENT, MARKUP_PERCENT, DISCOUNT_PERCENT, priceTier } = require('../utils/quotationPricing');
 const { requiredFields, sanitizeFields, completionProblems } = require('../utils/travelPackValidation');
 
 const router = express.Router();
@@ -104,7 +104,7 @@ router.post('/preview', checkAdmin, async (req, res) => {
       bufferPercent: FIXED_BUFFER_PERCENT,
       markupPercent: FIXED_MARKUP_PERCENT,
       taxPercent: 0,
-      discountPercent: 0,
+      discountPercent: DISCOUNT_PERCENT,
       discountAmount: 0,
       discountType: 'Percentage'
     });
@@ -275,11 +275,22 @@ const quotationInput = (body, enquiry, existing) => {
     tiers: names.map(name => {
       const input = inputTiers.find(item => item?.name === name) || {};
       const directCost = numberInRange(input.directCost, 0, 0, 100000000);
+      const comparables = (Array.isArray(input.marketComparables) ? input.marketComparables : []).slice(0, 3).map(item => ({
+        url: safeUrl(item.url), total: numberInRange(item.total, 0, 0, 100000000),
+        currency: cleanText(item.currency || 'INR', 12), taxTreatment: cleanText(item.taxTreatment, 100),
+        checkedAt: dateOnly(item.checkedAt), comparisonNote: cleanText(item.comparisonNote, 300)
+      }));
+      const comparableTotals = comparables.filter(item => item.url && item.total > 0 && item.checkedAt).map(item => item.total).sort((a, b) => a - b);
       return {
         name,
         directCost,
         sourceReference: cleanText(input.sourceReference, 300),
         sourceCheckedAt: dateOnly(input.sourceCheckedAt),
+        minimumSellingPrice: numberInRange(input.minimumSellingPrice, 0, 0, 100000000),
+        benchmarkStatus: comparableTotals.length === 3 ? 'Verified' : 'Provisional',
+        benchmarkNote: cleanText(input.benchmarkNote, 500),
+        benchmarkMedian: comparableTotals.length === 3 ? comparableTotals[1] : undefined,
+        marketComparables: comparables,
         accommodation: cleanText(input.accommodation, 240),
         transport: cleanText(input.transport, 240),
         meals: cleanText(input.meals, 240),
@@ -298,7 +309,11 @@ const quotationInput = (body, enquiry, existing) => {
       exclusions: cleanLines(body.terms?.exclusions),
       routeReviewNote: cleanText(body.terms?.routeReviewNote, 800)
     },
-    pricingRule: { bufferPercent: BUFFER_PERCENT, markupPercent: MARKUP_PERCENT },
+    pricingRule: {
+      bufferPercent: BUFFER_PERCENT, markupPercent: MARKUP_PERCENT, discountPercent: DISCOUNT_PERCENT,
+      offerStartDate: dateOnly(body.pricingRule?.offerStartDate),
+      offerEndDate: dateOnly(body.pricingRule?.offerEndDate)
+    },
     updatedAt: new Date(),
     reference: existing?.reference,
     version: existing?.version
@@ -319,11 +334,22 @@ const approvalProblems = quote => {
     if (reference.lastChecked > today) problems.push(`The check date for ${reference.name} cannot be in the future.`);
   }
   if (quote.tiers?.length !== 3) problems.push('All three quotation tiers are required.');
+  const offerStart = quote.pricingRule?.offerStartDate;
+  const offerEnd = quote.pricingRule?.offerEndDate;
+  if (!offerStart || !offerEnd) problems.push('Enter management-approved promotion start and end dates.');
+  else if (offerEnd < offerStart || today < offerStart || today > offerEnd) problems.push('The 5% offer must be active on the approval date.');
   for (const tier of quote.tiers || []) {
     if (!tier.price?.total || !tier.sourceReference || !tier.sourceCheckedAt || !tier.accommodation || !tier.transport || !tier.meals) {
       problems.push(`Complete the verified cost source and scope for ${tier.name}.`);
     }
     if (tier.sourceCheckedAt > today) problems.push(`The supplier source date for ${tier.name} cannot be in the future.`);
+    if (tier.benchmarkStatus === 'Verified') {
+      if (tier.marketComparables?.some(item => !item.url || !item.total || !item.checkedAt || !item.taxTreatment || !item.comparisonNote || item.checkedAt > today)) {
+        problems.push(`Complete three current comparable sources for ${tier.name}, including price, tax treatment and matched scope.`);
+      }
+    } else if (!tier.benchmarkNote) problems.push(`Record why a three-source market benchmark is unavailable for ${tier.name}.`);
+    if (!Number.isFinite(tier.minimumSellingPrice) || tier.minimumSellingPrice <= 0) problems.push(`Enter the approved minimum selling price for ${tier.name}.`);
+    else if (tier.price?.total < tier.minimumSellingPrice) problems.push(`${tier.name} is below the approved minimum selling price.`);
   }
   const terms = quote.terms || {};
   if (!terms.validUntil || !terms.taxNote || !terms.paymentSchedule || !terms.cancellationTerms || !terms.assumptions || !terms.inclusions?.length || !terms.exclusions?.length) {
@@ -424,6 +450,7 @@ router.get('/:id/download-data', checkAdmin, async (req, res) => {
         name, price, sourceCheckedAt, accommodation, transport, meals, activities
       })),
       terms: quote.terms,
+      offer: { discountPercent: quote.pricingRule?.discountPercent, startDate: quote.pricingRule?.offerStartDate, endDate: quote.pricingRule?.offerEndDate },
       approvedAt: quote.approval.at,
       approvedBy: quote.approval.displayName
     } });
@@ -445,6 +472,7 @@ const packQuoteData = quote => ({
     name, price, sourceCheckedAt, accommodation, transport, meals, activities
   })),
   terms: quote.terms,
+  offer: { discountPercent: quote.pricingRule?.discountPercent, startDate: quote.pricingRule?.offerStartDate, endDate: quote.pricingRule?.offerEndDate },
   approvedAt: quote.approval?.at,
   approvedBy: quote.approval?.displayName
 });

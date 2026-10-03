@@ -7,7 +7,7 @@ import {
 import { Link } from 'react-router-dom';
 import { DESTINATION_CATALOG, toCatalogPackage } from '../data/destinationCatalog';
 import { HERO_PACKAGE_TYPES, HERO_SLIDES } from '../data/heroSlides';
-import logoImg from '../assets/sreepayanam-official-logo.png';
+import logoImg from '../assets/sreepayanam-letterhead-logo.png';
 
 const initialQuoteForm = {
   destination: '',
@@ -15,7 +15,7 @@ const initialQuoteForm = {
   passengers: '2',
   preference: 'Family Tours',
   name: '',
-  phone: ''
+  phone: '', consent: false
 };
 
 const LandingPage = () => {
@@ -78,8 +78,8 @@ const LandingPage = () => {
   };
 
   const handleQuoteChange = event => {
-    const { name, value } = event.target;
-    setQuoteForm(previous => ({ ...previous, [name]: value }));
+    const { name, value, checked, type } = event.target;
+    setQuoteForm(previous => ({ ...previous, [name]: type === 'checkbox' ? checked : value }));
     setQuoteError('');
     setQuoteSuccess(false);
   };
@@ -99,6 +99,10 @@ const LandingPage = () => {
       document.getElementById('quick-quote-phone')?.focus();
       return;
     }
+    if (!quoteForm.consent) {
+      setQuoteError('Please agree to be contacted about this request.');
+      return;
+    }
 
     setQuoteLoading(true);
     try {
@@ -113,7 +117,8 @@ const LandingPage = () => {
           toLocation: quoteForm.destination || 'Not decided',
           numberOfPassengers: Math.max(1, Math.min(Number(quoteForm.passengers) || 2, 50)),
           preferredCategory: quoteForm.preference,
-          remarks: 'Lead captured via SreePayanam home page quick planner.'
+          remarks: 'Lead captured via SreePayanam home page quick planner.',
+          contactConsent: true, consentVersion: 'home-callback-v1.3-2026-10-03', leadSource: 'website'
         })
       });
       const data = await response.json();
@@ -389,6 +394,7 @@ const LandingPage = () => {
                   </select>
                 </div>
               </div>
+              <label className="service-consent"><input name="consent" type="checkbox" checked={quoteForm.consent} onChange={handleQuoteChange} /> I agree to be contacted by SreePayanam about this request.</label>
               {quoteError && <div className="form-feedback error" role="alert" style={{ marginTop: '0.9rem' }}><span aria-hidden="true">!</span>{quoteError}</div>}
               {quoteSuccess && <div className="form-feedback success" role="status" style={{ marginTop: '0.9rem' }}><Check size={17} aria-hidden="true" />Thanks — the SreePayanam travel desk will call you shortly.</div>}
               <button className="btn btn-primary" type="submit" disabled={quoteLoading} aria-busy={quoteLoading} style={{ width: '100%', marginTop: '0.9rem' }}>
@@ -399,14 +405,14 @@ const LandingPage = () => {
         </section>
       </main>
 
-      <a className="float-contact" href="https://wa.me/919443217654" target="_blank" rel="noreferrer" aria-label="Chat with SreePayanam on WhatsApp">
+      <a className="float-contact" href="https://wa.me/919280077182" target="_blank" rel="noreferrer" aria-label="Chat with SreePayanam on WhatsApp">
         <MessageCircle size={23} aria-hidden="true" />
       </a>
 
       <footer className="site-footer">
         <div className="container footer-inner">
           <div className="footer-brand">
-            <img src={logoImg} alt="SreePayanam AI Travel Ecosystem" width="260" height="76" />
+            <img src={logoImg} alt="SreePayanam Tours and Travels" width="360" height="120" />
             <p>Travel smarter. Journey better.</p>
           </div>
           <div>

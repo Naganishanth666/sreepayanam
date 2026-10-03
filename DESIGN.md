@@ -60,9 +60,9 @@ Approved customer quotations follow the supplied Standard Travel Documents Pack'
 
 - **Audience and primary job:** Families, pilgrims, couples, student groups and corporate travellers need to turn a rough travel idea into a route, destination shortlist, time-aware route draft and enquiry.
 - **Target market(s) and evidence:** India-first travel planning, with domestic and international packages. Evidence is the existing National/International package model, the current planner fields, and the requested destination catalogue.
-- **Locale(s) and language policy:** English UI and copy; INR is the default customer-facing currency. Use clear, non-legalistic English and avoid inventing package policies.
+- **Locale(s) and language policy:** English UI is shipped; Tamil localization remains a requirement from SRS v1.3. Public package listings are price-free. INR is used only in staff-reviewed quotations and financial views. Use clear, non-legalistic English and avoid inventing package policies.
 - **Usage scene:** Primarily mobile and small laptop use, often while comparing routes or messaging a travel desk. Touch targets must be generous and progress must remain obvious.
-- **Register:** Hybrid. `/`, `/about`, `/packages`, `/contact` are brand surfaces; `/ai-assistant`, `/checkout`, `/bookings` and `/admin` are product surfaces with stronger state and recovery rules.
+- **Register:** Hybrid. `/`, `/about`, `/packages`, `/services`, `/contact` are brand surfaces; `/ai-assistant`, `/bookings` and `/admin` are product surfaces with stronger state and recovery rules. The legacy direct checkout is retired until accepted-quotation booking is implemented.
 - **Memorable signature:** A twelve-frame route reel on the home hero, pairing each package type with a destination image and a practical route note.
 - **Restraint:** Form labels, commercial boundaries, errors, dates and customer data remain calm, high-contrast and unsurprising.
 - **Anti-references:** Neon “AI” gradients, anonymous hotel-booking grids, and generic dashboard chrome. The brand should feel grounded in the journeys it coordinates.

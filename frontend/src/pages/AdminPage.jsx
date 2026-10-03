@@ -7,13 +7,14 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import QuotationDesk from '../components/QuotationDesk';
 import { renderRichText } from '../utils/textFormatter';
 import { calculateCosting } from '../utils/costingEngine';
+import { CATALOG_CATEGORIES, categoriesForPackage } from '../utils/catalogCategories';
 
 const TOUR_TYPES = [
   'Family Tours','Pilgrimage Tours','Honeymoon Tours','Hill Station Tours',
   'Resort Packages','Weekend Tours','Group Tours','School / College Tours',
   'Corporate Tours','Festival Tours','Cultural Tours','Medical Tours',
   'Event / Sports Tours','Cruise Packages','Luxury Tours','Budget Tours',
-  'MICE Tours','Education Tours','Adventure Tours'
+  'MICE Tours','Education Tours','Adventure Tours','IRCTC Rail Tours'
 ];
 
 const ADMIN_VERIFY_TIMEOUT_MS = 20_000;
@@ -26,8 +27,8 @@ const formatAccountDate = value => {
 };
 
 const emptyForm = {
-  title: '', destination: '', packageCategory: 'National', tourType: 'Family Tours',
-  startingCity: '', endingCity: '', durationDays: '', durationNights: '',
+  title: '', destination: '', packageCategory: 'National', tourType: 'Family Tours', catalogCategories: [],
+  startingCity: '', endingCity: '', durationDays: '', durationNights: '', seasonStart: '', seasonEnd: '',
   overview: '', imageUrl: '',
   itinerary: [{ day: 1, title: '', activities: '', hotel: '', mealPlan: '', transport: '' }],
   inclusions: '', exclusions: '', optionalAddons: '',
@@ -71,9 +72,9 @@ const emptyForm = {
   miscCost: '',
 
   bufferPercent: 10,
-  markupPercent: 25,
+  markupPercent: 40,
   taxPercent: 0,
-  discountPercent: 0,
+  discountPercent: 5,
   discountAmount: 0,
   discountType: 'Percentage',
 };
@@ -115,9 +116,9 @@ const flattenCostingData = (data) => {
     miscCost: cb.miscCost !== undefined && cb.miscCost !== null ? cb.miscCost : '',
     
     bufferPercent: cb.bufferPercent !== undefined && cb.bufferPercent !== null ? cb.bufferPercent : 10,
-    markupPercent: cb.markupPercent !== undefined && cb.markupPercent !== null ? cb.markupPercent : 25,
+    markupPercent: cb.markupPercent !== undefined && cb.markupPercent !== null ? cb.markupPercent : 40,
     taxPercent: cb.taxPercent !== undefined && cb.taxPercent !== null ? cb.taxPercent : 0,
-    discountPercent: cb.discountPercent !== undefined && cb.discountPercent !== null ? cb.discountPercent : 0,
+    discountPercent: cb.discountPercent !== undefined && cb.discountPercent !== null ? cb.discountPercent : 5,
     discountAmount: cb.discountAmount !== undefined && cb.discountAmount !== null ? cb.discountAmount : 0,
     discountType: cb.discountType !== undefined && cb.discountType !== null ? cb.discountType : 'Percentage',
   };
@@ -1191,8 +1192,11 @@ const AdminPage = () => {
       destination: pkg.destination || '',
       packageCategory: pkg.packageCategory || 'National',
       tourType: pkg.tourType || 'Family Tours',
+      catalogCategories: categoriesForPackage(pkg),
       startingCity: pkg.startingCity || '',
       endingCity: pkg.endingCity || '',
+      seasonStart: pkg.seasonStart ? new Date(pkg.seasonStart).toISOString().slice(0, 10) : '',
+      seasonEnd: pkg.seasonEnd ? new Date(pkg.seasonEnd).toISOString().slice(0, 10) : '',
       durationDays: pkg.durationDays || '',
       durationNights: pkg.durationNights || '',
       overview: pkg.overview || '',
@@ -1364,13 +1368,22 @@ const AdminPage = () => {
         throw new Error(data.message || 'Failed to delete package.');
       }
       setDeleteTarget(null);
-      setSuccess(`Package "${deleteTarget.title}" was deleted.`);
+      setSuccess(`Package "${deleteTarget.title}" was archived and can be restored.`);
       fetchPackages();
     } catch (err) {
       setError(err.message || 'Failed to delete package.');
     } finally {
       setDeleteBusy(false);
     }
+  };
+  const handleRestore = async pkg => {
+    try {
+      const response = await fetch(`/api/packages/${pkg.packageId}/restore`, { method: 'POST', headers: { 'x-admin-password': password } });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || 'Could not restore the package.');
+      setSuccess(`Package "${pkg.title}" restored.`);
+      fetchPackages();
+    } catch (restoreError) { setError(restoreError.message); }
   };
 
 
@@ -2224,6 +2237,15 @@ const AdminPage = () => {
                     </select>
                   </Field>
                   <Row>
+                    <Field label="Season starts (optional)"><input type="date" name="seasonStart" className="input-field" value={formData.seasonStart || ''} onChange={handleChange} /></Field>
+                    <Field label="Season ends (optional)"><input type="date" name="seasonEnd" className="input-field" value={formData.seasonEnd || ''} onChange={handleChange} /></Field>
+                  </Row>
+                  <fieldset className="admin-catalog-categories">
+                    <legend>Browse categories</legend>
+                    <p>Choose each category where this package should appear.</p>
+                    <div>{CATALOG_CATEGORIES.map(category => <label key={category}><input type="checkbox" checked={(formData.catalogCategories || []).includes(category)} onChange={event => setFormData(current => ({ ...current, catalogCategories: event.target.checked ? [...(current.catalogCategories || []), category] : (current.catalogCategories || []).filter(item => item !== category) }))} /> {category}</label>)}</div>
+                  </fieldset>
+                  <Row>
                     <Field label="Meal Plan (e.g. CP/MAP/AP)">
                       <input name="mealPlan" className="input-field" placeholder="e.g. MAP Plan - Daily Breakfast & Dinner" value={formData.mealPlan} onChange={handleChange} />
                     </Field>
@@ -2437,7 +2459,9 @@ const AdminPage = () => {
                       <Field label="Package Status">
                         <select name="status" className="input-field" value={formData.status} onChange={handleChange} style={{ borderColor: formData.status === 'Draft' ? '#ffc107' : '#28a745', fontWeight: 'bold' }}>
                           <option value="Draft">🟡 Draft – Awaiting Admin Approval</option>
-                          <option value="Approved">🟢 Approved – Publish & Show Publicly</option>
+                          <option value="Approved">🟢 Approved – Visible to customers</option>
+                          <option value="Published">🟢 Published – Visible to customers</option>
+                          <option value="Expired">⚪ Expired – Hidden from customers</option>
                         </select>
                       </Field>
                       <Field label="Package Visibility">
@@ -2578,12 +2602,12 @@ const AdminPage = () => {
                           name="markupPercent" 
                           min="10" 
                           max="35" 
-                          value={formData.markupPercent ?? 25}
+                          value={formData.markupPercent ?? 40}
                           onChange={handleChange} 
                           style={{ flex: 1, height: '8px', borderRadius: '4px', accentColor: 'var(--primary)', cursor: 'pointer' }}
                         />
                         <span style={{ fontWeight: 'bold', fontSize: '0.95rem', minWidth: '40px', color: 'var(--primary)' }}>
-                          {formData.markupPercent ?? 25}%
+                          {formData.markupPercent ?? 40}%
                         </span>
                       </div>
                     </Field>
@@ -2876,6 +2900,7 @@ const AdminPage = () => {
                           <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--primary)', marginTop: 2 }}>
                             ID: {pkg.packageId}
                           </div>
+                          {!pkg.isActive && <span style={{ color: '#a15c00', fontWeight: 800, fontSize: '.76rem' }}>Archived</span>}
                           <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)', marginTop: 2 }}>
                             ₹{(pkg.offerPrice || pkg.originalPrice || pkg.price || 0).toLocaleString()}
                             {' '}<span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>• {pkg.durationDays}D/{pkg.durationNights}N</span>
@@ -2901,15 +2926,15 @@ const AdminPage = () => {
                             >
                               <Edit size={18} />
                             </button>
-                            <button
+                            {pkg.isActive ? <button
                               type="button"
                               onClick={() => setDeleteTarget(pkg)}
-                              aria-label={`Delete ${pkg.title}`}
+                              aria-label={`Archive ${pkg.title}`}
                               style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 6 }}
-                              title="Delete package"
+                              title="Archive package"
                             >
                               <Trash2 size={18} />
-                            </button>
+                            </button> : <button type="button" onClick={() => handleRestore(pkg)} className="btn btn-outline">Restore</button>}
                           </div>
                         </div>
                       </div>
@@ -4326,9 +4351,9 @@ const AdminPage = () => {
         />
         <ConfirmDialog
           open={Boolean(deleteTarget)}
-          title="Delete this tour package?"
-          message={deleteTarget ? `“${deleteTarget.title}” will be removed from the package manager. This cannot be undone.` : ''}
-          confirmLabel="Delete package"
+          title="Archive this tour package?"
+          message={deleteTarget ? `“${deleteTarget.title}” will be hidden from the public catalogue. You can restore it later.` : ''}
+          confirmLabel="Archive package"
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}
           busy={deleteBusy}

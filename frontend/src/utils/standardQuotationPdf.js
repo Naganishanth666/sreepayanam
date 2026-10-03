@@ -357,7 +357,7 @@ const renderQuotationPages = (quote, pack = null, options = {}, logo) => {
     ]), [58, 182, 88, 84, 95], { fontSize: 7.1, lineHeight: 10.2, after: 10 });
   paragraph(isDraft
     ? 'Planning statement: This draft has no approved prices, tax or supplier bookings. The travel desk will confirm hotel properties, rooms, meals, tickets, darshan slots and transport before issuing a quotation.'
-    : 'Quote statement: Prices are subject to supplier availability and final confirmation. Confirmed properties, meal services, tickets, darshan slots and transport will be stated in the approved booking confirmation.',
+    : `Quote statement: ${quote.offer?.discountPercent ? `${quote.offer.discountPercent}% promotional discount included; valid ${formatDate(quote.offer.startDate)} to ${formatDate(quote.offer.endDate)}. ` : ''}Prices are subject to supplier availability and final confirmation. Confirmed properties, meal services, tickets, darshan slots and transport will be stated in the approved booking confirmation.`,
   { size: 8, after: 11 });
 
   heading('Inclusions, exclusions and payment', false, 245);

@@ -82,7 +82,7 @@ test('draft quotation copies an edited route and applies the SRS pricing rule', 
     assert.equal(saved.customer.rooms, 1);
     assert.equal(saved.customer.visitTimingPreferences, 'Morning darshan');
     assert.deepEqual(saved.route.planningReview.unplacedPlaces, []);
-    assert.equal(saved.tiers.find(tier => tier.name === 'Economic').price.total, 137500);
+    assert.equal(saved.tiers.find(tier => tier.name === 'Economic').price.total, 146300);
     assert.equal(saved.tiers.find(tier => tier.name === 'Deluxe').price, null);
   });
 });
@@ -149,7 +149,8 @@ test('complete quote approval records the named Admin and locks the version', as
     _id: 'quote-id', status: 'Draft', selectedPlaces: ['Rockfort Temple'],
     route: { endingCity: 'Chennai', durationNights: 0, itinerary: [{ title: 'Day 1', activities: 'Visit Rockfort Temple.', entryWindow: 'Opening time checked with official source.' }], planningReview: { status: 'workable', unplacedPlaces: [] } },
     destinationReferences: [{ name: 'Rockfort Temple', url: 'https://example.com/rockfort', sourceType: 'Official', lastChecked: checkedAt }],
-    tiers: ['Economic', 'Deluxe', 'Premium'].map(name => ({ name, price: { total: 137500 }, sourceReference: 'Supplier quote 1', sourceCheckedAt: checkedAt, accommodation: 'Category stay', transport: 'Sedan', meals: 'Breakfast' })),
+    tiers: ['Economic', 'Deluxe', 'Premium'].map(name => ({ name, price: { total: 146300 }, minimumSellingPrice: 140000, benchmarkStatus: 'Provisional', benchmarkNote: 'Comparable public offers unavailable; verified supplier quote reviewed.', sourceReference: 'Supplier quote 1', sourceCheckedAt: checkedAt, accommodation: 'Category stay', transport: 'Sedan', meals: 'Breakfast' })),
+    pricingRule: { bufferPercent: 10, markupPercent: 40, discountPercent: 5, offerStartDate: checkedAt, offerEndDate: checkedAt },
     terms: { validUntil: checkedAt, taxNote: 'GST extra/as applicable', paymentSchedule: 'Deposit on acceptance', cancellationTerms: 'Approved supplier terms', assumptions: 'Subject to availability', inclusions: ['Stay'], exclusions: ['Personal expenses'], routeReviewNote: 'Checked the proposed order and timing with the destination references.' }
   };
   Quotation.findById = async () => quote;
