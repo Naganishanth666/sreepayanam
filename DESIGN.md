@@ -100,7 +100,7 @@ Solid blue is the primary safe action. Outline ink is neutral. Orange is a focus
 
 ### Navigation and data display
 
-The navigation is a sticky white bar with a visible mobile menu button and blue link states. Package cards use real links for navigation. The planner's route ribbon and route-draft panel are the primary data display; the public planner and route brief never expose supplier cost, internal profit or commercial totals.
+The navigation is a sticky white bar with a visible mobile menu button and blue link states. Featured package cards use real links and show only the opening route summary; full package highlights and seasonal details belong on the detail page. The planner's route ribbon and route-draft panel are the primary data display; the public planner and route brief never expose supplier cost, internal profit or commercial totals.
 
 ### Forms and overlays
 

@@ -693,6 +693,13 @@ export const toCatalogPackage = (pkg) => {
   const id = pkg.packageId || `remote-${pkg._id}`;
   const remotePlaces = Array.isArray(pkg.templesList) ? pkg.templesList.filter(Boolean) : [];
   const remoteDestination = pkg.destination || 'Custom route';
+  const overviewIntro = typeof pkg.overview === 'string'
+    ? pkg.overview.split(/\n\s*\n|package highlights|ideal time to visit|best season:/i)[0].replace(/\s+/g, ' ').trim()
+    : '';
+  const firstSentence = overviewIntro.match(/^.+?[.!?](?=\s|$)/)?.[0] || overviewIntro;
+  const description = firstSentence.length > 160
+    ? `${firstSentence.slice(0, 159).replace(/\s+\S*$/, '').replace(/[,:;\s–-]+$/, '')}…`
+    : firstSentence;
   const groups = remotePlaces.length > 0
     ? [{ id: 'package-highlights', label: 'Package highlights', kind: 'recommended', places: remotePlaces }]
     : [{ id: 'package-route', label: 'Package route', kind: 'recommended', places: [remoteDestination] }];
@@ -705,7 +712,7 @@ export const toCatalogPackage = (pkg) => {
     tourType: pkg.tourType || 'Family Tours',
     durationDays: Number(pkg.durationDays) || 1,
     durationNights: Number(pkg.durationNights) || Math.max(Number(pkg.durationDays || 1) - 1, 0),
-    description: pkg.overview || 'A published SreePayanam package.',
+    description: description || 'Explore this route and ask us to tailor it to your dates.',
     imageUrl: typeof pkg.imageUrl === 'string' ? pkg.imageUrl : '',
     groups,
     remote: true,
