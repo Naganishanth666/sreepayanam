@@ -346,6 +346,16 @@ const renderQuotationPages = (quote, pack = null, options = {}, logo) => {
     ];
   }), [157, 350]);
 
+  if (isDraft && quote.hotelSuggestions?.length) {
+    heading('Hotel ideas and public nightly estimates');
+    paragraph('These figures are indicative public room/night estimates, not a package quotation. Actual travel dates, room type, occupancy, taxes, availability and final price require staff confirmation.', { size: 8, after: 8 });
+    table(['Hotel / area', 'Indicative room/night', 'Why it may fit / public source'], quote.hotelSuggestions.map(hotel => [
+      `${short(hotel.name)}\n${short(hotel.area, '')}`,
+      hotel.nightlyEstimate ? `${money(hotel.nightlyEstimate)}\nChecked ${formatDate(hotel.checkedAt)}` : 'Rate unavailable',
+      { text: `${short(hotel.fitReason, 'Location to confirm')}\nPublic listing (tap to view)`, link: hotel.sourceUrl }
+    ]), [155, 115, 237], { fontSize: 7.2, after: 9 });
+  }
+
   heading('Stay, meals and price options');
   table(['Option', 'Stay / transport / meal plan', 'Total for group', 'Per person', 'Tax'],
     (quote.tiers || []).map(tier => [
@@ -356,7 +366,7 @@ const renderQuotationPages = (quote, pack = null, options = {}, logo) => {
       isDraft ? 'To be confirmed' : short(terms.taxNote)
     ]), [58, 182, 88, 84, 95], { fontSize: 7.1, lineHeight: 10.2, after: 10 });
   paragraph(isDraft
-    ? 'Planning statement: This draft has no approved prices, tax or supplier bookings. The travel desk will confirm hotel properties, rooms, meals, tickets, darshan slots and transport before issuing a quotation.'
+    ? 'Planning statement: The hotel nightly figures above are unverified public estimates. This draft has no approved package price, tax or supplier booking. The travel desk will confirm properties, rooms, meals, tickets, darshan slots and transport before issuing a quotation.'
     : `Quote statement: ${quote.offer?.discountPercent ? `${quote.offer.discountPercent}% promotional discount included; valid ${formatDate(quote.offer.startDate)} to ${formatDate(quote.offer.endDate)}. ` : ''}Prices are subject to supplier availability and final confirmation. Confirmed properties, meal services, tickets, darshan slots and transport will be stated in the approved booking confirmation.`,
   { size: 8, after: 11 });
 

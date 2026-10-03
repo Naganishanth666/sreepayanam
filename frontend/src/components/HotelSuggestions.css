@@ -1,0 +1,22 @@
+.hotel-suggestions { margin: 1.2rem 0; padding: 1.15rem; background: #f7f9fd; border: 1px solid #dce5ef; border-radius: 16px; }
+.hotel-suggestions-heading { display: flex; align-items: end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.hotel-suggestions-heading h3 { margin: 0.25rem 0 0; color: #132d58; font-size: 1.25rem; line-height: 1.2; }
+.hotel-suggestions-kicker { color: #b36626; font-size: .72rem; letter-spacing: .13em; text-transform: uppercase; font-weight: 800; }
+.hotel-suggestions-count { color: #52637d; font-size: .76rem; font-weight: 700; }
+.hotel-suggestions-disclosure { max-width: 68ch; margin: .7rem 0 1rem; color: #53627a; font-size: .79rem; line-height: 1.5; }
+.hotel-suggestions-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 225px), 1fr)); gap: .7rem; }
+.hotel-suggestion { display: flex; flex-direction: column; min-width: 0; padding: .95rem; background: #fff; border: 1px solid #d5dfeb; border-radius: 12px; }
+.hotel-suggestion.is-selected { border-color: #0b3d91; box-shadow: inset 0 0 0 1px #0b3d91; }
+.hotel-suggestion-top { display: flex; justify-content: space-between; gap: .5rem; }
+.hotel-suggestion-index { display: block; margin-bottom: .28rem; color: #ad6529; font-size: .67rem; letter-spacing: .06em; text-transform: uppercase; font-weight: 800; }
+.hotel-suggestion h4 { margin: 0; color: #0b3d91; font-size: 1rem; line-height: 1.25; }
+.hotel-suggestion-top p { margin: .3rem 0 0; color: #52637d; font-size: .77rem; }
+.hotel-suggestion-selected { align-self: start; padding: .2rem .42rem; color: #0b3d91; background: #e7effb; border-radius: 99px; font-size: .65rem; font-weight: 800; }
+.hotel-suggestion-fit { flex: 1; margin: .7rem 0; color: #34465f; font-size: .79rem; line-height: 1.45; }
+.hotel-suggestion-rate { display: flex; align-items: baseline; flex-wrap: wrap; gap: .3rem .45rem; padding-top: .65rem; border-top: 1px solid #e2e9f1; }
+.hotel-suggestion-rate strong { color: #122d53; font-size: 1.15rem; }
+.hotel-suggestion-rate span, .hotel-suggestion-foot small { color: #60718a; font-size: .68rem; }
+.hotel-suggestion-foot { display: flex; justify-content: space-between; gap: .35rem; flex-wrap: wrap; margin-top: .45rem; }
+.hotel-suggestion-foot a { color: #0b3d91; font-size: .72rem; font-weight: 800; text-underline-offset: 2px; }
+.hotel-suggestion .btn { width: 100%; min-height: 2.25rem; margin-top: .75rem; font-size: .75rem; }
+.hotel-suggestions-compact { margin: 1rem 0; }

@@ -4,6 +4,7 @@ import { Download, FileCheck2, FilePenLine } from 'lucide-react';
 import ConfirmDialog from './ConfirmDialog';
 import { useAuth } from '../context/useAuth';
 import TravelDocumentPackDesk from './TravelDocumentPackDesk';
+import HotelSuggestions from './HotelSuggestions';
 import { downloadApprovedQuotationPdf } from '../utils/quotationPdf';
 import './QuotationDesk.css';
 
@@ -75,6 +76,39 @@ const QuotationDesk = ({ enquiry, adminPassword }) => {
   const [verifiedSources, setVerifiedSources] = useState(false);
   const [confirmApproval, setConfirmApproval] = useState(false);
   const hasRoute = Boolean(enquiry.detailedPreferences?.routeDraft?.itinerary?.length);
+  const savedHotelSuggestions = enquiry.detailedPreferences?.hotelSuggestions || [];
+  const [hotelLookup, setHotelLookup] = useState({ state: 'idle', hotels: [], error: '' });
+  const hotelSuggestions = savedHotelSuggestions.length ? savedHotelSuggestions : hotelLookup.hotels;
+
+  useEffect(() => {
+    if (!open || !hasRoute || savedHotelSuggestions.length) return undefined;
+    const destination = enquiry.detailedPreferences?.destination || enquiry.toLocation;
+    if (!destination) return undefined;
+    const controller = new AbortController();
+    const load = async () => {
+      setHotelLookup({ state: 'loading', hotels: [], error: '' });
+      try {
+        const response = await fetch('/api/ai/hotel-suggestions', {
+          method: 'POST', signal: controller.signal,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            destination, category: enquiry.hotelCategory || '3 Star',
+            area: enquiry.detailedPreferences?.preferredHotelArea || '',
+            travelStartDate: enquiry.detailedPreferences?.travelStartDate || '',
+            returnDate: enquiry.detailedPreferences?.returnDate || '',
+            rooms: enquiry.hotelRooms || 1, adults: enquiry.adultCount || 2
+          })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || 'Hotel lookup unavailable.');
+        setHotelLookup({ state: 'ready', hotels: data.hotels || [], error: '' });
+      } catch (error) {
+        if (error.name !== 'AbortError') setHotelLookup({ state: 'error', hotels: [], error: error.message || 'Hotel lookup unavailable.' });
+      }
+    };
+    load();
+    return () => controller.abort();
+  }, [open, hasRoute, enquiry, savedHotelSuggestions.length]);
 
   useEffect(() => {
     if (!open || !hasRoute) return undefined;
@@ -234,6 +268,11 @@ const QuotationDesk = ({ enquiry, adminPassword }) => {
               <label>Trip return point <input value={form.route.endingCity || ''} onChange={event => changeTripDetail('route', 'endingCity', event.target.value)} /></label>
               <label>Rooms for overnight stays <input type="number" min="0" max="30" value={form.customer.rooms} onChange={event => changeTripDetail('customer', 'rooms', event.target.value)} /></label>
             </div>
+
+            {hotelLookup.state === 'loading' && !savedHotelSuggestions.length && <p className="quotation-desk-note" role="status">Looking up hotels and public nightly estimates for this enquiry…</p>}
+            {hotelLookup.state === 'error' && <p className="quotation-desk-note" role="status">{hotelLookup.error}</p>}
+            <HotelSuggestions hotels={hotelSuggestions} selectedName={enquiry.detailedPreferences?.preferredHotelName || ''} title="Hotel candidates for this quotation" actions={hotel => <div className="quotation-hotel-actions">{TIER_NAMES.map((name, index) => <button key={name} type="button" className="btn btn-outline" onClick={() => changeTier(index, 'accommodation', `${hotel.name} (${hotel.category || 'room type to confirm'})`)}>Use for {name}</button>)}</div>} />
+            {!!hotelSuggestions.length && <p className="quotation-desk-note">These are public market indications. Confirm a supplier quote before entering direct cost or approving a tier.</p>}
 
             <h6>Destination detail references</h6>
             <div className="quotation-desk-reference-list">{form.destinationReferences.map((item, index) => <div className="quotation-desk-reference" key={`${item.name}-${index}`}>

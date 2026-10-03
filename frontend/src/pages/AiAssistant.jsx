@@ -12,6 +12,7 @@ import {
 } from '../data/destinationCatalog';
 import { downloadQuotationPdf } from '../utils/quotationPdf';
 import { createStayDetails, createStaySummary } from '../utils/stayPlan';
+import HotelSuggestions from '../components/HotelSuggestions';
 
 const STEPS = [
   { id: 1, name: 'Route', detail: 'Destination & dates' },
@@ -268,6 +269,8 @@ const AiAssistant = () => {
   const [requestState, setRequestState] = useState('idle');
   const [requestError, setRequestError] = useState('');
   const [enquirySuccess, setEnquirySuccess] = useState(false);
+  const [hotelLookup, setHotelLookup] = useState({ key: '', state: 'idle', hotels: [], error: '' });
+  const [hotelRefresh, setHotelRefresh] = useState(0);
   const [chatMessages, setChatMessages] = useState([
     { role: 'assistant', content: 'Tell me the feeling you want from this trip — temple trail, cool hills, coast, or somewhere completely new.' }
   ]);
@@ -370,6 +373,14 @@ const AiAssistant = () => {
     () => JSON.stringify({ ...planningPayload, planningFingerprint: undefined }),
     [planningPayload]
   );
+  const hotelRequestKey = useMemo(() => JSON.stringify({
+    destination: form.destination.trim(), category: form.hotelCategory,
+    area: form.preferredHotelArea.trim(), travelStartDate: form.travelStartDate,
+    returnDate: form.returnDate, rooms: Number(form.hotelRooms) || 1,
+    adults: Number(form.adultCount) || 2
+  }), [form.destination, form.hotelCategory, form.preferredHotelArea, form.travelStartDate, form.returnDate, form.hotelRooms, form.adultCount]);
+  const hotelSuggestions = hotelLookup.key === hotelRequestKey ? hotelLookup.hotels : [];
+  const selectedHotelSuggestion = hotelSuggestions.find(hotel => hotel.name.toLowerCase() === form.preferredHotelName.trim().toLowerCase()) || null;
   const totalTravellers = Number(form.adultCount || 0) + Number(form.childWithBedCount || 0) + Number(form.childNoBedCount || 0) + Number(form.infantCount || 0);
   const activeItinerary = submittedDraft?.itinerary || planningDraft?.itinerary || [];
   const activeReview = submittedDraft?.planningReview || planningDraft?.planningReview || buildLocalPlanningReview(selectedLabels, form.durationDays);
@@ -379,6 +390,27 @@ const AiAssistant = () => {
     guideController.current?.abort();
     planningController.current?.abort();
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== 'planner' || currentStep !== 3 || !form.destination.trim()) return undefined;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setHotelLookup({ key: hotelRequestKey, state: 'loading', hotels: [], error: '' });
+      try {
+        const response = await fetch('/api/ai/hotel-suggestions', {
+          method: 'POST', signal: controller.signal,
+          headers: { 'Content-Type': 'application/json' },
+          body: hotelRequestKey
+        });
+        const data = await safeJson(response);
+        if (!response.ok) throw new Error(data.message || 'Hotel suggestions are unavailable.');
+        setHotelLookup({ key: hotelRequestKey, state: 'ready', hotels: data.hotels || [], error: '' });
+      } catch (error) {
+        if (error.name !== 'AbortError') setHotelLookup({ key: hotelRequestKey, state: 'error', hotels: [], error: error.message || 'Hotel suggestions are unavailable.' });
+      }
+    }, 450);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [activeTab, currentStep, form.destination, hotelRequestKey, hotelRefresh]);
 
   useEffect(() => {
     if (chatListRef.current) chatListRef.current.scrollTop = chatListRef.current.scrollHeight;
@@ -698,6 +730,8 @@ const AiAssistant = () => {
             mealPlan: form.mealPlan,
             preferredHotelName: form.preferredHotelName.trim(),
             preferredHotelArea: form.preferredHotelArea.trim(),
+            selectedHotelSuggestion,
+            hotelSuggestions,
             mealPreference: form.mealPreference,
             foodRestrictions: form.foodRestrictions,
             visitTimingPreferences: form.visitTimingPreferences.trim(),
@@ -771,7 +805,8 @@ const AiAssistant = () => {
         form,
         draft: submittedDraft,
         selectedPackage,
-        selectedDestinations: selectedLabels
+        selectedDestinations: selectedLabels,
+        hotelSuggestions
       });
       return true;
     } catch {
@@ -889,7 +924,8 @@ const AiAssistant = () => {
                     </div>
                   </div>
                 </div>
-                <div className="draft-private-note"><ShieldCheck size={16} aria-hidden="true" /><span>Commercial details are shared separately after the travel desk reviews availability, timing and suppliers.</span></div>
+                <HotelSuggestions hotels={hotelSuggestions} selectedName={form.preferredHotelName} title="Hotels to consider" compact />
+                <div className="draft-private-note"><ShieldCheck size={16} aria-hidden="true" /><span>Hotel nightly figures above are public estimates only. The package price and supplier-confirmed hotel details follow staff review.</span></div>
                 <div className="quote-result-actions">
                   {requestState === 'ready' && <button type="button" className="btn btn-primary" onClick={() => submitEnquiry(submittedDraft)} disabled={requestState === 'sending'} aria-busy={requestState === 'sending'}><RefreshCw size={16} aria-hidden="true" /> Send enquiry again</button>}
                   <button type="button" className="btn btn-secondary" onClick={downloadPdf} disabled={pdfState === 'loading'} aria-busy={pdfState === 'loading'}><Download size={16} aria-hidden="true" /> {pdfState === 'loading' ? 'Preparing route draft...' : 'Download standard-format route draft PDF'}</button>
@@ -1009,6 +1045,10 @@ const AiAssistant = () => {
                             <Field id="mealPreference" label="Food preference"><select id="mealPreference" className="planner-select" value={form.mealPreference} onChange={event => updateField('mealPreference', event.target.value)}><option>Either</option><option>Vegetarian</option><option>Non-vegetarian</option><option>Jain</option></select></Field>
                             <Field id="budget" label="Target group budget (₹)" error={fieldErrors.budget} help="Optional planning target, not a quoted price."><input id="budget" className="planner-field" type="number" min="1" inputMode="decimal" value={form.budget} onChange={event => updateField('budget', event.target.value)} {...getAria('budget', fieldErrors.budget, 'budget-help')} /></Field>
                           </div>
+                          {hotelLookup.key === hotelRequestKey && hotelLookup.state === 'loading' && <p className="hotel-lookup-status" role="status">Looking up hotels and public nightly estimates for this route…</p>}
+                          {hotelLookup.key === hotelRequestKey && hotelLookup.state === 'error' && <div className="hotel-lookup-status" role="status">{hotelLookup.error} <button type="button" className="btn btn-ghost" onClick={() => setHotelRefresh(value => value + 1)}>Try again</button></div>}
+                          {hotelLookup.key === hotelRequestKey && hotelLookup.state === 'ready' && !hotelSuggestions.length && <p className="hotel-lookup-status" role="status">No source-backed hotel shortlist was found. Enter a preferred hotel above and staff will check it.</p>}
+                          <HotelSuggestions hotels={hotelSuggestions} selectedName={form.preferredHotelName} actions={hotel => <button type="button" className="btn btn-outline" onClick={() => updateField('preferredHotelName', hotel.name)}>{selectedHotelSuggestion?.name === hotel.name ? 'Requested for review' : 'Request this hotel'}</button>} />
                           <div className="planner-field-grid" style={{ marginTop: '1rem' }}>
                             <Field id="interests" label="Interests" help="Optional. Temples, food, nature, history or anything important to you."><input id="interests" className="planner-field" value={form.interests} onChange={event => updateField('interests', event.target.value)} /></Field>
                             <Field id="foodRestrictions" label="Allergies or food restrictions" help="Tell the travel desk what must be checked with suppliers."><input id="foodRestrictions" className="planner-field" value={form.foodRestrictions} onChange={event => updateField('foodRestrictions', event.target.value)} /></Field>
@@ -1022,7 +1062,7 @@ const AiAssistant = () => {
                       {currentStep === 4 && (
                         <div>
                           <div className="planner-section-title"><h2>Review your route</h2><p>Send the enquiry to download your standard-format route draft PDF. The travel desk will then verify suppliers and prepare the Economic, Deluxe and Premium quotation.</p></div>
-                          <div className="planner-document-note"><FileText size={19} aria-hidden="true" /><div><strong>Two different documents</strong><p>Your unpriced route draft uses the standard quotation layout and records the day plan, hotel request and places for staff review. The completed document pack becomes available after staff fills every section and approves it.</p></div></div>
+                          <div className="planner-document-note"><FileText size={19} aria-hidden="true" /><div><strong>Two different documents</strong><p>Your route draft uses the standard quotation layout and records the day plan, hotel ideas and indicative public nightly estimates. Package prices and the completed document pack become available after staff fills every section and approves them.</p></div></div>
                           <div className={`planning-review status-${reviewStatus}`} aria-live="polite">
                             <div className="planning-review-header"><span className="planning-review-icon"><Route size={18} aria-hidden="true" /></span><div><span className="planning-review-kicker">AI route review</span><h3>{reviewStatusCopy[reviewStatus]}</h3></div></div>
                             <p className="planning-review-summary">{activeReview.summary}</p>

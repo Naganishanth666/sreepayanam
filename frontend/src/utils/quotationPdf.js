@@ -7,7 +7,7 @@ const safeFilePart = value => clean(value).toLowerCase().replace(/[^a-z0-9]+/g, 
 
 const mapSearchUrl = (place, destination) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([place, destination].filter(Boolean).join(', '))}`;
 
-const createUnpricedQuote = ({ form = {}, draft, selectedPackage, selectedDestinations = [] }) => {
+const createUnpricedQuote = ({ form = {}, draft, selectedPackage, selectedDestinations = [], hotelSuggestions = [] }) => {
   if (!draft) throw new Error('A route draft is required.');
   const days = Array.isArray(draft.itinerary) ? draft.itinerary : [];
   const durationDays = positiveNumber(draft.durationDays || form.durationDays) || days.length || 1;
@@ -78,6 +78,7 @@ const createUnpricedQuote = ({ form = {}, draft, selectedPackage, selectedDestin
       itinerary
     },
     hotelRequest,
+    hotelSuggestions: hotelSuggestions.slice(0, 4),
     selectedPlaces: places,
     destinationReferences: places.map(name => ({
       name,
