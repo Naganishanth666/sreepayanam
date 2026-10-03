@@ -297,7 +297,7 @@ const renderQuotationPages = (quote, pack = null, options = {}, logo) => {
   }
   heading('01  Tour Package Quotation', true);
   paragraph(isDraft
-    ? 'UNPRICED PLANNING DRAFT  |  Travel-desk review required before a quotation or booking can be issued.'
+    ? 'PACKAGE PRICE PENDING  |  Indicative hotel room/night figures only; travel-desk review required before a quotation or booking can be issued.'
     : `APPROVED QUOTATION  |  Reviewed by ${short(quote.approvedBy, 'SreePayanam travel desk')}. Prices and arrangements remain subject to the validity and terms below.`,
   { after: 12, bold: true, color: BLUE });
   table(
@@ -356,7 +356,7 @@ const renderQuotationPages = (quote, pack = null, options = {}, logo) => {
     ]), [155, 115, 237], { fontSize: 7.2, after: 9 });
   }
 
-  heading('Stay, meals and price options');
+  heading('Stay, meals and price options', false, 145);
   table(['Option', 'Stay / transport / meal plan', 'Total for group', 'Per person', 'Tax'],
     (quote.tiers || []).map(tier => [
       tier.name,
