@@ -158,6 +158,8 @@ const normalizePlannerDraft = (payload, preferences) => {
     const openDay = places.length === 0;
     const openDayTitle = index === 0 ? 'Arrival & settle in' : index === durationDays - 1 ? 'Last light & return' : 'Flexible local discovery';
     const openDayActivities = `Keep this day flexible around ${base || preferences.destination || 'the destination'} for local travel and rest. The travel desk can add a nearby visit after checking its location, opening times and access. No additional attraction is confirmed for this day.`;
+    const requestedVisitWindow = typeof preferences.visitTimingPreferences === 'string' ? preferences.visitTimingPreferences.trim().slice(0, 160) : '';
+    const entryWindow = `${requestedVisitWindow ? `${requestedVisitWindow} requested. ` : ''}${preferences.entryTickets === 'Yes' ? 'Ticket support requested where applicable. ' : ''}Opening times, charges and slot availability need official-source confirmation.`;
     return {
       day: index + 1,
       title: openDay ? openDayTitle : typeof day.title === 'string' && day.title.trim() ? day.title.trim().slice(0, 140) : 'Discover the route',
@@ -167,9 +169,7 @@ const normalizePlannerDraft = (payload, preferences) => {
       hotel: createStayDetails(preferences, { base }, index, durationNights),
       meal: openDay ? '' : typeof day.meal === 'string' ? day.meal.trim().slice(0, 600) : '',
       transit: openDay ? 'Travel and local transfers are to be confirmed by the travel desk.' : typeof day.transit === 'string' ? day.transit.trim().slice(0, 600) : '',
-      entryWindow: openDay ? 'Any added visit or darshan time needs official-source confirmation.' : typeof day.entryWindow === 'string' && day.entryWindow.trim()
-        ? day.entryWindow.trim().slice(0, 600)
-        : 'Entry and darshan timing to be confirmed from an official source.'
+      entryWindow: openDay ? 'Any added visit or darshan time needs official-source confirmation.' : entryWindow
     };
   });
   const planned = new Set(itinerary.flatMap(day => day.places.map(place => place.toLowerCase())));

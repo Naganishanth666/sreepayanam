@@ -143,6 +143,8 @@ const sanitizeStructuredPlan = (payload, preferences) => {
     const openDay = places.length === 0;
     const openDayTitle = index === 0 ? 'Arrival & settle in' : index === durationDays - 1 ? 'Last light & return' : 'Flexible local discovery';
     const openDayActivities = `Keep this day flexible around ${stayArea || 'the destination'} for local travel and rest. The travel desk can add a nearby visit after checking its location, opening times and access. No additional attraction is confirmed for this day.`;
+    const requestedVisitWindow = cleanPlanningText(preferences.visitTimingPreferences, 160);
+    const entryWindow = `${requestedVisitWindow ? `${requestedVisitWindow} requested. ` : ''}${preferences.entryTickets === 'Yes' ? 'Ticket support requested where applicable. ' : ''}Opening times, charges and slot availability need official-source confirmation.`;
     const requestedRooms = numberInRange(preferences.hotelRooms, 0, 0, 30);
     const rooms = requestedRooms > 0 ? `${requestedRooms} ${requestedRooms === 1 ? 'room' : 'rooms'} requested` : 'Room count to be confirmed';
     const hotel = index < durationNights ? {
@@ -165,8 +167,7 @@ const sanitizeStructuredPlan = (payload, preferences) => {
       hotel,
       meal: openDay ? '' : cleanPlanningText(day.meal, 500),
       transit: openDay ? 'Travel and local transfers are to be confirmed by the travel desk.' : cleanPlanningText(day.transit, 500),
-      entryWindow: openDay ? 'Any added visit or darshan time needs official-source confirmation.' : cleanPlanningText(day.entryWindow, 500)
-        || 'Entry and darshan timing to be confirmed from an official source.'
+      entryWindow: openDay ? 'Any added visit or darshan time needs official-source confirmation.' : entryWindow
     };
   });
 
@@ -709,11 +710,11 @@ router.post('/plan-structured', async (req, res) => {
       6. Optimize the route geographically and by time. Keep places in the same neighbourhood, corridor or nearby area on the same day where practical; order each day and the overall trip to minimize backtracking; allow realistic travel, meal and rest time; do not force every selected place into the plan when the time window cannot support it. The daily "base" is the stay area for an overnight day when the traveller specified a preferred hotel area; a sightseeing day trip does not move the hotel base. Do not infer an attraction's town or district from a similar-sounding landmark. When its location is uncertain, say that staff must verify it instead of naming a guessed town.
       7. Detect feasibility honestly. If the selection is too large or geographically spread out, set planningReview.status to "tight" or "not_feasible", explain the constraint in planningReview.summary, list every selected place that could not fit in planningReview.unplacedPlaces, and suggest specific removals in planningReview.suggestedRemovals. Suggest replacements only from the available guide places or credible nearby alternatives in planningReview.suggestedReplacements. Never invent exact distances or travel times when uncertain.
       8. For every itinerary day, the places array MUST contain only exact names from the customer-selected places above. Do not silently add other guide places to the itinerary. Put any alternative in planningReview.suggestedReplacements for staff/customer review. An arrival or rest day may use an empty places array; when it does, do not name an unselected attraction or city in that day's title or prose. Preserve the customer's selections whenever feasible.
-      9. Include specific sightseeing spots, pace (e.g. slow, moderate, active) and entry tickets matching their sightseeing choices. The traveller's darshan or entry preference is ${safePreferences.visitTimingPreferences || 'not supplied'}. Place it on the relevant day as a request, never as a confirmed slot. Make the daily itinerary descriptions extremely descriptive, informative, and engaging:
+      9. Include specific sightseeing spots and pace (e.g. slow, moderate, active). Record ticket support only as a request where applicable. The traveller's darshan or entry preference is ${safePreferences.visitTimingPreferences || 'not supplied'}. Place it on the relevant day as a request, never as a confirmed slot. Make the daily itinerary descriptions extremely descriptive, informative, and engaging:
          - The "activities" field must be a detailed, rich paragraph (at least 4-5 sentences) describing the scenic beauty, historical significance, local culture, and specific sightseeing places visited, explaining why they are special.
          - The "meal" field should describe appropriate meals and rest stops without inventing a restaurant or confirmed menu.
          - The "transit" field should describe route order and vehicle type. Do not invent numerical times or distances without verified routing data.
-         - The "entryWindow" field should record any requested darshan or entry window and explicitly say that opening times and slot availability need official-source confirmation. Never invent an opening hour, reservation or source check.
+         - The "entryWindow" field should record any requested darshan or entry window and explicitly say that opening times, ticket requirements, charges and slot availability need official-source confirmation. A request for ticket support does not mean every attraction requires a ticket. Never assert that a ticket is required without an official source, or invent an opening hour, reservation or source check.
       10. The output MUST be a valid JSON object ONLY. Do not write any markdown wrappers (like \`\`\`json), explanations, prices or trailing characters.
 
       The JSON object MUST strictly conform to the following schema:
