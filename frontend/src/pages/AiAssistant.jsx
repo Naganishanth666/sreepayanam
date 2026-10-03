@@ -152,17 +152,22 @@ const normalizePlannerDraft = (payload, preferences) => {
   const itinerary = Array.from({ length: durationDays }, (_, index) => {
     const day = rawItinerary.find(item => Number(item?.day) === index + 1) || rawItinerary[index] || {};
     const places = Array.isArray(day.places) ? day.places.filter(place => typeof place === 'string' && place.trim()).map(place => selectedNames.get(place.trim().toLowerCase())).filter(Boolean).slice(0, 10) : [];
-    const base = typeof day.base === 'string' ? day.base.trim().slice(0, 120) : '';
+    const suggestedBase = typeof day.base === 'string' ? day.base.trim().slice(0, 120) : '';
+    const preferredHotelArea = typeof preferences.preferredHotelArea === 'string' ? preferences.preferredHotelArea.trim().slice(0, 120) : '';
+    const base = index < durationNights && preferredHotelArea ? preferredHotelArea : suggestedBase;
+    const openDay = places.length === 0;
+    const openDayTitle = index === 0 ? 'Arrival & settle in' : index === durationDays - 1 ? 'Last light & return' : 'Flexible local discovery';
+    const openDayActivities = `Keep this day flexible around ${base || preferences.destination || 'the destination'} for local travel and rest. The travel desk can add a nearby visit after checking its location, opening times and access. No additional attraction is confirmed for this day.`;
     return {
       day: index + 1,
-      title: typeof day.title === 'string' && day.title.trim() ? day.title.trim().slice(0, 140) : index === 0 ? 'Arrival & settle in' : index === durationDays - 1 ? 'Last light & return' : 'Discover the route',
+      title: openDay ? openDayTitle : typeof day.title === 'string' && day.title.trim() ? day.title.trim().slice(0, 140) : 'Discover the route',
       base,
       places,
-      activities: typeof day.activities === 'string' && day.activities.trim() ? day.activities.trim().slice(0, 1200) : places.length ? `A considered day around ${places.join(', ')} with time for local travel, meals and rest.` : 'Flexible time for local discovery.',
+      activities: openDay ? openDayActivities : typeof day.activities === 'string' && day.activities.trim() ? day.activities.trim().slice(0, 1200) : `A considered day around ${places.join(', ')} with time for local travel, meals and rest.`,
       hotel: createStayDetails(preferences, { base }, index, durationNights),
-      meal: typeof day.meal === 'string' ? day.meal.trim().slice(0, 600) : '',
-      transit: typeof day.transit === 'string' ? day.transit.trim().slice(0, 600) : '',
-      entryWindow: typeof day.entryWindow === 'string' && day.entryWindow.trim()
+      meal: openDay ? '' : typeof day.meal === 'string' ? day.meal.trim().slice(0, 600) : '',
+      transit: openDay ? 'Travel and local transfers are to be confirmed by the travel desk.' : typeof day.transit === 'string' ? day.transit.trim().slice(0, 600) : '',
+      entryWindow: openDay ? 'Any added visit or darshan time needs official-source confirmation.' : typeof day.entryWindow === 'string' && day.entryWindow.trim()
         ? day.entryWindow.trim().slice(0, 600)
         : 'Entry and darshan timing to be confirmed from an official source.'
     };

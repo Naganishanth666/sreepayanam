@@ -139,6 +139,10 @@ const sanitizeStructuredPlan = (payload, preferences) => {
     const hotelCategory = cleanPlanningText(preferences.hotelCategory, 50) || 'Preferred category';
     const preferredHotelName = cleanPlanningText(preferences.preferredHotelName, 120);
     const stayArea = preferredHotelArea || base || cleanPlanningText(preferences.destination, 120);
+    const places = cleanPlaceList(day.places, 10).map(place => selectedNames.get(normalizePlaceKey(place))).filter(Boolean);
+    const openDay = places.length === 0;
+    const openDayTitle = index === 0 ? 'Arrival & settle in' : index === durationDays - 1 ? 'Last light & return' : 'Flexible local discovery';
+    const openDayActivities = `Keep this day flexible around ${stayArea || 'the destination'} for local travel and rest. The travel desk can add a nearby visit after checking its location, opening times and access. No additional attraction is confirmed for this day.`;
     const requestedRooms = numberInRange(preferences.hotelRooms, 0, 0, 30);
     const rooms = requestedRooms > 0 ? `${requestedRooms} ${requestedRooms === 1 ? 'room' : 'rooms'} requested` : 'Room count to be confirmed';
     const hotel = index < durationNights ? {
@@ -154,14 +158,14 @@ const sanitizeStructuredPlan = (payload, preferences) => {
     };
     return {
       day: index + 1,
-      title: cleanPlanningText(day.title, 120) || (index === 0 ? 'Arrival & settle in' : index === durationDays - 1 ? 'Last light & return' : 'Discover the route'),
+      title: openDay ? openDayTitle : cleanPlanningText(day.title, 120) || 'Discover the route',
       base,
-      places: cleanPlaceList(day.places, 10).map(place => selectedNames.get(normalizePlaceKey(place))).filter(Boolean),
-      activities: cleanPlanningText(day.activities, 900) || 'Flexible time for local discovery.',
+      places,
+      activities: openDay ? openDayActivities : cleanPlanningText(day.activities, 900) || 'Flexible time for local discovery.',
       hotel,
-      meal: cleanPlanningText(day.meal, 500),
-      transit: cleanPlanningText(day.transit, 500),
-      entryWindow: cleanPlanningText(day.entryWindow, 500)
+      meal: openDay ? '' : cleanPlanningText(day.meal, 500),
+      transit: openDay ? 'Travel and local transfers are to be confirmed by the travel desk.' : cleanPlanningText(day.transit, 500),
+      entryWindow: openDay ? 'Any added visit or darshan time needs official-source confirmation.' : cleanPlanningText(day.entryWindow, 500)
         || 'Entry and darshan timing to be confirmed from an official source.'
     };
   });
@@ -704,7 +708,7 @@ router.post('/plan-structured', async (req, res) => {
       5. Use exactly ${safePreferences.durationDays} itinerary entries and ${safePreferences.durationNights} hotel nights. Treat the supplied dates and duration as authoritative; never silently change them.
       6. Optimize the route geographically and by time. Keep places in the same neighbourhood, corridor or nearby area on the same day where practical; order each day and the overall trip to minimize backtracking; allow realistic travel, meal and rest time; do not force every selected place into the plan when the time window cannot support it. The daily "base" is the stay area for an overnight day when the traveller specified a preferred hotel area; a sightseeing day trip does not move the hotel base. Do not infer an attraction's town or district from a similar-sounding landmark. When its location is uncertain, say that staff must verify it instead of naming a guessed town.
       7. Detect feasibility honestly. If the selection is too large or geographically spread out, set planningReview.status to "tight" or "not_feasible", explain the constraint in planningReview.summary, list every selected place that could not fit in planningReview.unplacedPlaces, and suggest specific removals in planningReview.suggestedRemovals. Suggest replacements only from the available guide places or credible nearby alternatives in planningReview.suggestedReplacements. Never invent exact distances or travel times when uncertain.
-      8. For every itinerary day, the places array MUST contain only exact names from the customer-selected places above. Do not silently add other guide places to the itinerary. Put any alternative in planningReview.suggestedReplacements for staff/customer review. An arrival or rest day may use an empty places array. Preserve the customer's selections whenever feasible.
+      8. For every itinerary day, the places array MUST contain only exact names from the customer-selected places above. Do not silently add other guide places to the itinerary. Put any alternative in planningReview.suggestedReplacements for staff/customer review. An arrival or rest day may use an empty places array; when it does, do not name an unselected attraction or city in that day's title or prose. Preserve the customer's selections whenever feasible.
       9. Include specific sightseeing spots, pace (e.g. slow, moderate, active) and entry tickets matching their sightseeing choices. The traveller's darshan or entry preference is ${safePreferences.visitTimingPreferences || 'not supplied'}. Place it on the relevant day as a request, never as a confirmed slot. Make the daily itinerary descriptions extremely descriptive, informative, and engaging:
          - The "activities" field must be a detailed, rich paragraph (at least 4-5 sentences) describing the scenic beauty, historical significance, local culture, and specific sightseeing places visited, explaining why they are special.
          - The "meal" field should describe appropriate meals and rest stops without inventing a restaurant or confirmed menu.
