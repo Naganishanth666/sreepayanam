@@ -17,15 +17,15 @@ colors:
   focus: "#D4AF37"
 typography:
   display:
-    fontFamily: "'Roboto', Arial, sans-serif"
+    fontFamily: "'Century Gothic', 'Avenir Next', 'Trebuchet MS', Arial, sans-serif"
     fontSize: "6.9rem"
     lineHeight: "0.95"
   sans:
-    fontFamily: "'Roboto', Arial, sans-serif"
+    fontFamily: "'Century Gothic', 'Avenir Next', 'Trebuchet MS', Arial, sans-serif"
     fontSize: "1rem"
     lineHeight: "1.55"
   utility:
-    fontFamily: "'Roboto', Arial, sans-serif"
+    fontFamily: "'Century Gothic', 'Avenir Next', 'Trebuchet MS', Arial, sans-serif"
     fontSize: "0.75rem"
     lineHeight: "1.2"
 rounded:
@@ -74,7 +74,7 @@ Primary blue is the structural color for headings, navigation, primary actions a
 
 ## Typography
 
-Roboto is the shared display, body and utility face: a readable sans-serif with enough weight range for route headlines, controls, labels and longer copy. It is bundled locally so typography remains stable under the site's CSP and when external font hosts are unavailable. Sentence case is the default; all-caps is limited to short eyebrows and document metadata. Prices and references use tabular-looking system numerals where available. Runtime hero headings use the responsive range `clamp(3.1rem, 7vw, 6.9rem)`; the frontmatter value records the maximum scale in the design token format. The supplied logo wordmark remains unchanged as brand artwork.
+Century Gothic is the first-choice display, body and utility face for route headlines, controls, labels and longer copy. The site uses the visitor's installed copy and falls back to Avenir Next, Trebuchet MS, Arial or the system sans-serif when it is unavailable; no Century Gothic font file is redistributed with the website. Sentence case is the default; all-caps is limited to short eyebrows and document metadata. Prices and references use tabular-looking system numerals where available. Runtime hero headings use the responsive range `clamp(3.1rem, 7vw, 6.9rem)`; the frontmatter value records the maximum scale in the design token format. The supplied logo wordmark remains unchanged as brand artwork.
 
 ## Layout
 
