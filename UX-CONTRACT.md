@@ -46,6 +46,7 @@ This contract covers the public planner/route-brief workflow, the shared public 
 - Offline/degraded: form input remains available; the app does not claim the enquiry was sent or the route draft is final until the server confirms.
 - Success: route reference, timing status, selected/planned places and the day-by-day route remain visible; commercial details stay separate.
 - Admin accounts: loading retains the directory frame, empty and no-results states explain the next action, server failures keep filters and provide retry, and approval actions show a busy state until the server confirms the change.
+- Admin enquiries: entering the CRM tab fetches the current lead list, and a visible Refresh enquiries control fetches it again without requiring a page reload or another password sign-in.
 - Reduced motion: step transitions and route-stop movement become immediate/opacity-only.
 
 ## Data and safety behavior

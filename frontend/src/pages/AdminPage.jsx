@@ -850,11 +850,15 @@ const AdminPage = () => {
   useEffect(() => {
     if (isAuthenticated) {
       fetchPackages();
-      fetchEnquiries();
       fetchBookings();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (isAuthenticated && activeTab === 'enquiries') fetchEnquiries();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, activeTab]);
 
   useEffect(() => {
     if (isAuthenticated && activeTab === 'accounts') {
@@ -2948,16 +2952,21 @@ const AdminPage = () => {
           <div className="admin-enquiries-layout" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 380px', gap: 30, alignItems: 'start' }}>
             {/* Enquiries List */}
             <div className="glass-card" style={{ padding: 32 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
                 <h2 style={{ margin: 0, color: 'var(--dark)' }}>📞 CRM Leads &amp; Enquiries</h2>
-                <button
-                  type="button"
-                  onClick={() => openLeadModal(null)}
-                  className="btn btn-primary"
-                  style={{ padding: '8px 16px', fontSize: '0.88rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}
-                >
-                  <Plus size={16} /> Create Lead
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                  <button type="button" onClick={fetchEnquiries} className="btn btn-outline" disabled={enquiriesLoading} aria-busy={enquiriesLoading} style={{ padding: '8px 14px', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <RefreshCw size={16} aria-hidden="true" /> Refresh enquiries
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openLeadModal(null)}
+                    className="btn btn-primary"
+                    style={{ padding: '8px 16px', fontSize: '0.88rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <Plus size={16} /> Create Lead
+                  </button>
+                </div>
               </div>
               
               {enquiriesLoading ? (
