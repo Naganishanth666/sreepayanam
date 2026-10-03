@@ -131,10 +131,14 @@ const sanitizeStructuredPlan = (payload, preferences) => {
   const rawItinerary = Array.isArray(payload?.itinerary) ? payload.itinerary : [];
   const itinerary = Array.from({ length: durationDays }, (_, index) => {
     const day = rawItinerary.find(item => Number(item?.day) === index + 1) || rawItinerary[index] || {};
-    const base = cleanPlanningText(day.base || day.location, 120);
+    const suggestedBase = cleanPlanningText(day.base || day.location, 120);
+    const preferredHotelArea = cleanPlanningText(preferences.preferredHotelArea, 120);
+    // A named stay area is the overnight base for hotel nights. Do not let an
+    // unverified AI day label contradict the traveller's chosen hotel area.
+    const base = index < durationNights && preferredHotelArea ? preferredHotelArea : suggestedBase;
     const hotelCategory = cleanPlanningText(preferences.hotelCategory, 50) || 'Preferred category';
     const preferredHotelName = cleanPlanningText(preferences.preferredHotelName, 120);
-    const stayArea = cleanPlanningText(preferences.preferredHotelArea, 120) || base || cleanPlanningText(preferences.destination, 120);
+    const stayArea = preferredHotelArea || base || cleanPlanningText(preferences.destination, 120);
     const requestedRooms = numberInRange(preferences.hotelRooms, 0, 0, 30);
     const rooms = requestedRooms > 0 ? `${requestedRooms} ${requestedRooms === 1 ? 'room' : 'rooms'} requested` : 'Room count to be confirmed';
     const hotel = index < durationNights ? {
@@ -698,7 +702,7 @@ router.post('/plan-structured', async (req, res) => {
          - Local Car/Cab: If local_transport (e.g. 'Sedan', 'SUV') is specified and requested, detail road travel/excursions using that vehicle category.
       4. This is a route-planning draft, not a quotation. NEVER return prices, currency amounts, fares, rates, budgets, taxes, discounts or any other commercial figures.
       5. Use exactly ${safePreferences.durationDays} itinerary entries and ${safePreferences.durationNights} hotel nights. Treat the supplied dates and duration as authoritative; never silently change them.
-      6. Optimize the route geographically and by time. Keep places in the same neighbourhood, corridor or nearby area on the same day where practical; order each day and the overall trip to minimize backtracking; allow realistic travel, meal and rest time; do not force every selected place into the plan when the time window cannot support it.
+      6. Optimize the route geographically and by time. Keep places in the same neighbourhood, corridor or nearby area on the same day where practical; order each day and the overall trip to minimize backtracking; allow realistic travel, meal and rest time; do not force every selected place into the plan when the time window cannot support it. The daily "base" is the stay area for an overnight day when the traveller specified a preferred hotel area; a sightseeing day trip does not move the hotel base. Do not infer an attraction's town or district from a similar-sounding landmark. When its location is uncertain, say that staff must verify it instead of naming a guessed town.
       7. Detect feasibility honestly. If the selection is too large or geographically spread out, set planningReview.status to "tight" or "not_feasible", explain the constraint in planningReview.summary, list every selected place that could not fit in planningReview.unplacedPlaces, and suggest specific removals in planningReview.suggestedRemovals. Suggest replacements only from the available guide places or credible nearby alternatives in planningReview.suggestedReplacements. Never invent exact distances or travel times when uncertain.
       8. For every itinerary day, the places array MUST contain only exact names from the customer-selected places above. Do not silently add other guide places to the itinerary. Put any alternative in planningReview.suggestedReplacements for staff/customer review. An arrival or rest day may use an empty places array. Preserve the customer's selections whenever feasible.
       9. Include specific sightseeing spots, pace (e.g. slow, moderate, active) and entry tickets matching their sightseeing choices. The traveller's darshan or entry preference is ${safePreferences.visitTimingPreferences || 'not supplied'}. Place it on the relevant day as a request, never as a confirmed slot. Make the daily itinerary descriptions extremely descriptive, informative, and engaging:
