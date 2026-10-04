@@ -72,11 +72,17 @@ const buildDaySchedule = ({ dayIndex, durationDays, durationNights, places = [],
     add(cursor, cursor + 60, 'Lunch and rest', 'meal', 'Meal venue and service require staff confirmation.');
     cursor += 60;
   }
-  if (placed.length) {
-    add(cursor, Math.min(cursor + 45, end), last ? 'Travel to departure point' : 'Return to hotel', last ? 'departure' : 'hotel',
+  if (last) {
+    const transferStart = Math.max(cursor, end - 45);
+    if (placed.length && transferStart > cursor) {
+      add(cursor, transferStart, 'Free time, collect luggage and prepare for departure', 'rest',
+        'Use this interval for a rest and luggage collection. Confirm hotel luggage storage and pickup arrangements.');
+    }
+    add(Math.max(cursor, transferStart), end, 'Leave for departure point', 'departure',
+      `Provisional transfer allowance; plan to reach the departure point about one hour before${departure ? ` your ${departure}` : ' departure'}. Confirm check-in time, traffic and pickup location.`);
+  } else if (placed.length) {
+    add(cursor, Math.min(cursor + 45, end), 'Return to hotel', 'hotel',
       'Provisional transfer allowance; staff must check the road route, traffic and pickup point.');
-  } else if (last) {
-    add(cursor, Math.min(cursor + 60, end), 'Travel to departure point', 'departure', 'No attraction is scheduled; confirm departure and transfer details.');
   } else if (!first && cursor < end) {
     add(cursor, Math.min(cursor + 60, end), 'Rest or local time near hotel', 'rest', 'No additional attraction has been added to your selected route.');
   }
