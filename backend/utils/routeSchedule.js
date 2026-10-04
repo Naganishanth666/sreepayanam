@@ -73,10 +73,15 @@ const buildDaySchedule = ({ dayIndex, durationDays, durationNights, places = [],
     cursor += 60;
   }
   if (last) {
+    if (placed.length && cursor + 45 < end) {
+      add(cursor, cursor + 45, 'Return to hotel and collect luggage', 'hotel',
+        'Provisional transfer allowance; confirm checkout, luggage storage and pickup with the hotel.');
+      cursor += 45;
+    }
     const transferStart = Math.max(cursor, end - 45);
-    if (placed.length && transferStart > cursor) {
-      add(cursor, transferStart, 'Free time, collect luggage and prepare for departure', 'rest',
-        'Use this interval for a rest and luggage collection. Confirm hotel luggage storage and pickup arrangements.');
+    if (transferStart > cursor) {
+      add(cursor, transferStart, placed.length ? 'Free time and prepare for departure' : 'Rest and prepare for departure', 'rest',
+        'Use this interval for rest and any remaining arrangements before leaving for the departure point.');
     }
     add(Math.max(cursor, transferStart), end, 'Leave for departure point', 'departure',
       `Provisional transfer allowance; plan to reach the departure point about one hour before${departure ? ` your ${departure}` : ' departure'}. Confirm check-in time, traffic and pickup location.`);
