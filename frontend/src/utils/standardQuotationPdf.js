@@ -1,6 +1,7 @@
 // The combined pack follows all sections of the Standard Travel Documents Pack.
 // The public route brief uses its quotation layout with unpriced draft content.
 import travelPackTemplate from '../../../shared/standardTravelPack.json';
+import { dayDirectionsUrl } from './mapDirections';
 const logoSrc = new URL('../assets/sreepayanam-letterhead-logo.png', import.meta.url).href;
 const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
@@ -330,19 +331,23 @@ const renderQuotationPages = (quote, pack = null, options = {}, logo) => {
   ], [228, 279]);
 
   heading('Day-by-day plan', false, 170);
-  table(['Day / area / stops', 'Plan, travel, darshan and meal details'], days.map(day => {
+  table(['Day / area / stops', 'Plan, travel, darshan and meal details'], days.map((day, index) => {
     const stops = day.places || [];
     const stopText = stops.join('\n') || 'Flexible local discovery';
     const stay = day.hotel?.name
       ? `${day.hotel.name}${day.hotel.desc ? `; ${day.hotel.desc}` : ''}`
       : day.hotel?.desc || 'No overnight stay planned';
     const status = short(day.entryWindow, 'Entry / darshan timing requires source confirmation');
+    const roadLink = dayDirectionsUrl(route, day, index, days.length);
+    const timing = Array.isArray(day.schedule) && day.schedule.length
+      ? day.schedule.map(item => `${short(item.start, '--:--')}–${short(item.end, '--:--')}  ${short(item.label, 'Activity')}${item.kind === 'visit' && item.detail ? ` — ${item.detail}` : ''}`).join('\n')
+      : 'Daily clock plan pending travel-desk review';
     return [
       {
-        text: `Day ${day.day} — ${short(day.base, 'Area to confirm')}\nStops:\n${stopText}`,
-        lineLinks: stops.map(name => ({ label: name, url: references.get(clean(name).toLowerCase())?.url }))
+        text: `Day ${day.day}${day.date ? ` / ${formatDate(day.date)}` : ''} — ${short(day.base, 'Area to confirm')}\nStops:\n${stopText}${roadLink ? '\nOpen road route in Google Maps' : ''}`,
+        lineLinks: [...stops.map(name => ({ label: name, url: references.get(clean(name).toLowerCase())?.url })), ...(roadLink ? [{ label: 'Open road route in Google Maps', url: roadLink }] : [])]
       },
-      `Visit plan: ${short(day.activities)}\nTravel: ${short(day.transit)}\nDarshan/entry window: ${status}\nMeals: ${short(day.meal)}\nStay: ${stay}${day.hotel?.rating ? `; ${day.hotel.rating}` : ''}`
+      `Suggested daily timing (provisional):\n${timing}\nVisit notes: ${short(day.activities)}\nTravel: ${short(day.transit)}\nDarshan/entry window: ${status}\nMeals: ${short(day.meal)}\nStay: ${stay}${day.hotel?.rating ? `; ${day.hotel.rating}` : ''}\n${(day.scheduleAssumptions || []).join(' ')}`
     ];
   }), [157, 350]);
 

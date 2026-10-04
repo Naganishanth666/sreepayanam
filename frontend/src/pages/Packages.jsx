@@ -525,13 +525,13 @@ const PackageCard = ({ pkg, index }) => {
         </div>
 
         <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ color: 'var(--color-ink-soft)', fontWeight: 700, fontSize: '0.85rem' }}>Request a tailored quotation</span>
+          <span style={{ color: 'var(--color-ink-soft)', fontWeight: 700, fontSize: '0.85rem' }}>Price confirmed after your enquiry</span>
           <button 
             className="btn btn-primary" 
             style={{ padding: '8px 16px', fontSize: '0.85rem', borderRadius: 8 }} 
-            onClick={e => { e.stopPropagation(); navigate(`/package/${pkg.packageId}`); }}
+            onClick={e => { e.stopPropagation(); navigate(`/package/${pkg.packageId}#package-enquiry`); }}
           >
-            Explore tour
+            Request for price
           </button>
         </div>
       </div>

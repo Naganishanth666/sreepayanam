@@ -44,6 +44,12 @@ const PackageDetails = () => {
       .catch(() => setLoading(false));
   }, [id]);
 
+  useEffect(() => {
+    if (pkg && window.location.hash === '#package-enquiry') {
+      window.requestAnimationFrame(() => document.getElementById('package-enquiry')?.scrollIntoView({ block: 'start' }));
+    }
+  }, [pkg]);
+
   const handleEnquiry = async (e) => {
     e.preventDefault();
     setEnquiryError('');
@@ -166,7 +172,7 @@ const PackageDetails = () => {
           {/* Inquiry invitation */}
           <div className="glass-card" style={{ padding: '20px 28px', marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
             <div>
-              <strong style={{ display: 'block', color: 'var(--primary)', fontSize: '1.2rem' }}>Request a tailored quotation</strong>
+              <strong style={{ display: 'block', color: 'var(--primary)', fontSize: '1.2rem' }}>Request for price</strong>
               <span style={{ color: 'var(--text-muted)', fontSize: '0.92rem' }}>Our travel desk checks your dates, party and selected places before pricing.</span>
             </div>
             <div style={{ display: 'flex', gap: 12 }}>
@@ -429,10 +435,10 @@ const PackageDetails = () => {
         </div>
 
         {/* Sidebar */}
-        <div style={{ position: 'sticky', top: 90 }}>
+        <div id="package-enquiry" style={{ position: 'sticky', top: 90, scrollMarginTop: 105 }}>
           <div className="glass-card" style={{ padding: 28, marginBottom: 20 }}>
             <>
-                <h3 style={{ marginBottom: 4, color: 'var(--dark)', fontWeight: 700, fontSize: '1.2rem' }}>Request this tour</h3>
+                <h3 style={{ marginBottom: 4, color: 'var(--dark)', fontWeight: 700, fontSize: '1.2rem' }}>Request for price</h3>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: 20 }}>Tell us your plans. Staff will confirm availability and send a personalized quotation.</p>
 
                 {submitted ? (
@@ -470,7 +476,7 @@ const PackageDetails = () => {
                     <label>Special requests<textarea className="input-field" rows="3" maxLength="1000" placeholder="Room, accessibility or visit preferences. Do not include medical records or payment details." value={enquiry.notes} onChange={e => setEnquiry(f => ({ ...f, notes: e.target.value }))} /></label>
                     <label className="package-enquiry-check"><input type="checkbox" required checked={enquiry.contactConsent} onChange={e => setEnquiry(f => ({ ...f, contactConsent: e.target.checked }))} /> I agree to be contacted by SreePayanam about this quotation request. *</label>
                     <button type="submit" disabled={submitting} className="btn btn-primary" style={{ marginTop: 4, padding: '12px' }}>
-                      <Phone size={16} style={{ marginRight: 8 }} /> {submitting ? 'Sending request…' : 'Request quotation'}
+                      <Phone size={16} style={{ marginRight: 8 }} /> {submitting ? 'Sending request…' : 'Request for price'}
                     </button>
                   </form>
                 )}

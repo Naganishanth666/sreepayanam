@@ -158,17 +158,14 @@ function calculateCosting(params) {
   const supplierCost = hotelCost + transportCost + mealCost + sightseeingCost + activityCost + 
                        guideCost + tollPermitParkingCost + driverAllowance + escortCost + insuranceCost + miscCost;
 
-  const bufferPercent = params.bufferPercent !== undefined && params.bufferPercent !== null && params.bufferPercent !== ''
-    ? Number(params.bufferPercent)
-    : 10;
+  const bufferPercent = 10;
   const bufferAmount = Math.round(supplierCost * (bufferPercent / 100));
   const landedCost = supplierCost + bufferAmount;
 
-  const markupPercent = params.markupPercent !== undefined && params.markupPercent !== null && params.markupPercent !== ''
-    ? Number(params.markupPercent)
-    : 40;
-  const markupAmount = Math.round(landedCost * (markupPercent / 100));
-  const sellingPrice = landedCost + markupAmount;
+  const targetMarginPercent = 35;
+  const markupPercent = targetMarginPercent; // Legacy stored-field name.
+  const sellingPrice = Math.ceil(landedCost / (1 - targetMarginPercent / 100));
+  const markupAmount = sellingPrice - landedCost;
 
   const taxPercent = params.taxPercent !== undefined && params.taxPercent !== null && params.taxPercent !== ''
     ? Number(params.taxPercent)
@@ -176,20 +173,13 @@ function calculateCosting(params) {
   const taxAmount = Math.round(sellingPrice * (taxPercent / 100));
 
   const discountType = params.discountType || 'Percentage';
-  const discountPercent = params.discountPercent !== undefined && params.discountPercent !== null && params.discountPercent !== ''
-    ? Number(params.discountPercent)
-    : 5;
-  
-  const discountAmount = discountType === 'Percentage'
-    ? Math.round(sellingPrice * (discountPercent / 100))
-    : params.discountAmount !== undefined && params.discountAmount !== null && params.discountAmount !== ''
-      ? Number(params.discountAmount)
-      : 0;
+  const discountPercent = 0;
+  const discountAmount = 0;
 
   const customerPrice = sellingPrice + taxAmount - discountAmount;
 
   const netProfit = (sellingPrice - discountAmount) - supplierCost;
-  const profitMarginPercent = customerPrice > 0 ? Math.round((netProfit / customerPrice) * 100) : 0;
+  const profitMarginPercent = sellingPrice > 0 ? Math.round(((sellingPrice - landedCost) / sellingPrice) * 100) : 0;
 
   return {
     adultCount,
@@ -241,6 +231,7 @@ function calculateCosting(params) {
     bufferPercent,
     bufferAmount,
     landedCost,
+    targetMarginPercent,
     markupPercent,
     markupAmount,
     sellingPrice,

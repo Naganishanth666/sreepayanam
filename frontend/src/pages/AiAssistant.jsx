@@ -12,6 +12,7 @@ import {
 } from '../data/destinationCatalog';
 import { downloadQuotationPdf } from '../utils/quotationPdf';
 import { createStayDetails, createStaySummary } from '../utils/stayPlan';
+import { dayDirectionsUrl } from '../utils/mapDirections';
 import HotelSuggestions from '../components/HotelSuggestions';
 
 const STEPS = [
@@ -30,6 +31,8 @@ const DEFAULT_FORM = {
   returnCity: '',
   travelStartDate: '',
   returnDate: '',
+  arrivalTime: '',
+  departureTime: '',
   durationDays: DESTINATION_CATALOG[0].durationDays,
   durationNights: DESTINATION_CATALOG[0].durationNights,
   adultCount: 2,
@@ -65,7 +68,7 @@ const DEFAULT_FORM = {
 const PLANNING_FIELDS = new Set([
   'adultCount', 'childWithBedCount', 'childNoBedCount', 'infantCount',
   'childAges', 'preferredTier', 'travelPace', 'interests', 'accessibilityNeeds', 'mealPreference', 'foodRestrictions', 'budget',
-  'returnCity', 'visitTimingPreferences',
+  'returnCity', 'visitTimingPreferences', 'arrivalTime', 'departureTime',
   'hotelCategory', 'hotelRooms', 'preferredHotelName', 'preferredHotelArea', 'mealPlan', 'vehicleType', 'guideRequired', 'entryTickets',
   'durationDays', 'durationNights'
 ]);
@@ -165,6 +168,9 @@ const normalizePlannerDraft = (payload, preferences) => {
       title: openDay ? openDayTitle : typeof day.title === 'string' && day.title.trim() ? day.title.trim().slice(0, 140) : 'Discover the route',
       base,
       places,
+      date: typeof day.date === 'string' ? day.date : '',
+      schedule: Array.isArray(day.schedule) ? day.schedule.filter(item => /^([01]\d|2[0-3]):[0-5]\d$/.test(item?.start || '') && /^([01]\d|2[0-3]):[0-5]\d$/.test(item?.end || '') && typeof item?.label === 'string').slice(0, 16) : [],
+      scheduleAssumptions: Array.isArray(day.scheduleAssumptions) ? day.scheduleAssumptions.filter(item => typeof item === 'string').slice(0, 8) : [],
       activities: openDay ? openDayActivities : typeof day.activities === 'string' && day.activities.trim() ? day.activities.trim().slice(0, 1200) : `A considered day around ${places.join(', ')} with time for local travel, meals and rest.`,
       hotel: createStayDetails(preferences, { base }, index, durationNights),
       meal: openDay ? '' : typeof day.meal === 'string' ? day.meal.trim().slice(0, 600) : '',
@@ -188,6 +194,7 @@ const normalizePlannerDraft = (payload, preferences) => {
 
   return {
     planReference: typeof payload?.planReference === 'string' && payload.planReference.trim() ? payload.planReference.trim() : createDraftReference(),
+    generationMode: payload?.generationMode === 'provisional' ? 'provisional' : 'assisted',
     inputFingerprint: preferences.planningFingerprint || '',
     title: typeof payload?.title === 'string' && payload.title.trim() ? payload.title.trim().slice(0, 160) : `${preferences.destination || 'Custom'} route draft`,
     destination: preferences.destination || '',
@@ -345,6 +352,8 @@ const AiAssistant = () => {
     endingCity: form.returnCity.trim() || form.departureCity.trim() || form.destination.trim(),
     travelStartDate: form.travelStartDate,
     returnDate: form.returnDate,
+    arrivalTime: form.arrivalTime,
+    departureTime: form.departureTime,
     durationDays: Number(form.durationDays) || 1,
     durationNights: Number(form.durationNights) || 0,
     durationSource: dateDuration ? 'travel dates' : 'manual duration fallback',
@@ -372,7 +381,7 @@ const AiAssistant = () => {
     guideRequired: form.guideRequired,
     entryTickets: form.entryTickets,
     planningFingerprint: ''
-  }), [allDestinations, dateDuration, form.adultCount, form.budget, form.childAges, form.childNoBedCount, form.childWithBedCount, form.destination, form.departureCity, form.returnCity, form.entryTickets, form.foodRestrictions, form.visitTimingPreferences, form.guideRequired, form.hotelCategory, form.hotelRooms, form.preferredHotelName, form.preferredHotelArea, form.infantCount, form.interests, form.accessibilityNeeds, form.mealPlan, form.mealPreference, form.preferredTier, form.returnDate, form.travelPace, form.travelStartDate, form.vehicleType, form.durationDays, form.durationNights, selectedLabels]);
+  }), [allDestinations, dateDuration, form.adultCount, form.arrivalTime, form.departureTime, form.budget, form.childAges, form.childNoBedCount, form.childWithBedCount, form.destination, form.departureCity, form.returnCity, form.entryTickets, form.foodRestrictions, form.visitTimingPreferences, form.guideRequired, form.hotelCategory, form.hotelRooms, form.preferredHotelName, form.preferredHotelArea, form.infantCount, form.interests, form.accessibilityNeeds, form.mealPlan, form.mealPreference, form.preferredTier, form.returnDate, form.travelPace, form.travelStartDate, form.vehicleType, form.durationDays, form.durationNights, selectedLabels]);
 
   const planningFingerprint = useMemo(
     () => JSON.stringify({ ...planningPayload, planningFingerprint: undefined }),
@@ -504,12 +513,8 @@ const AiAssistant = () => {
 
       const guide = normalizeDestinationGuide(data, destination);
       if (!guide.groups.length) throw new Error('No nearby places were returned. Try a more specific destination.');
-      const recommended = flattenDestinationGroups(guide.groups)
-        .filter(place => place.kind === 'recommended')
-        .slice(0, suggestedStopLimit(form.durationDays))
-        .map(place => place.id);
       setDestinationGuide(guide);
-      setSelectedDestinations(recommended);
+      setSelectedDestinations([]);
       setCustomPlaces([]);
       setCustomPlace('');
       setDestinationSearch('');
@@ -638,7 +643,8 @@ const AiAssistant = () => {
       if (!response.ok) throw new Error(data.message || 'We could not prepare the route draft right now.');
       const draft = normalizePlannerDraft(data, requestPayload);
       setPlanningDraft(draft);
-      setPlanningState('ready');
+      setPlanningState(draft.generationMode === 'provisional' ? 'error' : 'ready');
+      if (draft.generationMode === 'provisional') setPlanningError('The AI route service is temporarily unavailable. This timed draft is a provisional sequence for the travel desk to verify.');
       return draft;
     } catch (error) {
       if (error.name === 'AbortError') return null;
@@ -709,6 +715,8 @@ const AiAssistant = () => {
             durationNights: Number(form.durationNights),
             travelStartDate: form.travelStartDate,
             returnDate: form.returnDate,
+            arrivalTime: form.arrivalTime,
+            departureTime: form.departureTime,
             durationSource: dateDuration ? 'travel dates' : 'manual duration fallback',
             planningStatus: nextDraft?.planningReview?.status || 'workable',
             routeDraft: nextDraft ? {
@@ -719,6 +727,8 @@ const AiAssistant = () => {
               endingCity: nextDraft.endingCity,
               travelStartDate: nextDraft.travelStartDate,
               returnDate: nextDraft.returnDate,
+              arrivalTime: form.arrivalTime,
+              departureTime: form.departureTime,
               durationDays: nextDraft.durationDays,
               durationNights: nextDraft.durationNights,
               overview: nextDraft.overview,
@@ -925,7 +935,7 @@ const AiAssistant = () => {
                   <div className="quote-panel">
                     <div className="draft-panel-heading"><CalendarDays size={18} aria-hidden="true" /><h3>Day-by-day route</h3></div>
                     <div className="quote-itinerary route-draft-itinerary">
-                      {submittedDraft.itinerary.map(day => <article className="quote-day route-draft-day" key={day.day}><span className="quote-day-number">D{day.day}</span><div><div className="route-draft-day-heading"><h4>{day.title}</h4>{day.base && <span>{day.base}</span>}</div><p><strong>Stops</strong> {day.places.length ? day.places.join(' · ') : 'Flexible local discovery'}</p>{day.activities && <p><strong>Plan</strong> {day.activities}</p>}{day.transit && <p><strong>Travel</strong> {day.transit}</p>}{day.entryWindow && <p><strong>Darshan / entry</strong> {day.entryWindow}</p>}{day.meal && <p><strong>Meals</strong> {day.meal}</p>}</div></article>)}
+                      {submittedDraft.itinerary.map((day, index) => <article className="quote-day route-draft-day" key={day.day}><span className="quote-day-number">D{day.day}</span><div><div className="route-draft-day-heading"><h4>{day.title}</h4>{day.base && <span>{day.base}</span>}</div>{day.date && <p className="route-draft-date">{new Date(`${day.date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' })}</p>}<p><strong>Stops</strong> {day.places.length ? day.places.join(' · ') : 'No attraction scheduled'}</p>{day.schedule?.length ? <ol className="route-draft-timeline" aria-label={`Day ${day.day} suggested schedule`}>{day.schedule.map((item, blockIndex) => <li key={`${item.start}-${blockIndex}`}><time>{item.start}–{item.end}</time><span><b>{item.label}</b>{item.detail && <small>{item.detail}</small>}</span></li>)}</ol> : <p className="route-draft-pending">Specific visit times need travel-desk review.</p>}{day.activities && <p><strong>About the visits</strong> {day.activities}</p>}{day.entryWindow && <p><strong>Entry status</strong> {day.entryWindow}</p>}{day.scheduleAssumptions?.length > 0 && <p className="route-draft-assumption">{day.scheduleAssumptions.join(' ')}</p>}{dayDirectionsUrl(submittedDraft, day, index, submittedDraft.itinerary.length) && <a className="route-draft-map-link" href={dayDirectionsUrl(submittedDraft, day, index, submittedDraft.itinerary.length)} target="_blank" rel="noopener noreferrer">Open this day’s road route in Google Maps <ArrowRight size={14} aria-hidden="true" /></a>}</div></article>)}
                     </div>
                   </div>
                 </div>
@@ -981,6 +991,12 @@ const AiAssistant = () => {
                             <Field id="returnDate" label="Return date" error={fieldErrors.returnDate} help={dateDuration ? 'Travel days and hotel nights are calculated from these dates.' : 'Choose both dates to calculate days and nights automatically.'}>
                               <input id="returnDate" name="returnDate" className="planner-field" type="date" value={form.returnDate} onChange={handleDateChange} {...getAria('returnDate', fieldErrors.returnDate, 'returnDate-help')} />
                             </Field>
+                            <Field id="arrivalTime" label="Arrival time on day 1" help="Optional. Helps us place check-in and the first visit. Without it, the draft assumes arrival by 13:00.">
+                              <input id="arrivalTime" className="planner-field" type="time" value={form.arrivalTime} onChange={event => updateField('arrivalTime', event.target.value)} {...getAria('arrivalTime', fieldErrors.arrivalTime, 'arrivalTime-help')} />
+                            </Field>
+                            <Field id="departureTime" label="Departure time on final day" help="Optional. Helps us leave enough time for your return journey. Without it, the draft assumes departure after 17:00.">
+                              <input id="departureTime" className="planner-field" type="time" value={form.departureTime} onChange={event => updateField('departureTime', event.target.value)} {...getAria('departureTime', fieldErrors.departureTime, 'departureTime-help')} />
+                            </Field>
                             <Field id="durationDays" label="Travel days" required error={fieldErrors.durationDays} help={dateDuration ? 'Set by the travel dates.' : undefined}>
                               <input id="durationDays" className="planner-field" type="number" min="1" max="60" inputMode="numeric" value={form.durationDays} readOnly={Boolean(dateDuration)} aria-readonly={dateDuration ? 'true' : undefined} onChange={event => updateField('durationDays', event.target.value)} {...getAria('durationDays', fieldErrors.durationDays, dateDuration ? 'durationDays-help' : undefined)} />
                             </Field>
@@ -993,7 +1009,7 @@ const AiAssistant = () => {
 
                       {currentStep === 2 && (
                         <div id="destinationPicker" tabIndex="-1" aria-invalid={fieldErrors.destinationPicker ? 'true' : undefined} aria-describedby={fieldErrors.destinationPicker ? 'destinationPicker-error' : undefined}>
-                          <div className="planner-section-title"><h2>Discover nearby places</h2><p>Start with this suggested shortlist for {destinationGuide?.destination || form.destination}. Pick the places that matter; the travel desk will verify locations and timing.</p></div>
+                          <div className="planner-section-title"><h2>Choose your stops</h2><p>Places near {destinationGuide?.destination || form.destination} are suggestions. Nothing is added to your route until you choose it; the travel desk will verify locations and timing.</p></div>
                           <div className="destination-search-wrap">
                             <Search className="destination-search-icon" size={18} aria-hidden="true" />
                             <label className="sr-only" htmlFor="destination-search">Search every place near this destination</label>

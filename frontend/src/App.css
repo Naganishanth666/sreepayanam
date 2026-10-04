@@ -2683,6 +2683,153 @@ textarea.input-field,
   text-transform: uppercase;
 }
 
+.route-draft-day .route-draft-date {
+  color: var(--color-coral-dark);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.route-draft-timeline {
+  display: grid;
+  gap: 0;
+  margin: 0.8rem 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--color-border);
+}
+
+.route-draft-timeline li {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, auto) minmax(0, 1fr);
+  gap: 0.65rem;
+  padding: 0.62rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.route-draft-timeline time {
+  color: var(--color-ink-soft);
+  font: 700 0.71rem/1.4 var(--font-utility);
+  white-space: nowrap;
+}
+
+.route-draft-timeline b {
+  display: block;
+  color: var(--color-ink);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.route-draft-timeline small {
+  display: block;
+  margin-top: 0.14rem;
+  color: var(--color-muted);
+  font-size: 0.69rem;
+  line-height: 1.4;
+}
+
+.route-draft-day .route-draft-assumption,
+.route-draft-day .route-draft-pending {
+  margin-top: 0.55rem;
+  color: var(--color-muted);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.route-draft-map-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.65rem;
+  color: var(--color-ink);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.15rem;
+}
+
+.route-draft-map-link:focus-visible {
+  outline: 2px solid var(--color-coral-dark);
+  outline-offset: 3px;
+}
+
+.quotation-schedule-editor {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.85rem;
+  background: var(--color-paper, #f7f9fc);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.quotation-schedule-editor > p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.76rem;
+}
+
+.quotation-schedule-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  padding: 0.7rem 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.quotation-schedule-row label,
+.quotation-schedule-row input,
+.quotation-schedule-row select {
+  min-width: 0;
+}
+
+.package-internal-cost-note {
+  margin: 0 0 1rem;
+  color: var(--color-muted);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.catalog-coverage {
+  margin-bottom: 1.1rem;
+  padding: 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-paper, #f7f9fc);
+}
+
+.catalog-coverage > strong {
+  color: var(--color-ink);
+  font-size: 0.84rem;
+}
+
+.catalog-coverage > p {
+  margin: 0.35rem 0 0.75rem;
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.catalog-coverage ul {
+  display: grid;
+  gap: 0.35rem;
+  max-height: 13rem;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.catalog-coverage li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+}
+
+.catalog-coverage li b {
+  color: var(--color-ink-soft);
+  white-space: nowrap;
+}
+
 .draft-private-note {
   display: flex;
   align-items: flex-start;

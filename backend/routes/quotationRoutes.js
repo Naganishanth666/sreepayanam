@@ -6,11 +6,10 @@ const Enquiry = require('../models/Enquiry');
 const Quotation = require('../models/Quotation');
 const TravelDocumentPack = require('../models/TravelDocumentPack');
 const User = require('../models/User');
-const { BUFFER_PERCENT, MARKUP_PERCENT, DISCOUNT_PERCENT, priceTier } = require('../utils/quotationPricing');
+const { BUFFER_PERCENT, TARGET_MARGIN_PERCENT, DISCOUNT_PERCENT, priceTier } = require('../utils/quotationPricing');
 const { requiredFields, sanitizeFields, completionProblems } = require('../utils/travelPackValidation');
 
 const router = express.Router();
-const FIXED_MARKUP_PERCENT = MARKUP_PERCENT;
 const FIXED_BUFFER_PERCENT = BUFFER_PERCENT;
 
 const numberInRange = (value, fallback, min, max) => {
@@ -102,7 +101,7 @@ router.post('/preview', checkAdmin, async (req, res) => {
       insuranceCostPerPax: numberInRange(body.insuranceCostPerPax, 200, 0, 100000),
       miscCost: numberInRange(body.miscCost, 0, 0, 1000000),
       bufferPercent: FIXED_BUFFER_PERCENT,
-      markupPercent: FIXED_MARKUP_PERCENT,
+      targetMarginPercent: TARGET_MARGIN_PERCENT,
       taxPercent: 0,
       discountPercent: DISCOUNT_PERCENT,
       discountAmount: 0,
@@ -162,6 +161,15 @@ const safeUrl = value => {
 const dateFromEnquiry = value => value instanceof Date && !Number.isNaN(value.getTime())
   ? value.toISOString().slice(0, 10) : '';
 
+const cleanSchedule = value => Array.isArray(value) ? value.slice(0, 16).map(item => ({
+  start: /^([01]\d|2[0-3]):[0-5]\d$/.test(item?.start || '') ? item.start : '',
+  end: /^([01]\d|2[0-3]):[0-5]\d$/.test(item?.end || '') ? item.end : '',
+  label: cleanText(item?.label, 160),
+  kind: ['hotel', 'meal', 'transfer', 'visit', 'departure', 'rest'].includes(item?.kind) ? item.kind : 'rest',
+  detail: cleanText(item?.detail, 400),
+  place: cleanText(item?.place, 160)
+})).filter(item => item.start && item.end && item.start < item.end && item.label) : [];
+
 const routeFromEnquiry = enquiry => {
   const source = enquiry.detailedPreferences?.routeDraft;
   if (!source || !Array.isArray(source.itinerary) || !source.itinerary.length) return null;
@@ -188,6 +196,9 @@ const routeFromEnquiry = enquiry => {
       title: cleanText(day?.title, 120),
       base: cleanText(day?.base, 120),
       places: cleanLines(day?.places).slice(0, 10),
+      date: dateOnly(day?.date),
+      schedule: cleanSchedule(day?.schedule),
+      scheduleAssumptions: cleanLines(day?.scheduleAssumptions).slice(0, 8),
       activities: cleanText(day?.activities, 1200),
       transit: cleanText(day?.transit, 700),
       meal: cleanText(day?.meal, 700),
@@ -215,6 +226,7 @@ const editedRouteFromInput = (enquiry, requested, selectedPlaces) => {
       title: cleanText(input.title ?? day.title, 120),
       base: cleanText(input.base ?? day.base, 120),
       places: cleanLines(input.places ?? day.places).slice(0, 10),
+      schedule: cleanSchedule(input.schedule ?? day.schedule),
       activities: cleanText(input.activities ?? day.activities, 1200),
       transit: cleanText(input.transit ?? day.transit, 700),
       meal: cleanText(input.meal ?? day.meal, 700),
@@ -310,9 +322,8 @@ const quotationInput = (body, enquiry, existing) => {
       routeReviewNote: cleanText(body.terms?.routeReviewNote, 800)
     },
     pricingRule: {
-      bufferPercent: BUFFER_PERCENT, markupPercent: MARKUP_PERCENT, discountPercent: DISCOUNT_PERCENT,
-      offerStartDate: dateOnly(body.pricingRule?.offerStartDate),
-      offerEndDate: dateOnly(body.pricingRule?.offerEndDate)
+      bufferPercent: BUFFER_PERCENT, targetMarginPercent: TARGET_MARGIN_PERCENT,
+      discountPercent: DISCOUNT_PERCENT, formulaVersion: 'SRS-1.5-margin-35-v1'
     },
     updatedAt: new Date(),
     reference: existing?.reference,
@@ -327,6 +338,8 @@ const approvalProblems = quote => {
   if (!quote.route?.endingCity) problems.push('Confirm the trip return point.');
   if (quote.route?.durationNights > 0 && !quote.customer?.rooms) problems.push('Confirm the room count for the selected nights.');
   if (quote.route?.itinerary?.some(day => !day.title || !day.activities || !day.entryWindow)) problems.push('Each day needs a title, reviewed plan and entry-window status.');
+  if (quote.route?.itinerary?.some(day => !day.schedule?.length || day.places?.some(place => !day.schedule.some(item => item.kind === 'visit' && item.place?.toLowerCase() === place.toLowerCase())))) problems.push('Each day needs a timed sequence and a visit window for every planned stop.');
+  if (quote.route?.itinerary?.some(day => day.schedule?.some((item, index) => index > 0 && item.start < day.schedule[index - 1].end))) problems.push('Timed activities must be in order without overlaps.');
   if (!quote.selectedPlaces?.length) problems.push('The selected-place list is missing.');
   if (quote.destinationReferences?.length !== quote.selectedPlaces?.length) problems.push('Each selected place needs its own detail reference.');
   for (const reference of quote.destinationReferences || []) {
@@ -334,10 +347,7 @@ const approvalProblems = quote => {
     if (reference.lastChecked > today) problems.push(`The check date for ${reference.name} cannot be in the future.`);
   }
   if (quote.tiers?.length !== 3) problems.push('All three quotation tiers are required.');
-  const offerStart = quote.pricingRule?.offerStartDate;
-  const offerEnd = quote.pricingRule?.offerEndDate;
-  if (!offerStart || !offerEnd) problems.push('Enter management-approved promotion start and end dates.');
-  else if (offerEnd < offerStart || today < offerStart || today > offerEnd) problems.push('The 5% offer must be active on the approval date.');
+  if (quote.pricingRule?.discountPercent > 0) problems.push('Discounts require a separately approved offer and margin-floor rule.');
   for (const tier of quote.tiers || []) {
     if (!tier.price?.total || !tier.sourceReference || !tier.sourceCheckedAt || !tier.accommodation || !tier.transport || !tier.meals) {
       problems.push(`Complete the verified cost source and scope for ${tier.name}.`);
@@ -350,6 +360,7 @@ const approvalProblems = quote => {
     } else if (!tier.benchmarkNote) problems.push(`Record why a three-source market benchmark is unavailable for ${tier.name}.`);
     if (!Number.isFinite(tier.minimumSellingPrice) || tier.minimumSellingPrice <= 0) problems.push(`Enter the approved minimum selling price for ${tier.name}.`);
     else if (tier.price?.total < tier.minimumSellingPrice) problems.push(`${tier.name} is below the approved minimum selling price.`);
+    if (tier.directCost > 0 && tier.price?.total < priceTier(tier.directCost, quote.customer?.passengers || 1)?.total) problems.push(`${tier.name} is below the 35% gross margin floor.`);
   }
   const terms = quote.terms || {};
   if (!terms.validUntil || !terms.taxNote || !terms.paymentSchedule || !terms.cancellationTerms || !terms.assumptions || !terms.inclusions?.length || !terms.exclusions?.length) {

@@ -44,8 +44,10 @@ const quotationSchema = new mongoose.Schema({
   },
   pricingRule: {
     bufferPercent: { type: Number, default: 10 },
-    markupPercent: { type: Number, default: 40 },
-    discountPercent: { type: Number, default: 5 },
+    markupPercent: Number, // Historical snapshots only.
+    targetMarginPercent: { type: Number, default: 35 },
+    formulaVersion: String,
+    discountPercent: { type: Number, default: 0 },
     offerStartDate: String,
     offerEndDate: String
   },

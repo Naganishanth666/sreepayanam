@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
+const { buildDaySchedule, validTime } = require('../utils/routeSchedule');
 const { OpenAI } = require('openai');
 const multer = require('multer');
 const { PDFParse } = require('pdf-parse');
@@ -139,8 +140,14 @@ const sanitizeStructuredPlan = (payload, preferences) => {
     const hotelCategory = cleanPlanningText(preferences.hotelCategory, 50) || 'Preferred category';
     const preferredHotelName = cleanPlanningText(preferences.preferredHotelName, 120);
     const stayArea = preferredHotelArea || base || cleanPlanningText(preferences.destination, 120);
-    const places = cleanPlaceList(day.places, 10).map(place => selectedNames.get(normalizePlaceKey(place))).filter(Boolean);
+    const requestedPlaces = cleanPlaceList(day.places, 10).map(place => selectedNames.get(normalizePlaceKey(place))).filter(Boolean);
+    const timing = buildDaySchedule({
+      dayIndex: index, durationDays, durationNights, places: requestedPlaces,
+      arrivalTime: preferences.arrivalTime, departureTime: preferences.departureTime
+    });
+    const places = timing.placed;
     const openDay = places.length === 0;
+    const adjustedDay = places.length < requestedPlaces.length;
     const openDayTitle = index === 0 ? 'Arrival & settle in' : index === durationDays - 1 ? 'Last light & return' : 'Flexible local discovery';
     const openDayActivities = `Keep this day flexible around ${stayArea || 'the destination'} for local travel and rest. The travel desk can add a nearby visit after checking its location, opening times and access. No additional attraction is confirmed for this day.`;
     const requestedVisitWindow = cleanPlanningText(preferences.visitTimingPreferences, 160);
@@ -160,13 +167,20 @@ const sanitizeStructuredPlan = (payload, preferences) => {
     };
     return {
       day: index + 1,
-      title: openDay ? openDayTitle : cleanPlanningText(day.title, 120) || 'Discover the route',
+      date: cleanDateOnly(preferences.travelStartDate)
+        ? new Date(Date.parse(`${cleanDateOnly(preferences.travelStartDate)}T00:00:00Z`) + index * 86400000).toISOString().slice(0, 10)
+        : '',
+      title: openDay ? openDayTitle : adjustedDay ? `Visit ${places.join(' and ')}` : cleanPlanningText(day.title, 120) || 'Discover the route',
       base,
       places,
-      activities: openDay ? openDayActivities : cleanPlanningText(day.activities, 900) || 'Flexible time for local discovery.',
+      schedule: timing.schedule,
+      scheduleAssumptions: timing.assumptions,
+      activities: openDay ? openDayActivities : adjustedDay
+        ? `Focus on ${places.join(', ')} at a manageable pace. The other selected stops proposed for this day need a different day or a longer trip; the travel desk will review them with you.`
+        : cleanPlanningText(day.activities, 900) || `Allow time to visit ${places.join(', ')} at the requested pace.`,
       hotel,
       meal: openDay ? '' : cleanPlanningText(day.meal, 500),
-      transit: openDay ? 'Travel and local transfers are to be confirmed by the travel desk.' : cleanPlanningText(day.transit, 500),
+      transit: openDay || adjustedDay ? 'Road order, distance and transfer times are pending licensed routing and travel-desk review.' : cleanPlanningText(day.transit, 500),
       entryWindow: openDay ? 'Any added visit or darshan time needs official-source confirmation.' : entryWindow
     };
   });
@@ -213,6 +227,24 @@ const sanitizeStructuredPlan = (payload, preferences) => {
     inclusions: cleanPlaceList(payload?.inclusions, 20).map(item => cleanPlanningText(item, 240)).filter(Boolean),
     exclusions: cleanPlaceList(payload?.exclusions, 20).map(item => cleanPlanningText(item, 240)).filter(Boolean)
   };
+};
+
+const provisionalStructuredPlan = preferences => {
+  const places = [...preferences.selectedDestinations];
+  const itinerary = Array.from({ length: preferences.durationDays }, (_, index) => {
+    const limit = index === 0 || index === preferences.durationDays - 1 ? 2 : 3;
+    return { day: index + 1, base: preferences.preferredHotelArea || preferences.destination,
+      places: places.splice(0, limit), title: 'Provisional route sequence',
+      activities: 'The travel desk will check the road order, visit windows and accessibility before confirming this day.',
+      transit: 'Road legs and drive times have not been checked.',
+      meal: 'Meal stop and service to be confirmed.' };
+  });
+  return { ...sanitizeStructuredPlan({
+    title: `${preferences.destination || 'Custom'} route draft`,
+    overview: 'A provisional timed route while the AI grouping service is unavailable. Staff will check the road order and attraction hours.',
+    itinerary,
+    planningReview: { status: 'tight', summary: 'AI grouping is temporarily unavailable. This is a provisional order; the travel desk must verify locations, road times, opening hours and every selected stop before confirmation.' }
+  }, preferences), generationMode: 'provisional' };
 };
 
 const sanitizeDestinationGuide = (payload, destination) => {
@@ -494,7 +526,7 @@ router.post('/plan', async (req, res) => {
     if (!openai) return;
 
     // Fetch available packages to provide context
-    const packages = await Package.find({ isActive: true }).select('title destination durationDays durationNights price offerPrice highlights tourType');
+    const packages = await Package.find({ isActive: true, status: { $in: ['Approved', 'Published'] } }).select('title destination durationDays durationNights highlights tourType');
     
     const contextPrompt = `
       You are an expert AI Travel Planner & Assistant for "SreePayanam Tours & Travels".
@@ -505,14 +537,14 @@ router.post('/plan', async (req, res) => {
       
       Instructions:
       1. Carefully match the user's request against our available packages.
-      2. If one or more packages are a good match, showcase them enthusiastically with pricing (₹), duration, and highlight features. Let them know they can click on "Packages" in the navigation bar to see full details.
-      3. If no package is a perfect match, perform thorough, realistic travel research and suggest a beautiful custom day-by-day itinerary matching their desires. For each day, you MUST explicitly detail:
+      2. If one or more packages are a good match, describe their duration and highlights and direct the traveller to that package's Request for price form. Do not state any package price.
+      3. If no package is a good match, suggest a provisional custom route matching their desires. For each day, you MUST explicitly detail:
          - 🏨 **Suggested Hotel:** Recommend a specific realistic local hotel or resort (along with its star rating/luxury tier).
          - 🍽️ **Meal & Cuisine:** Suggest authentic dining options, restaurants, or local cuisines to try in detail (e.g. Traditional Sadya, Mandi, local seafood, specific signature dishes, or street foods to sample).
          - ✈️🚗 **Suggested Travel & Transit:** Provide concrete travel suggestions (e.g., flight routing/airlines, train options, or car transfers with driving distances and driving durations).
          - 🏛️ **Places of Visit & Activities:** Provide a very descriptive, highly detailed description of the daily activities and sightseeing spots (at least 4-5 sentences per day). Describe the unique beauty, natural scenery, historical context, or cultural background of each visited place. Do not write short or generic summaries.
          Tell the user they can instantly book these options by submitting the Enquiry Form or pinging us on WhatsApp (+91 94432 17654).
-      4. Keep your tone extremely friendly, inspiring, and professional. Use Markdown format (bullet points, bold text, emojis) for readability. Do not expose raw JSON.
+      4. Keep your tone helpful and clear. Use Markdown for readability. Do not expose raw JSON, invent prices, or claim an unverified supplier or attraction detail is confirmed.
     `;
 
     const completion = await openai.chat.completions.create({
@@ -619,6 +651,7 @@ router.post('/hotel-suggestions', async (req, res) => {
 });
 
 router.post('/plan-structured', async (req, res) => {
+  let safePreferences;
   try {
     const preferences = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
     const {
@@ -650,7 +683,7 @@ router.post('/plan-structured', async (req, res) => {
     const safeDurationDays = dateDuration?.days || numberInRange(durationDays, 5, 1, 60);
     const safeDurationNights = dateDuration?.nights ?? numberInRange(durationNights, Math.max(safeDurationDays - 1, 0), 0, 59);
 
-    const safePreferences = {
+    safePreferences = {
       ...preferences,
       destination: cleanAiText(destination, 180),
       startingCity: cleanAiText(startingCity, 160),
@@ -664,12 +697,14 @@ router.post('/plan-structured', async (req, res) => {
       preferredHotelName: cleanPlanningText(preferences.preferredHotelName, 120),
       preferredHotelArea: cleanPlanningText(preferences.preferredHotelArea, 120),
       visitTimingPreferences: cleanPlanningText(preferences.visitTimingPreferences, 240),
+      arrivalTime: validTime(preferences.arrivalTime),
+      departureTime: validTime(preferences.departureTime),
       selectedDestinations: cleanPlaceList(selectedDestinations, 40),
       availableDestinations: cleanPlaceList(availableDestinations, 120)
     };
 
-    const openai = getOpenAIClient(res);
-    if (!openai) return;
+    const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+    if (!openai) return res.json(provisionalStructuredPlan(safePreferences));
 
     // Convert preferences object to a readable string for the AI prompt
     let formattedPreferences = '';
@@ -710,8 +745,8 @@ router.post('/plan-structured', async (req, res) => {
       6. Optimize the route geographically and by time. Keep places in the same neighbourhood, corridor or nearby area on the same day where practical; order each day and the overall trip to minimize backtracking; allow realistic travel, meal and rest time; do not force every selected place into the plan when the time window cannot support it. The daily "base" is the stay area for an overnight day when the traveller specified a preferred hotel area; a sightseeing day trip does not move the hotel base. Do not infer an attraction's town or district from a similar-sounding landmark. When its location is uncertain, say that staff must verify it instead of naming a guessed town.
       7. Detect feasibility honestly. If the selection is too large or geographically spread out, set planningReview.status to "tight" or "not_feasible", explain the constraint in planningReview.summary, list every selected place that could not fit in planningReview.unplacedPlaces, and suggest specific removals in planningReview.suggestedRemovals. Suggest replacements only from the available guide places or credible nearby alternatives in planningReview.suggestedReplacements. Never invent exact distances or travel times when uncertain.
       8. For every itinerary day, the places array MUST contain only exact names from the customer-selected places above. Do not silently add other guide places to the itinerary. Put any alternative in planningReview.suggestedReplacements for staff/customer review. An arrival or rest day may use an empty places array; when it does, do not name an unselected attraction or city in that day's title or prose. Preserve the customer's selections whenever feasible.
-      9. Include specific sightseeing spots and pace (e.g. slow, moderate, active). Record ticket support only as a request where applicable. The traveller's darshan or entry preference is ${safePreferences.visitTimingPreferences || 'not supplied'}. Place it on the relevant day as a request, never as a confirmed slot. Make the daily itinerary descriptions extremely descriptive, informative, and engaging:
-         - The "activities" field must be a detailed, rich paragraph (at least 4-5 sentences) describing the scenic beauty, historical significance, local culture, and specific sightseeing places visited, explaining why they are special.
+      9. Plan a practical day, not a generic travel essay. Spread stops across days with at most two on arrival/departure days and three on full days; allow hotel departure, travel, a meaningful visit, lunch/rest and return. If the traveller gave an arrival time (${safePreferences.arrivalTime || 'not given'}) or final departure time (${safePreferences.departureTime || 'not given'}), respect it. The server will create provisional clock windows for each selected stop and will flag any stop that does not fit; do not try to invent exact road or venue times. Record ticket support only as a request where applicable. The traveller's darshan or entry preference is ${safePreferences.visitTimingPreferences || 'not supplied'}. Place it on the relevant day as a request, never as a confirmed slot.
+         - The "activities" field should give 2-3 specific, useful sentences about the selected stop(s), why they matter, and any practical pace or access consideration. Avoid boilerplate, unsourced historical claims and attractions the customer did not select.
          - The "meal" field should describe appropriate meals and rest stops without inventing a restaurant or confirmed menu.
          - The "transit" field should describe route order and vehicle type. Do not invent numerical times or distances without verified routing data.
          - The "entryWindow" field should record any requested darshan or entry window and explicitly say that opening times, ticket requirements, charges and slot availability need official-source confirmation. A request for ticket support does not mean every attraction requires a ticket. Never assert that a ticket is required without an official source, or invent an opening hour, reservation or source check.
@@ -776,7 +811,8 @@ router.post('/plan-structured', async (req, res) => {
     res.json(itineraryData);
   } catch (error) {
     console.error('AI Structured Plan Error:', error);
-    res.status(500).json({ message: 'Error compiling your customized itinerary' });
+    if (!safePreferences) return res.status(500).json({ message: 'Error compiling your customized itinerary' });
+    res.json(provisionalStructuredPlan(safePreferences));
   }
 });
 
@@ -890,9 +926,9 @@ JSON Schema to conform to:
       "optionalAddons": ["Optional addons, e.g. 'Houseboat upgrade', 'Candlelight dinner'"],
       "termsAndConditions": "Terms and conditions text if found, otherwise general terms",
       "cancellationPolicy": "Cancellation policy text if found, otherwise general policy",
-      "originalPrice": number (If price is found in the brochure, put it here. If not, default to 19999),
-      "offerPrice": number (If a discounted price is found, put it here, otherwise leave null or default to 15999),
-      "isSpecialOffer": boolean,
+      "originalPrice": number or null (only when explicitly printed in the brochure; otherwise null),
+      "offerPrice": number or null (only when explicitly printed in the brochure; otherwise null),
+      "isSpecialOffer": false,
       "seoTitle": "catchy SEO title",
       "seoMetaDescription": "engaging meta description"
     }
@@ -972,9 +1008,9 @@ JSON Schema to conform to:
               "optionalAddons": ["Optional addons, e.g. 'Houseboat upgrade', 'Candlelight dinner'"],
               "termsAndConditions": "Terms and conditions text if found, otherwise general terms",
               "cancellationPolicy": "Cancellation policy text if found, otherwise general policy",
-              "originalPrice": number (If price is found in the brochure, put it here. If not, default to 19999),
-              "offerPrice": number (If a discounted price is found, put it here, otherwise leave null or default to 15999),
-              "isSpecialOffer": boolean,
+              "originalPrice": number or null (only when explicitly printed in the brochure; otherwise null),
+              "offerPrice": number or null (only when explicitly printed in the brochure; otherwise null),
+              "isSpecialOffer": false,
               "seoTitle": "catchy SEO title",
               "seoMetaDescription": "engaging meta description"
             }
@@ -1007,7 +1043,7 @@ JSON Schema to conform to:
       packages = [parsedData];
     }
 
-    res.json({ packages });
+    res.json({ packages: packages.map(pkg => ({ ...pkg, status: 'Draft', isSpecialOffer: false })) });
   } catch (error) {
     console.error('PDF parsing/AI processing failed:', error);
     res.status(500).json({ message: 'Failed to process PDF brochure content', error: error.message });
@@ -1049,13 +1085,7 @@ router.post('/generate-package', checkAdmin, async (req, res) => {
       
       Your response MUST be a valid JSON object ONLY.
       
-      Pricing Instruction:
-      Calculate a realistic pricing structure in Indian Rupees (₹) for exactly 2 passengers (2 pax) total:
-      - For domestic/national destinations: estimate direct supplier cost only, clearly provisional until staff verify the source and retrieval time. Staff pricing follows 10% contingency, 40% markup and the approved 5% promotional offer when active.
-      - For international destinations: estimate direct supplier cost only, clearly provisional until staff verify the source and retrieval time. Do not invent confirmed fares or availability.
-      Set originalPrice as the retail price (cost * 1.50) and offerPrice as the selling price.
-      Both originalPrice and offerPrice MUST be returned as integers, not formatted strings.
-      Generate a detailed text block in "priceBreakdown" explaining the wholesale cost breakdown (Hotel, Car transport, tolls/driver, meals).
+      Pricing instruction: This is price-free catalogue content. Do not invent supplier costs, selling prices, discounts, offers, rate sources or availability. Leave price fields absent; staff will verify costs when preparing a private quotation.
  
       Itinerary Duration Constraint:
       Your itinerary array MUST contain exactly ${days} items (i.e. one entry per day from Day 1 to Day ${days}).
@@ -1111,11 +1141,7 @@ router.post('/generate-package', checkAdmin, async (req, res) => {
         "inclusions": "Separate each inclusion item with a newline character.",
         "exclusions": "Separate each exclusion item with a newline character.",
         "optionalAddons": "Separate each addon with a newline. Example: Ayurvedic Spa Package\\nHouseboat Night stay upgrade",
-        "baseCost": 14500,
-        "originalPrice": 22000,
-        "offerPrice": 18500,
-        "isSpecialOffer": true,
-        "priceBreakdown": "Hotel: ₹3500\\nTransport: ₹6000\\nTolls & Driver: ₹3000\\nMeals: ₹2000",
+        "isSpecialOffer": false,
         "termsAndConditions": "Standard package booking terms, advance payments, and document needs.",
         "cancellationPolicy": "Cancellation terms require travel-desk and supplier review.",
         "seoTitle": "Premium SEO optimized title (max 60 chars)",
@@ -1146,7 +1172,7 @@ router.post('/generate-package', checkAdmin, async (req, res) => {
     const hotelCategory = req.body.hotelCategory || '3 Star';
     const vehicleType = req.body.vehicleType || req.body.carType || null;
     const mealPlan = req.body.mealRequired || 'MAP';
-    const markupPercent = Number(req.body.markupPercent) || 40;
+    const markupPercent = 35;
     const bufferPercent = Number(req.body.bufferPercent) || 10;
 
     const costingParams = {
@@ -1167,12 +1193,12 @@ router.post('/generate-package', checkAdmin, async (req, res) => {
 
     packageData.costingBreakdown = costing;
     packageData.status = 'Draft';
-    packageData.baseCost = costing.supplierCost;
-    packageData.originalPrice = costing.sellingPrice;
-    packageData.offerPrice = costing.customerPrice;
+    packageData.baseCost = costing.supplierCost > 0 ? costing.supplierCost : undefined;
+    packageData.originalPrice = costing.supplierCost > 0 ? costing.sellingPrice : undefined;
+    packageData.offerPrice = costing.supplierCost > 0 ? costing.customerPrice : undefined;
     packageData.profitMarginPercent = costing.profitMarginPercent;
     
-    packageData.isSpecialOffer = true;
+    packageData.isSpecialOffer = false;
     packageData.mealPlan = packageMealPlan;
     
     // Assign a beautiful preset image if imageUrl is empty or a generic placeholder
@@ -1527,7 +1553,7 @@ router.post('/compile-draft', checkAdmin, async (req, res) => {
       vehicleType: selectedCar ? selectedCar.type : null,
       vehicleDailyRate,
       miscCost: flightTrainCost,
-      markupPercent: Number(req.body.markupPercent) || 40,
+      markupPercent: 35,
       bufferPercent: Number(req.body.bufferPercent) || 10
     };
 
@@ -1574,7 +1600,7 @@ router.post('/compile-draft', checkAdmin, async (req, res) => {
       - baseCost: ${totalBaseCost}
       - originalPrice: ${computedOriginalPrice}
       - offerPrice: ${computedOfferPrice}
-      - isSpecialOffer: true
+      - isSpecialOffer: false
       - priceBreakdown: "${breakdownText.replace(/\n/g, '\\n')}"
       Both originalPrice and offerPrice MUST be returned as integers, NOT as formatted strings.
 
@@ -1643,7 +1669,7 @@ router.post('/compile-draft', checkAdmin, async (req, res) => {
         "baseCost": ${totalBaseCost},
         "originalPrice": ${computedOriginalPrice},
         "offerPrice": ${computedOfferPrice},
-        "isSpecialOffer": true,
+        "isSpecialOffer": false,
         "priceBreakdown": "${breakdownText.replace(/\n/g, '\\n')}",
         "termsAndConditions": "Standard package booking terms, advance payments, and document needs.",
         "cancellationPolicy": "Cancellation terms require travel-desk and supplier review.",
@@ -1673,7 +1699,7 @@ router.post('/compile-draft', checkAdmin, async (req, res) => {
     packageData.originalPrice = costing.sellingPrice;
     packageData.offerPrice = costing.customerPrice;
     packageData.profitMarginPercent = costing.profitMarginPercent;
-    packageData.isSpecialOffer = true;
+    packageData.isSpecialOffer = false;
     packageData.priceBreakdown = breakdownText;
     packageData.mealPlan = packageMealPlan;
     packageData.templesList = templesToInclude;

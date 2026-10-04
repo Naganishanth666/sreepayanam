@@ -30,6 +30,13 @@ const packageSchema = new mongoose.Schema({
   startingCity: { type: String },
   endingCity: { type: String },
   overview: { type: String, required: true },
+  journeyTimeNotes: String,
+  journeyDistanceNotes: String,
+  accessibilityNotes: String,
+  seasonConstraints: String,
+  imageRightsNote: String,
+  contentReviewedBy: String,
+  contentReviewedAt: String,
   
   itinerary: [{
     day: Number,
@@ -67,9 +74,9 @@ const packageSchema = new mongoose.Schema({
   cancellationPolicy: { type: String },
   
   baseCost: { type: Number }, // Raw wholesale cost price to SreePayanam
-  profitMarginPercent: { type: Number, default: 40 }, // Legacy display field; the costing snapshot owns the actual calculation.
+  profitMarginPercent: { type: Number, default: 35 }, // Legacy display field; the costing snapshot owns the actual calculation.
   
-  originalPrice: { type: Number, required: true },
+  originalPrice: { type: Number }, // Internal only; a catalogue draft can await supplier costing.
   offerPrice: { type: Number },
   isSpecialOffer: { type: Boolean, default: false },
   offerValidity: { type: Date },
@@ -124,12 +131,13 @@ const packageSchema = new mongoose.Schema({
     bufferPercent: { type: Number, default: 10 },
     bufferAmount: { type: Number, default: 0 },
     landedCost: { type: Number, default: 0 },
-    markupPercent: { type: Number, default: 40 },
+    markupPercent: { type: Number, default: 35 }, // Legacy field; calculated as gross-margin percent.
+    targetMarginPercent: { type: Number, default: 35 },
     markupAmount: { type: Number, default: 0 },
     sellingPrice: { type: Number, default: 0 },
     taxPercent: { type: Number, default: 0 },
     taxAmount: { type: Number, default: 0 },
-    discountPercent: { type: Number, default: 5 },
+    discountPercent: { type: Number, default: 0 },
     discountAmount: { type: Number, default: 0 },
     discountType: { type: String, enum: ['Fixed', 'Percentage'], default: 'Percentage' },
     customerPrice: { type: Number, default: 0 },
@@ -174,17 +182,18 @@ packageSchema.pre('save', function() {
     this.profitMarginPercent = this.costingBreakdown.profitMarginPercent;
   } else {
     if (this.baseCost && this.offerPrice) {
-      this.profitMarginPercent = Math.round(((this.offerPrice - this.baseCost) / this.baseCost) * 100);
+      const bufferedCost = this.baseCost + Math.round(this.baseCost * 0.10);
+      this.profitMarginPercent = Math.round(((this.offerPrice - bufferedCost) / this.offerPrice) * 100);
     } else if (this.baseCost) {
-      this.originalPrice = Math.round(Math.round(this.baseCost * 1.10) * 1.40);
-      this.offerPrice = this.originalPrice - Math.round(this.originalPrice * 0.05);
-    } else if (this.offerPrice) {
-      const margin = this.profitMarginPercent || 40;
-      this.baseCost = Math.round(this.offerPrice / (1 + margin / 100));
-    } else if (this.originalPrice) {
-      const margin = this.profitMarginPercent || 40;
+      this.originalPrice = Math.ceil((this.baseCost + Math.round(this.baseCost * 0.10)) / 0.65);
       this.offerPrice = this.originalPrice;
-      this.baseCost = Math.round(this.offerPrice / (1 + margin / 100));
+    } else if (this.offerPrice) {
+      const margin = this.profitMarginPercent || 35;
+      this.baseCost = Math.round((this.offerPrice * (1 - margin / 100)) / 1.10);
+    } else if (this.originalPrice) {
+      const margin = this.profitMarginPercent || 35;
+      this.offerPrice = this.originalPrice;
+      this.baseCost = Math.round((this.offerPrice * (1 - margin / 100)) / 1.10);
     }
   }
   this.updatedAt = Date.now();

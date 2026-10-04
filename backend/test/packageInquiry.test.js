@@ -34,7 +34,7 @@ test('public package response excludes all stored commercial amounts', async () 
   Package.findOne = async () => ({
     packageId: 'SP-PKG-TEST', title: 'Trichy temples', status: 'Approved', isActive: true,
     baseCost: 100000, originalPrice: 154000, offerPrice: 146300,
-    priceBreakdown: 'Private supplier cost', costingBreakdown: { markupPercent: 40 },
+    priceBreakdown: 'Private supplier cost', costingBreakdown: { targetMarginPercent: 35 },
     brochureUrl: 'https://example.com/old-priced-brochure.pdf'
   });
   await withServer(async base => {

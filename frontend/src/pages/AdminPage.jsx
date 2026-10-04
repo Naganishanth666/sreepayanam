@@ -29,7 +29,8 @@ const formatAccountDate = value => {
 const emptyForm = {
   title: '', destination: '', packageCategory: 'National', tourType: 'Family Tours', catalogCategories: [],
   startingCity: '', endingCity: '', durationDays: '', durationNights: '', seasonStart: '', seasonEnd: '',
-  overview: '', imageUrl: '',
+  overview: '', imageUrl: '', journeyTimeNotes: '', journeyDistanceNotes: '',
+  accessibilityNotes: '', seasonConstraints: '', imageRightsNote: '', contentReviewedBy: '', contentReviewedAt: '',
   itinerary: [{ day: 1, title: '', activities: '', hotel: '', mealPlan: '', transport: '' }],
   inclusions: '', exclusions: '', optionalAddons: '',
   templesList: [], destinationReferences: [], priceBreakdown: '', mealPlan: '', baseCost: '',
@@ -37,7 +38,7 @@ const emptyForm = {
   termsAndConditions: '', cancellationPolicy: '',
   seoTitle: '', seoMetaDescription: '',
   isActive: true,
-  status: 'Approved',
+  status: 'Draft',
   
   // Costing breakdown inputs
   adultCount: 2,
@@ -72,9 +73,9 @@ const emptyForm = {
   miscCost: '',
 
   bufferPercent: 10,
-  markupPercent: 40,
+  markupPercent: 35,
   taxPercent: 0,
-  discountPercent: 5,
+  discountPercent: 0,
   discountAmount: 0,
   discountType: 'Percentage',
 };
@@ -82,7 +83,7 @@ const emptyForm = {
 const flattenCostingData = (data) => {
   const cb = data.costingBreakdown || {};
   return {
-    status: data.status || 'Approved',
+    status: data.status || 'Draft',
     adultCount: cb.adultCount !== undefined && cb.adultCount !== null ? cb.adultCount : 2,
     childWithBedCount: cb.childWithBedCount !== undefined && cb.childWithBedCount !== null ? cb.childWithBedCount : 0,
     childNoBedCount: cb.childNoBedCount !== undefined && cb.childNoBedCount !== null ? cb.childNoBedCount : 0,
@@ -116,9 +117,9 @@ const flattenCostingData = (data) => {
     miscCost: cb.miscCost !== undefined && cb.miscCost !== null ? cb.miscCost : '',
     
     bufferPercent: cb.bufferPercent !== undefined && cb.bufferPercent !== null ? cb.bufferPercent : 10,
-    markupPercent: cb.markupPercent !== undefined && cb.markupPercent !== null ? cb.markupPercent : 40,
+    markupPercent: 35,
     taxPercent: cb.taxPercent !== undefined && cb.taxPercent !== null ? cb.taxPercent : 0,
-    discountPercent: cb.discountPercent !== undefined && cb.discountPercent !== null ? cb.discountPercent : 5,
+    discountPercent: 0,
     discountAmount: cb.discountAmount !== undefined && cb.discountAmount !== null ? cb.discountAmount : 0,
     discountType: cb.discountType !== undefined && cb.discountType !== null ? cb.discountType : 'Percentage',
   };
@@ -630,9 +631,9 @@ const AdminPage = () => {
       inclusions: Array.isArray(data.inclusions) ? data.inclusions.join('\n') : (data.inclusions || ''),
       exclusions: Array.isArray(data.exclusions) ? data.exclusions.join('\n') : (data.exclusions || ''),
       optionalAddons: Array.isArray(data.optionalAddons) ? data.optionalAddons.join('\n') : (data.optionalAddons || ''),
-      originalPrice: data.originalPrice || 19999,
-      offerPrice: data.offerPrice || 15999,
-      isSpecialOffer: !!data.isSpecialOffer,
+      originalPrice: data.originalPrice || '',
+      offerPrice: data.offerPrice || '',
+      isSpecialOffer: false,
       offerValidity: data.offerValidity || '',
       termsAndConditions: data.termsAndConditions || '',
       cancellationPolicy: data.cancellationPolicy || '',
@@ -1147,9 +1148,9 @@ const AdminPage = () => {
       
       if (costingFields.includes(name)) {
         const costing = recalculateCost(updated);
-        updated.baseCost = costing.supplierCost;
-        updated.originalPrice = costing.sellingPrice;
-        updated.offerPrice = costing.customerPrice;
+        updated.baseCost = costing.supplierCost || '';
+        updated.originalPrice = costing.supplierCost > 0 ? costing.sellingPrice : '';
+        updated.offerPrice = costing.supplierCost > 0 ? costing.customerPrice : '';
         updated.profitMarginPercent = costing.profitMarginPercent;
       }
       
@@ -1205,6 +1206,9 @@ const AdminPage = () => {
       durationNights: pkg.durationNights || '',
       overview: pkg.overview || '',
       imageUrl: pkg.imageUrl || '',
+      journeyTimeNotes: pkg.journeyTimeNotes || '', journeyDistanceNotes: pkg.journeyDistanceNotes || '',
+      accessibilityNotes: pkg.accessibilityNotes || '', seasonConstraints: pkg.seasonConstraints || '',
+      imageRightsNote: pkg.imageRightsNote || '', contentReviewedBy: pkg.contentReviewedBy || '', contentReviewedAt: pkg.contentReviewedAt || '',
       itinerary: Array.isArray(pkg.itinerary) && pkg.itinerary.length > 0 
         ? pkg.itinerary.map(day => ({
             day: day.day || 1,
@@ -1244,30 +1248,6 @@ const AdminPage = () => {
     setFormData(emptyForm);
     setSuccess('');
     setError('');
-  };
-
-  const handlePublishDraft = async (pkg) => {
-    try {
-      setLoading(true);
-      const res = await fetch(`/api/packages/${pkg.packageId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({
-          ...pkg,
-          status: 'Approved'
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || 'Failed to approve draft.');
-      }
-      setSuccess(`🟢 Approved and published "${pkg.title}"!`);
-      fetchPackages();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
   };
 
   const handleSubmit = async (e) => {
@@ -1317,10 +1297,10 @@ const AdminPage = () => {
         insuranceCostPerPax: formData.insuranceCostPerPax,
         miscCost: formData.miscCost,
         bufferPercent: formData.bufferPercent,
-        markupPercent: formData.markupPercent,
+        markupPercent: 35,
         taxPercent: formData.taxPercent,
-        discountPercent: formData.discountPercent,
-        discountAmount: formData.discountAmount,
+        discountPercent: 0,
+        discountAmount: 0,
         discountType: formData.discountType,
       };
 
@@ -1328,16 +1308,20 @@ const AdminPage = () => {
 
       const payload = {
         ...formData,
+        markupPercent: 35,
+        discountPercent: 0,
+        discountAmount: 0,
         durationDays: Number(formData.durationDays),
         durationNights: Number(formData.durationNights),
-        originalPrice: Number(formData.originalPrice),
+        originalPrice: formData.originalPrice ? Number(formData.originalPrice) : undefined,
         offerPrice: formData.offerPrice ? Number(formData.offerPrice) : undefined,
         baseCost: formData.baseCost ? Number(formData.baseCost) : undefined,
+        isSpecialOffer: false,
         inclusions: formData.inclusions.split('\n').map(s => s.trim()).filter(Boolean),
         exclusions: formData.exclusions.split('\n').map(s => s.trim()).filter(Boolean),
         optionalAddons: formData.optionalAddons.split('\n').map(s => s.trim()).filter(Boolean),
         destinationReferences: (formData.destinationReferences || []).map(item => ({ name: item.name.trim(), url: item.url.trim(), sourceType: item.sourceType, lastChecked: item.lastChecked })),
-        status: formData.status || 'Approved',
+        status: formData.status || 'Draft',
         costingBreakdown: calculated
       };
       const url = editingId ? `/api/packages/${editingId}` : '/api/packages';
@@ -1349,7 +1333,7 @@ const AdminPage = () => {
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.message || 'Failed to submit package.');
+        throw new Error([err.message, ...(err.problems || [])].filter(Boolean).join(' ') || 'Failed to submit package.');
       }
       setSuccess(editingId ? '✅ Package updated successfully!' : '✅ Package created successfully!');
       setFormData(emptyForm);
@@ -2287,6 +2271,7 @@ const AdminPage = () => {
                       <button type="button" className="btn btn-ghost" aria-label={`Remove reference ${item.name || index + 1}`} onClick={() => setFormData(previous => ({ ...previous, destinationReferences: (previous.destinationReferences || []).filter((_, itemIndex) => itemIndex !== index) }))}>Remove</button>
                     </div>)}
                   </div>
+                  <div className="package-reference-editor"><div className="package-reference-heading"><div><strong>Content review before publication</strong><small>Save new packages as drafts, then complete and check these details before changing status to Approved or Published.</small></div></div><Row><Field label="Approximate road journey times and basis"><input name="journeyTimeNotes" className="input-field" value={formData.journeyTimeNotes || ''} onChange={handleChange} placeholder="e.g. city-to-city drive estimates; source/date" /></Field><Field label="Approximate road distances and basis"><input name="journeyDistanceNotes" className="input-field" value={formData.journeyDistanceNotes || ''} onChange={handleChange} placeholder="e.g. route distances; source/date" /></Field></Row><Row><Field label="Accessibility and fitness notes"><input name="accessibilityNotes" className="input-field" value={formData.accessibilityNotes || ''} onChange={handleChange} placeholder="Steps, walking, mobility support" /></Field><Field label="Season and operating constraints"><input name="seasonConstraints" className="input-field" value={formData.seasonConstraints || ''} onChange={handleChange} placeholder="Weather, closure or session limits" /></Field></Row><Row><Field label="Image source and usage rights"><input name="imageRightsNote" className="input-field" value={formData.imageRightsNote || ''} onChange={handleChange} placeholder="Owner/licence/source and permitted use" /></Field><Field label="Content reviewed by"><input name="contentReviewedBy" className="input-field" value={formData.contentReviewedBy || ''} onChange={handleChange} placeholder="Reviewer name" /></Field><Field label="Last reviewed"><input name="contentReviewedAt" type="date" className="input-field" value={formData.contentReviewedAt || ''} onChange={handleChange} /></Field></Row></div>
                   <Row>
                     <Field label="Duration (Days) *">
                       <input required type="number" name="durationDays" className="input-field" min="1" value={formData.durationDays} onChange={handleChange} />
@@ -2421,14 +2406,15 @@ const AdminPage = () => {
                   </Field>
                 </Section>
 
-                {/* PRICING */}
-                <Section id="pricing" title="💰 Pricing & Offers" openSection={openSection} setOpenSection={setOpenSection}>
+                {/* Private costing is optional for a price-free catalogue draft. */}
+                <Section id="pricing" title="💰 Internal costing" openSection={openSection} setOpenSection={setOpenSection}>
+                  <p className="package-internal-cost-note">Public packages show “Request for price”. Enter supplier-backed amounts here only after checking their source; the final customer price belongs in the approved quotation.</p>
                   <Row>
-                    <Field label="Original Price (₹) *">
-                      <input required type="number" name="originalPrice" className="input-field" placeholder="50000" value={formData.originalPrice} onChange={handleChange} />
+                    <Field label="Internal pre-tax target (₹, optional)">
+                      <input type="number" name="originalPrice" className="input-field" placeholder="Calculated from verified cost" value={formData.originalPrice} onChange={handleChange} />
                     </Field>
-                    <Field label="Offer Price (₹)">
-                      <input type="number" name="offerPrice" className="input-field" placeholder="45000" value={formData.offerPrice} onChange={handleChange} />
+                    <Field label="Internal total with configured tax (₹, optional)">
+                      <input type="number" name="offerPrice" className="input-field" placeholder="No automatic offer applies" value={formData.offerPrice} onChange={handleChange} />
                     </Field>
                   </Row>
                   <Row>
@@ -2437,17 +2423,6 @@ const AdminPage = () => {
                     </Field>
                     <Field label="Price Margin & Breakdown (Auto justification)">
                       <textarea name="priceBreakdown" className="input-field resize-none" rows="2" placeholder="e.g. Hotel: 12000, Vehicle: 15000..." value={formData.priceBreakdown} onChange={handleChange} />
-                    </Field>
-                  </Row>
-                  <Row>
-                    <Field label="Offer Valid Until">
-                      <input type="date" name="offerValidity" className="input-field" value={formData.offerValidity} onChange={handleChange} />
-                    </Field>
-                    <Field label="Special Offer?">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
-                        <input type="checkbox" name="isSpecialOffer" id="isSpecialOffer" checked={formData.isSpecialOffer} onChange={handleChange} style={{ width: 20, height: 20 }} />
-                        <label htmlFor="isSpecialOffer">Mark as Special Offer</label>
-                      </div>
                     </Field>
                   </Row>
                 </Section>
@@ -2596,45 +2571,14 @@ const AdminPage = () => {
                   {/* Operational Overhead, Markup, Taxes & Discounts */}
                   <h4 style={{ fontSize: '15px', fontWeight: '600', margin: '20px 0 8px 0', borderBottom: '1px solid #eee', paddingBottom: '4px' }}>🛡️ Operational Overhead & Profit Control</h4>
                   <Row>
-                    <Field label="Operational Buffer (%)">
-                      <input type="number" name="bufferPercent" className="input-field" min="0" max="100" value={formData.bufferPercent} onChange={handleChange} />
-                    </Field>
-                    <Field label="SreePayanam Markup (10-35%)">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
-                        <input 
-                          type="range" 
-                          name="markupPercent" 
-                          min="10" 
-                          max="35" 
-                          value={formData.markupPercent ?? 40}
-                          onChange={handleChange} 
-                          style={{ flex: 1, height: '8px', borderRadius: '4px', accentColor: 'var(--primary)', cursor: 'pointer' }}
-                        />
-                        <span style={{ fontWeight: 'bold', fontSize: '0.95rem', minWidth: '40px', color: 'var(--primary)' }}>
-                          {formData.markupPercent ?? 40}%
-                        </span>
-                      </div>
-                    </Field>
-                    <Field label="Accountant-approved Tax / GST (%)">
+                    <Field label="Operational buffer"><p>10% of verified supplier cost under the current pricing rule.</p></Field>
+                    <Field label="Target gross margin"><p>35% of the pre-tax selling price after the 10% contingency buffer.</p></Field>
+                    <Field label="Tax / GST (%) · accountant review required">
                       <input type="number" name="taxPercent" className="input-field" min="0" max="100" value={formData.taxPercent} onChange={handleChange} />
                     </Field>
                   </Row>
                   <Row>
-                    <Field label="Discount Type">
-                      <select name="discountType" className="input-field" value={formData.discountType} onChange={handleChange}>
-                        <option value="Percentage">Percentage (%)</option>
-                        <option value="Fixed">Fixed Amount (₹)</option>
-                      </select>
-                    </Field>
-                    {formData.discountType === 'Percentage' ? (
-                      <Field label="Discount Percent (%)">
-                        <input type="number" name="discountPercent" className="input-field" min="0" max="100" value={formData.discountPercent} onChange={handleChange} />
-                      </Field>
-                    ) : (
-                      <Field label="Discount Amount (₹)">
-                        <input type="number" name="discountAmount" className="input-field" min="0" value={formData.discountAmount} onChange={handleChange} />
-                      </Field>
-                    )}
+                    <Field label="Discount"><p>No automatic discount is applied. Promotions require an approved offer and margin-floor rule.</p></Field>
                     <Field label="Miscellaneous Costs (₹)">
                       <input type="number" name="miscCost" className="input-field" placeholder="0" value={formData.miscCost} onChange={handleChange} />
                     </Field>
@@ -2754,10 +2698,10 @@ const AdminPage = () => {
                               </tr>
                               <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
                                 <td style={{ padding: '12px 16px', fontWeight: '500', color: '#10b981' }}>
-                                  Markup Amount
+                                  Gross margin amount
                                 </td>
                                 <td style={{ padding: '12px 16px', color: '#64748b' }}>
-                                  {cost.markupPercent}% of Landed Cost
+                                  {cost.targetMarginPercent}% of pre-tax selling price
                                 </td>
                                 <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '600', color: '#10b981' }}>
                                   ₹{cost.markupAmount.toLocaleString()}
@@ -2768,7 +2712,7 @@ const AdminPage = () => {
                                   Selling Price (Subtotal)
                                 </td>
                                 <td style={{ padding: '12px 16px', color: '#64748b' }}>
-                                  Landed Cost + Markup
+                                  Buffered cost ÷ 0.65
                                 </td>
                                 <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '700', color: '#0f172a' }}>
                                   ₹{cost.sellingPrice.toLocaleString()}
@@ -2876,6 +2820,7 @@ const AdminPage = () => {
                 <h3 style={{ marginBottom: 20, color: 'var(--dark)', fontSize: '1.2rem', fontWeight: 700 }}>
                   📦 All Packages ({packages.length})
                 </h3>
+                <div className="catalog-coverage" aria-label="SRS v1.5 catalogue coverage"><strong>Category coverage · v1.5</strong><p>Target: 50–70 distinct, reviewed packages in each category. Each active listing counts only in its first assigned category; existing factual and image-rights review is still required.</p><ul>{CATALOG_CATEGORIES.map(category => { const count = packages.filter(pkg => pkg.isActive && ['Approved', 'Published'].includes(pkg.status) && categoriesForPackage(pkg)[0] === category).length; return <li key={category}><span>{category}</span><b>{count} / 50 minimum</b></li>; })}</ul></div>
                 {packages.length === 0 ? (
                   <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '20px 0' }}>No packages yet. Add one!</p>
                 ) : (
@@ -2906,7 +2851,7 @@ const AdminPage = () => {
                           </div>
                           {!pkg.isActive && <span style={{ color: '#a15c00', fontWeight: 800, fontSize: '.76rem' }}>Archived</span>}
                           <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)', marginTop: 2 }}>
-                            ₹{(pkg.offerPrice || pkg.originalPrice || pkg.price || 0).toLocaleString()}
+                            {pkg.offerPrice || pkg.originalPrice || pkg.price ? `Internal ₹${(pkg.offerPrice || pkg.originalPrice || pkg.price).toLocaleString()}` : 'Price after supplier review'}
                             {' '}<span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>• {pkg.durationDays}D/{pkg.durationNights}N</span>
                           </div>
                         </div>
@@ -2914,11 +2859,11 @@ const AdminPage = () => {
                           {pkg.status === 'Draft' && (
                             <button
                               type="button"
-                              onClick={() => handlePublishDraft(pkg)}
+                              onClick={() => handleEditClick(pkg)}
                               style={{ background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', padding: '4px 8px', fontSize: '0.72rem', fontWeight: 'bold' }}
-                              title="Approve & Publish Draft"
+                              title="Review this draft before publishing"
                             >
-                              Publish
+                              Review
                             </button>
                           )}
                           <div style={{ display: 'flex', gap: 4 }}>

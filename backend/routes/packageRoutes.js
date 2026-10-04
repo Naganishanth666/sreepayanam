@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const router = express.Router();
 const Package = require('../models/Package');
+const { publicationProblems } = require('../utils/catalogReadiness');
 const { checkAdmin } = require('../middleware/auth');
 
 const safeEqual = (left, right) => {
@@ -122,17 +123,24 @@ router.post('/', checkAdmin, async (req, res) => {
     let data = {
       ...req.body,
       overview: req.body.overview || req.body.description,
-      originalPrice: req.body.originalPrice || req.body.price,
+      originalPrice: req.body.originalPrice || req.body.price || undefined,
       packageCategory: req.body.packageCategory || 'National',
       tourType: req.body.tourType || 'Family Tours',
       durationNights: req.body.durationNights || (req.body.durationDays - 1) || 1,
       isActive: true,
+      status: 'Draft',
+      isSpecialOffer: false,
     };
     
     // Process and run costing engine calculation if fields are present
     const calculatedCost = processCosting(req.body);
-    if (calculatedCost) {
+    if (calculatedCost?.supplierCost > 0) {
       data.costingBreakdown = calculatedCost;
+      data.markupPercent = 35;
+      data.discountPercent = 0;
+      data.originalPrice = calculatedCost.sellingPrice;
+      data.offerPrice = calculatedCost.customerPrice;
+      data.baseCost = calculatedCost.supplierCost;
     }
     
     // Ensure mandatory policies for National packages
@@ -151,24 +159,35 @@ router.post('/', checkAdmin, async (req, res) => {
 router.put('/:id', checkAdmin, async (req, res) => {
   try {
     const { ensureMandatoryPolicies } = require('../utils/policyConstants');
+    const existing = await Package.findOne({ packageId: req.params.id });
+    if (!existing) return res.status(404).json({ message: 'Package not found' });
     
     let data = { ...req.body };
+    data.isSpecialOffer = false;
     
     // Process and run costing engine calculation if fields are present
     const calculatedCost = processCosting(req.body);
-    if (calculatedCost) {
+    if (calculatedCost?.supplierCost > 0) {
       data.costingBreakdown = calculatedCost;
+      data.markupPercent = 35;
+      data.discountPercent = 0;
+      data.originalPrice = calculatedCost.sellingPrice;
+      data.offerPrice = calculatedCost.customerPrice;
+      data.baseCost = calculatedCost.supplierCost;
     }
     
     // Ensure mandatory policies for National packages
     data = ensureMandatoryPolicies(data);
+    if (['Approved', 'Published'].includes(data.status) && !['Approved', 'Published'].includes(existing.status)) {
+      const problems = publicationProblems(data);
+      if (problems.length) return res.status(422).json({ message: 'Complete content review before publishing this package.', problems });
+    }
     
     const pkg = await Package.findOneAndUpdate(
       { packageId: req.params.id },
       { ...data, updatedAt: new Date() },
       { new: true, runValidators: true }
     );
-    if (!pkg) return res.status(404).json({ message: 'Package not found' });
     res.json(pkg);
   } catch (error) {
     console.error('[Packages] Update failed:', error.message);

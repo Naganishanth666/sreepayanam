@@ -21,7 +21,6 @@ const blankForm = enquiry => ({
   })) },
   destinationReferences: (enquiry.selectedDestinations || []).map(name => ({ name, url: '', sourceType: '', lastChecked: '' })),
   tiers: TIER_NAMES.map(name => ({ name, directCost: '', sourceReference: '', sourceCheckedAt: '', minimumSellingPrice: '', benchmarkNote: '', marketComparables: [blankComparable(), blankComparable(), blankComparable()], accommodation: '', transport: '', meals: '', activities: '' })),
-  pricingRule: { offerStartDate: '', offerEndDate: '' },
   terms: {
     validUntil: '', taxNote: '', paymentSchedule: '', cancellationTerms: '', assumptions: '',
     specialNotes: enquiry.remarks || '',
@@ -43,7 +42,6 @@ const formFromQuote = quote => ({
     const tier = quote.tiers?.find(item => item.name === name) || {};
     return { name, directCost: tier.directCost || '', sourceReference: tier.sourceReference || '', sourceCheckedAt: tier.sourceCheckedAt || '', minimumSellingPrice: tier.minimumSellingPrice || '', benchmarkNote: tier.benchmarkNote || '', marketComparables: [0, 1, 2].map(index => ({ ...blankComparable(), ...tier.marketComparables?.[index] })), accommodation: tier.accommodation || '', transport: tier.transport || '', meals: tier.meals || '', activities: tier.activities || '' };
   }),
-  pricingRule: { offerStartDate: quote.pricingRule?.offerStartDate || '', offerEndDate: quote.pricingRule?.offerEndDate || '' },
   terms: {
     validUntil: quote.terms?.validUntil || '',
     taxNote: quote.terms?.taxNote || '',
@@ -156,10 +154,6 @@ const QuotationDesk = ({ enquiry, adminPassword }) => {
     setForm(current => ({ ...current, terms: { ...current.terms, [field]: value } }));
     setDirty(true);
   };
-  const changePricingRule = (field, value) => {
-    setForm(current => ({ ...current, pricingRule: { ...current.pricingRule, [field]: value } }));
-    setDirty(true);
-  };
   const changeTripDetail = (scope, field, value) => {
     setForm(current => ({ ...current, [scope]: { ...current[scope], [field]: value } }));
     setDirty(true);
@@ -168,6 +162,7 @@ const QuotationDesk = ({ enquiry, adminPassword }) => {
     setForm(current => ({
       ...current,
       route: {
+        ...current.route,
         itinerary: current.route.itinerary.map((day, itemIndex) => {
           if (itemIndex !== index) return day;
           if (field === 'places') return { ...day, places: value.split('\n').map(place => place.trim()).filter(Boolean) };
@@ -176,6 +171,30 @@ const QuotationDesk = ({ enquiry, adminPassword }) => {
         })
       }
     }));
+    setDirty(true);
+  };
+  const changeSchedule = (dayIndex, blockIndex, field, value) => {
+    setForm(current => ({ ...current, route: { ...current.route,
+      itinerary: current.route.itinerary.map((day, index) => index === dayIndex
+        ? { ...day, schedule: (day.schedule || []).map((block, position) => position === blockIndex ? { ...block, [field]: value } : block) }
+        : day)
+    } }));
+    setDirty(true);
+  };
+  const addScheduleBlock = dayIndex => {
+    setForm(current => ({ ...current, route: { ...current.route,
+      itinerary: current.route.itinerary.map((day, index) => index === dayIndex
+        ? { ...day, schedule: [...(day.schedule || []), { start: '09:00', end: '10:00', label: '', kind: 'visit', detail: '', place: day.places?.[0] || '' }] }
+        : day)
+    } }));
+    setDirty(true);
+  };
+  const removeScheduleBlock = (dayIndex, blockIndex) => {
+    setForm(current => ({ ...current, route: { ...current.route,
+      itinerary: current.route.itinerary.map((day, index) => index === dayIndex
+        ? { ...day, schedule: (day.schedule || []).filter((_, position) => position !== blockIndex) }
+        : day)
+    } }));
     setDirty(true);
   };
 
@@ -261,7 +280,7 @@ const QuotationDesk = ({ enquiry, adminPassword }) => {
             {!isAdmin && <p className="quotation-desk-note">The combined final document pack requires a named Admin account. <Link to="/login">Sign in as Admin</Link> to complete and download it.</p>}
           </div>)}
           {!loading && <div className="quotation-desk-form">
-            <div className="quotation-desk-section-head"><h5>{draft ? `Draft ${draft.reference} · Version ${draft.version}` : 'New quotation draft'}</h5><span>10% contingency · 40% markup · 5% offer</span></div>
+            <div className="quotation-desk-section-head"><h5>{draft ? `Draft ${draft.reference} · Version ${draft.version}` : 'New quotation draft'}</h5><span>10% contingency · 35% target gross margin</span></div>
             <p className="quotation-desk-note">The route and customer details are copied from the enquiry. Check the day plan, supplier evidence, destination links and legal terms before approval.</p>
 
             <div className="quotation-desk-fields">
@@ -290,6 +309,7 @@ const QuotationDesk = ({ enquiry, adminPassword }) => {
                 <label>Day title <input value={day.title || ''} onChange={event => changeDay(index, 'title', event.target.value)} /></label>
                 <label>Area <input value={day.base || ''} onChange={event => changeDay(index, 'base', event.target.value)} /></label>
                 <label className="quotation-desk-wide">Stops · one per line <textarea rows="3" value={(day.places || []).join('\n')} onChange={event => changeDay(index, 'places', event.target.value)} /></label>
+                <div className="quotation-desk-wide quotation-schedule-editor"><strong>Proposed daily timing</strong><p>Check transfer allowances and official opening hours before approval. Keep a visit block for each selected stop.</p>{(day.schedule || []).map((block, blockIndex) => <div className="quotation-schedule-row" key={`${index}-${blockIndex}`}><label>From <input type="time" value={block.start || ''} onChange={event => changeSchedule(index, blockIndex, 'start', event.target.value)} /></label><label>To <input type="time" value={block.end || ''} onChange={event => changeSchedule(index, blockIndex, 'end', event.target.value)} /></label><label>Type <select value={block.kind || 'rest'} onChange={event => changeSchedule(index, blockIndex, 'kind', event.target.value)}>{['hotel', 'transfer', 'visit', 'meal', 'rest', 'departure'].map(kind => <option key={kind} value={kind}>{kind}</option>)}</select></label>{block.kind === 'visit' && <label>Stop <select value={block.place || ''} onChange={event => changeSchedule(index, blockIndex, 'place', event.target.value)}><option value="">Choose stop</option>{(day.places || []).map(place => <option key={place} value={place}>{place}</option>)}</select></label>}<label>Activity <input value={block.label || ''} onChange={event => changeSchedule(index, blockIndex, 'label', event.target.value)} /></label><label>Detail <input value={block.detail || ''} onChange={event => changeSchedule(index, blockIndex, 'detail', event.target.value)} /></label><button type="button" className="btn btn-outline" onClick={() => removeScheduleBlock(index, blockIndex)}>Remove block</button></div>)}<button type="button" className="btn btn-outline" onClick={() => addScheduleBlock(index)}>Add time block</button></div>
                 <label className="quotation-desk-wide">Plan <textarea rows="4" value={day.activities || ''} onChange={event => changeDay(index, 'activities', event.target.value)} /></label>
                 <label className="quotation-desk-wide">Travel and timing <textarea rows="2" value={day.transit || ''} onChange={event => changeDay(index, 'transit', event.target.value)} /></label>
                 <label className="quotation-desk-wide">Darshan / entry window and source status <textarea rows="2" value={day.entryWindow || ''} onChange={event => changeDay(index, 'entryWindow', event.target.value)} placeholder="Requested morning darshan; official hours and availability need confirmation" /></label>
@@ -302,7 +322,7 @@ const QuotationDesk = ({ enquiry, adminPassword }) => {
 
             <h6>Three tier cost and scope</h6>
             <div className="quotation-desk-tier-list">{form.tiers.map((tier, index) => <section className="quotation-desk-tier" key={tier.name} aria-label={`${tier.name} tier`}>
-              <div className="quotation-desk-tier-title"><strong>{tier.name}</strong><span>{Number(tier.directCost) > 0 ? `Offer price ${money(Math.round(Math.round(Number(tier.directCost) * 1.1) * 1.4 * 0.95))} + GST as applicable` : 'Enter verified direct cost'}</span></div>
+              <div className="quotation-desk-tier-title"><strong>{tier.name}</strong><span>{Number(tier.directCost) > 0 ? `Pre-tax quote ${money(Math.ceil((Number(tier.directCost) + Math.round(Number(tier.directCost) * 0.1)) / 0.65))} + GST as applicable` : 'Enter verified direct cost'}</span></div>
               <div className="quotation-desk-fields">
                 <label>Direct supplier cost (internal) <input type="number" min="0" step="1" value={tier.directCost} onChange={event => changeTier(index, 'directCost', event.target.value)} /></label>
                 <label>Supplier quote or contracted rate reference <input value={tier.sourceReference} onChange={event => changeTier(index, 'sourceReference', event.target.value)} placeholder="Supplier quote ID or contract reference" /></label>
@@ -330,8 +350,6 @@ const QuotationDesk = ({ enquiry, adminPassword }) => {
 
             <h6>Approved wording and travel scope</h6>
             <div className="quotation-desk-fields">
-              <label>5% offer starts <input type="date" value={form.pricingRule.offerStartDate} onChange={event => changePricingRule('offerStartDate', event.target.value)} /></label>
-              <label>5% offer ends <input type="date" value={form.pricingRule.offerEndDate} onChange={event => changePricingRule('offerEndDate', event.target.value)} /></label>
               <label>Price valid until <input type="date" min={today()} value={form.terms.validUntil} onChange={event => changeTerm('validUntil', event.target.value)} /></label>
               <label>Accountant-approved GST wording <input value={form.terms.taxNote} onChange={event => changeTerm('taxNote', event.target.value)} placeholder="Price + GST as applicable" /></label>
               <label className="quotation-desk-wide">Payment schedule <textarea rows="2" value={form.terms.paymentSchedule} onChange={event => changeTerm('paymentSchedule', event.target.value)} /></label>
