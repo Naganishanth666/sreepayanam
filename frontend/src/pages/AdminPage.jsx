@@ -266,6 +266,7 @@ const AdminPage = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [packages, setPackages] = useState([]);
+  const [catalogPublishing, setCatalogPublishing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -877,6 +878,28 @@ const AdminPage = () => {
       const data = await res.json();
       setPackages(Array.isArray(data) ? data : []);
     } catch (err) { console.error(err); }
+  };
+
+  const publishDefaultCatalog = async () => {
+    if (catalogPublishing) return;
+    setCatalogPublishing(true);
+    setError('');
+    setSuccess('');
+    try {
+      const response = await fetch('/api/packages/default-catalog', {
+        method: 'POST',
+        headers: { 'x-admin-password': password }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || 'The default package catalogue could not be published.');
+      const counts = (data.categoryCounts || []).map(item => item.category + ': ' + item.published).join(' · ');
+      setSuccess('Published ' + data.published + ' of ' + data.total + ' default packages (' + data.created + ' added; ' + data.alreadyPresent + ' already present). ' + counts);
+      await fetchPackages();
+    } catch (publishError) {
+      setError(publishError.message || 'The default package catalogue could not be published.');
+    } finally {
+      setCatalogPublishing(false);
+    }
   };
 
   const fetchEnquiries = async () => {
@@ -2820,7 +2843,13 @@ const AdminPage = () => {
                 <h3 style={{ marginBottom: 20, color: 'var(--dark)', fontSize: '1.2rem', fontWeight: 700 }}>
                   📦 All Packages ({packages.length})
                 </h3>
-                <div className="catalog-coverage" aria-label="SRS v1.5 catalogue coverage"><strong>Category coverage · v1.5</strong><p>Target: 50–70 distinct, reviewed packages in each category. Each active listing counts only in its first assigned category; existing factual and image-rights review is still required.</p><ul>{CATALOG_CATEGORIES.map(category => { const count = packages.filter(pkg => pkg.isActive && ['Approved', 'Published'].includes(pkg.status) && categoriesForPackage(pkg)[0] === category).length; return <li key={category}><span>{category}</span><b>{count} / 50 minimum</b></li>; })}</ul></div>
+                <div className="catalog-coverage" aria-label="SRS v1.5 catalogue coverage"><strong>Category coverage · v1.5</strong><p>Target: 50–70 distinct packages in each category. Published packages count in every category shown to customers.</p><ul>{CATALOG_CATEGORIES.map(category => { const count = new Set(packages.filter(pkg => pkg.isActive && ['Approved', 'Published'].includes(pkg.status) && categoriesForPackage(pkg).includes(category)).map(pkg => pkg.packageId)).size; return <li key={category}><span>{category}</span><b>{count} / 50 minimum</b></li>; })}</ul></div>
+                <div className="catalog-default-publish">
+                  <p>Add 60 price-free route outlines to each travel style. The listings appear publicly after publishing; dates, services, suppliers and prices remain unconfirmed until a tailored quotation.</p>
+                  <button type="button" className="btn btn-outline" onClick={publishDefaultCatalog} disabled={catalogPublishing} aria-busy={catalogPublishing}>
+                    {catalogPublishing ? 'Publishing 720 packages…' : 'Publish 720 default packages'}
+                  </button>
+                </div>
                 {packages.length === 0 ? (
                   <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '20px 0' }}>No packages yet. Add one!</p>
                 ) : (
@@ -2839,7 +2868,7 @@ const AdminPage = () => {
                               </span>
                             ) : (
                               <span style={{ fontSize: '0.68rem', fontWeight: 800, padding: '2px 6px', borderRadius: '4px', background: '#f0fdf4', color: '#15803d', border: '1px solid #dcfce7' }}>
-                                Approved
+                                {pkg.status}
                               </span>
                             )}
                           </div>

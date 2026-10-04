@@ -14,6 +14,8 @@ const packageSchema = new mongoose.Schema({
     'Family Holidays', 'Hill Station Tours', 'Educational Tours', 'Medical Tourism',
     'Corporate & MICE', 'Festival & Cultural Tours', 'Cruise Holidays', 'IRCTC Rail Tours'
   ] }],
+  catalogSeedKey: { type: String, unique: true, sparse: true, select: false },
+  isDefaultCatalogPackage: { type: Boolean, default: false },
   tourType: { 
     type: String, 
     enum: [

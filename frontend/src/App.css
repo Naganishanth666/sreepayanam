@@ -418,8 +418,7 @@ textarea.input-field,
   align-items: center;
   width: clamp(320px, 36vw, 430px);
   max-width: calc(100vw - 104px);
-  aspect-ratio: 3.55 / 1;
-  overflow: hidden;
+  aspect-ratio: 3 / 1;
   color: var(--color-ink);
 }
 
@@ -428,9 +427,8 @@ textarea.input-field,
   width: 100%;
   height: 100%;
   max-width: 100%;
-  object-fit: cover;
+  object-fit: contain;
   object-position: center;
-  transform: scale(1.1);
 }
 
 .nav-links {
@@ -2828,6 +2826,25 @@ textarea.input-field,
 .catalog-coverage li b {
   color: var(--color-ink-soft);
   white-space: nowrap;
+}
+
+.catalog-default-publish {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0 0 1.1rem;
+  padding: 0.95rem 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.catalog-default-publish > p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.catalog-default-publish > button {
+  width: 100%;
 }
 
 .draft-private-note {

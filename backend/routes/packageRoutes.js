@@ -28,6 +28,8 @@ const toPublicPackage = packageDocument => {
   delete result.isSpecialOffer;
   delete result.offerValidity;
   delete result.brochureUrl;
+  delete result.catalogSeedKey;
+  delete result.isDefaultCatalogPackage;
   return result;
 };
 
@@ -152,6 +154,49 @@ router.post('/', checkAdmin, async (req, res) => {
   } catch (error) {
     console.error('[Packages] Create failed:', error.message);
     res.status(400).json({ message: 'Package could not be saved. Check the package details.' });
+  }
+});
+
+// Publish the user's requested price-free standard catalogue in one idempotent Admin action.
+router.post('/default-catalog', checkAdmin, async (_req, res) => {
+  try {
+    const { buildDefaultCatalog, DEFAULT_CATALOG_TOTAL, DEFAULT_CATALOG_CATEGORIES } = require('../utils/defaultCatalog');
+    const { ensureMandatoryPolicies } = require('../utils/policyConstants');
+    const catalog = buildDefaultCatalog().map(item => ensureMandatoryPolicies({ ...item }));
+    if (catalog.length !== DEFAULT_CATALOG_TOTAL) {
+      return res.status(500).json({ message: 'The default catalogue is incomplete and was not published.' });
+    }
+
+    const operations = catalog.map(item => ({
+      updateOne: {
+        filter: { catalogSeedKey: item.catalogSeedKey },
+        update: { $setOnInsert: item },
+        upsert: true
+      }
+    }));
+    const result = await Package.bulkWrite(operations, { ordered: false });
+    const seedKeys = catalog.map(item => item.catalogSeedKey);
+    const published = await Package.find({
+      catalogSeedKey: { $in: seedKeys },
+      isActive: true,
+      status: { $in: ['Approved', 'Published'] }
+    }).select('+catalogSeedKey packageId catalogCategories').lean();
+
+    const categoryCounts = DEFAULT_CATALOG_CATEGORIES.map(category => ({
+      category,
+      published: published.filter(item => item.catalogCategories?.includes(category)).length
+    }));
+    res.json({
+      success: true,
+      total: DEFAULT_CATALOG_TOTAL,
+      created: result.upsertedCount || 0,
+      alreadyPresent: DEFAULT_CATALOG_TOTAL - (result.upsertedCount || 0),
+      published: published.length,
+      categoryCounts
+    });
+  } catch (error) {
+    console.error('[Packages] Default catalogue publish failed:', error.message);
+    res.status(500).json({ message: 'The default package catalogue could not be published.' });
   }
 });
 

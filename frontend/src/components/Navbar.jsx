@@ -33,7 +33,7 @@ const Navbar = () => {
     <header className="site-nav">
       <nav className="container nav-shell" aria-label="Main navigation">
         <Link className="nav-brand" to="/" aria-label="SreePayanam AI Travel Ecosystem home" onClick={() => setMobileOpen(false)}>
-          <img src={logoImg} width="392" height="110" alt="SreePayanam Tours and Travels" />
+          <img src={logoImg} width="430" height="143" alt="SreePayanam Tours and Travels" />
         </Link>
 
         <button
