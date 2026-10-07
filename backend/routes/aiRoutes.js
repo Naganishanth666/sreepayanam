@@ -308,7 +308,7 @@ const sanitizeDestinationGuide = (payload, destination) => {
     const key = comparable(place);
     return seenPlaces.some(previous => previous === key ||
       (Math.min(previous.length, key.length) >= 9 &&
-        editDistance(previous, key) <= Math.max(2, Math.floor(Math.min(previous.length, key.length) * 0.12))));
+        editDistance(previous, key) <= Math.max(3, Math.floor(Math.min(previous.length, key.length) * 0.12))));
   };
   const groups = Array.isArray(payload?.groups) ? payload.groups.slice(0, 4).map((group, index) => {
     const kind = fallbackKinds.includes(group?.kind) ? group.kind : fallbackKinds[Math.min(index, fallbackKinds.length - 1)];
