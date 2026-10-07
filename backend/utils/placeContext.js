@@ -28,7 +28,7 @@ const commonsImage = async filename => {
   const license = clean(info?.extmetadata?.LicenseShortName?.value, 100);
   const author = clean(info?.extmetadata?.Artist?.value?.replace(/<[^>]*>/g, ''), 160);
   const imageUrl = info?.thumburl || info?.url;
-  if (!/^(CC BY(?:-SA)?(?: [0-9.]+)?|CC0|Public domain)/i.test(license) || !/^https:\/\/upload\.wikimedia\.org\//.test(imageUrl || '')) return null;
+  if (!/^(CC BY(?:-SA)?(?: [0-9.]+)?|CC0|Public domain)/i.test(license) || !/^https:\/\/(?:upload|thumb)\.wikimedia\.org\//.test(imageUrl || '')) return null;
   return { imageUrl, imageCredit: `${author || 'Wikimedia Commons contributor'} · ${license}`, imageCreditUrl: info.descriptionurl };
 };
 
