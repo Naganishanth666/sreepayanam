@@ -10,6 +10,7 @@ const { checkAdmin } = require('../middleware/auth');
 const { sanitizeHotelSuggestions } = require('../utils/hotelSuggestions');
 const { getPlaceContexts } = require('../utils/placeContext');
 const { sanitizeVisitResearch } = require('../utils/visitResearch');
+const { officialVisitWindows } = require('../utils/officialVisitWindows');
 
 const hotelSuggestionCache = new Map();
 const HOTEL_CACHE_MS = 6 * 60 * 60 * 1000;
@@ -379,7 +380,10 @@ const researchSelectedVisits = async (openai, selectedPlaces, startDate, returnD
   const sources = (response.output || []).filter(item => item.type === 'web_search_call')
     .flatMap(item => item.action?.sources || []);
   const payload = JSON.parse(extractJson(response.output_text || ''));
-  const value = sanitizeVisitResearch(payload, sources, places, startDate, returnDate, new Date().toISOString());
+  const searched = sanitizeVisitResearch(payload, sources, places, startDate, returnDate, new Date().toISOString());
+  const official = officialVisitWindows(places);
+  const officialNames = new Set(official.map(item => normalizePlaceKey(item.name)));
+  const value = [...official, ...searched.filter(item => !officialNames.has(normalizePlaceKey(item.name)))];
   visitResearchCache.set(key, { at: Date.now(), value });
   if (visitResearchCache.size > 150) visitResearchCache.delete(visitResearchCache.keys().next().value);
   return value;
@@ -797,13 +801,14 @@ router.post('/plan-structured', async (req, res) => {
     const contextsByName = new Map(encyclopedicContexts.map(place => [normalizePlaceKey(place.name), place]));
 
     const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
-    safePreferences.visitResearch = [];
+    safePreferences.visitResearch = officialVisitWindows(safePreferences.selectedDestinations);
     if (openai) {
       try {
         safePreferences.visitResearch = await researchSelectedVisits(openai, safePreferences.selectedDestinations,
           safePreferences.travelStartDate, safePreferences.returnDate);
       } catch (error) {
         console.warn('Visiting-hours research unavailable:', error.message);
+        safePreferences.visitResearch = officialVisitWindows(safePreferences.selectedDestinations);
       }
     }
     const researchByName = new Map(safePreferences.visitResearch.map(item => [normalizePlaceKey(item.name), item]));
