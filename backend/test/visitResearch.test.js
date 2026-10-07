@@ -15,3 +15,11 @@ test('only searched sources and selected places can set visit windows or events'
   assert.deepEqual(research[0].closedWeekdays, [1]);
   assert.equal(research[0].event.date, '2026-11-01');
 });
+
+test('a different temple identifier cannot borrow another temple’s cited source', () => {
+  const research = sanitizeVisitResearch({ places: [{
+    name: 'Temple', sourceUrl: 'https://hrce.tn.gov.in/index_temple.php?tid=222',
+    windows: [{ start: '05:00', end: '12:00' }]
+  }] }, [{ url: 'https://hrce.tn.gov.in/index_temple.php?tid=111' }], ['Temple'], '', '', '2026-10-07T06:00:00Z');
+  assert.deepEqual(research, []);
+});

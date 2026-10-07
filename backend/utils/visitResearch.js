@@ -1,4 +1,4 @@
-const { publicSource, sourceKey } = require('./hotelSuggestions');
+const { publicSource } = require('./hotelSuggestions');
 
 const clean = (value, limit = 180) => typeof value === 'string'
   ? value.replace(/[<>\u0000-\u001F]/g, '').trim().slice(0, limit) : '';
@@ -6,6 +6,13 @@ const validTime = value => typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\
 const validDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
   && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
 const weekdays = new Map(['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'].map((day, index) => [day, index]));
+const sourceKey = value => {
+  const safe = publicSource(value);
+  if (!safe) return '';
+  const url = new URL(safe);
+  url.searchParams.sort();
+  return `${url.origin.toLowerCase()}${url.pathname.replace(/\/$/, '').toLowerCase()}${url.search}`;
+};
 
 // Web-search output is untrusted. Only keep hours tied to a returned HTTPS
 // source and a name the traveller actually selected.
