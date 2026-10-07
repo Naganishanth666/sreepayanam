@@ -291,7 +291,25 @@ const sanitizeDestinationGuide = (payload, destination) => {
   const fallbackKinds = ['recommended', 'nearby', 'optional'];
   const limits = { recommended: 8, nearby: 12, optional: 6 };
   const counts = { recommended: 0, nearby: 0, optional: 0 };
-  const seenPlaces = new Set();
+  const seenPlaces = [];
+  const comparable = value => value.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim();
+  const editDistance = (left, right) => {
+    let row = Array.from({ length: right.length + 1 }, (_, index) => index);
+    for (let i = 1; i <= left.length; i++) {
+      const next = [i];
+      for (let j = 1; j <= right.length; j++) {
+        next[j] = Math.min(next[j - 1] + 1, row[j] + 1, row[j - 1] + (left[i - 1] === right[j - 1] ? 0 : 1));
+      }
+      row = next;
+    }
+    return row[right.length];
+  };
+  const alreadyShown = place => {
+    const key = comparable(place);
+    return seenPlaces.some(previous => previous === key ||
+      (Math.min(previous.length, key.length) >= 9 &&
+        editDistance(previous, key) <= Math.max(2, Math.floor(Math.min(previous.length, key.length) * 0.12))));
+  };
   const groups = Array.isArray(payload?.groups) ? payload.groups.slice(0, 4).map((group, index) => {
     const kind = fallbackKinds.includes(group?.kind) ? group.kind : fallbackKinds[Math.min(index, fallbackKinds.length - 1)];
     const rawPlaces = Array.isArray(group?.places) ? group.places : [];
@@ -299,9 +317,9 @@ const sanitizeDestinationGuide = (payload, destination) => {
       .map(place => typeof place === 'string' ? place : place?.name)
       .map(place => cleanPlanningText(place, 160))
       .filter(place => {
-        const key = place.toLowerCase();
-        if (!key || seenPlaces.has(key) || counts[kind] >= limits[kind]) return false;
-        seenPlaces.add(key);
+        const key = comparable(place);
+        if (!key || alreadyShown(place) || counts[kind] >= limits[kind]) return false;
+        seenPlaces.push(key);
         counts[kind] += 1;
         return true;
       });
@@ -614,7 +632,7 @@ router.post('/destination-guide', async (req, res) => {
     const destinationPrompt = `
       Build a practical sightseeing shortlist for the customer-entered destination: ${JSON.stringify(destination)}.
 
-      This is for a custom AI travel planner. Do not limit the results to any company's existing packages or brochure. Include well-known landmarks, cultural sites, nature spots, museums, viewpoints, family attractions and realistic nearby day trips where applicable. Include only specific real places you know with reasonable confidence. Return fewer places when uncertain. Do not invent attractions, prices, distances or opening hours. Avoid aliases and repeated names for the same place.
+      This is for a custom AI travel planner. Do not limit the results to any company's existing packages or brochure. Include well-known landmarks, cultural sites, nature spots, museums, viewpoints, family attractions and realistic nearby day trips where applicable. Include only specific real places you know with reasonable confidence. Return fewer places when uncertain. Do not invent attractions, prices, distances or opening hours. Avoid aliases and repeated names for the same place. For a city destination, keep recommended sights within the city, nearby sights within a short local transfer, and optional day trips within a comfortable same-day road journey; omit remote detours when unsure.
 
       Group the places into exactly these kinds where possible:
       - recommended: must-see highlights in or very close to the destination
@@ -1766,3 +1784,4 @@ router.post('/compile-draft', checkAdmin, async (req, res) => {
 });
 
 module.exports = router;
+module.exports.sanitizeDestinationGuide = sanitizeDestinationGuide;
