@@ -9,11 +9,14 @@ const packageSchema = new mongoose.Schema({
     enum: ['National', 'International'], 
     required: true 
   },
-  catalogCategories: [{ type: String, enum: [
-    'National Tours', 'International Tours', 'Pilgrimage Tours', 'Honeymoon Packages',
-    'Family Holidays', 'Hill Station Tours', 'Educational Tours', 'Medical Tourism',
-    'Corporate & MICE', 'Festival & Cultural Tours', 'Cruise Holidays', 'IRCTC Rail Tours'
-  ] }],
+  catalogCategories: [{ type: String, trim: true, maxlength: 80 }],
+  regionScope: { type: String, enum: ['Tamil Nadu', 'South India', 'India-wide', 'Other'], default: 'Other', index: true },
+  hotelCategories: [{ type: String, enum: ['3 Star', '4 Star', '5 Star'] }],
+  routeSignature: { type: String, index: true },
+  showInMenu: { type: Boolean, default: false },
+  menuOrder: { type: Number, default: 100 },
+  uniquenessReviewedBy: String,
+  uniquenessReviewedAt: String,
   catalogSeedKey: { type: String, unique: true, sparse: true, select: false },
   isDefaultCatalogPackage: { type: Boolean, default: false },
   tourType: { 
@@ -167,6 +170,9 @@ const packageSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
+
+packageSchema.index({ status: 1, isActive: 1, regionScope: 1, durationDays: 1 });
+packageSchema.index({ startingCity: 1, endingCity: 1, hotelCategories: 1 });
 
 packageSchema.pre('validate', function() {
   if (!this.packageId) {

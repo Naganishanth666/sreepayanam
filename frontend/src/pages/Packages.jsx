@@ -33,6 +33,7 @@ const Packages = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   // State
   const [packages, setPackages] = useState([]);
+  const [catalogCategories, setCatalogCategories] = useState(CATALOG_CATEGORIES);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -42,6 +43,11 @@ const Packages = () => {
   const searchQuery = searchParams.get('dest') || '';
   const selectedCategory = searchParams.get('category') || 'All';
   const selectedCatalog = searchParams.get('catalog') || '';
+  const selectedDays = searchParams.get('days') || '';
+  const selectedStart = searchParams.get('start') || '';
+  const selectedEnd = searchParams.get('end') || '';
+  const selectedHotel = searchParams.get('hotel') || '';
+  const selectedRegion = searchParams.get('region') || '';
   const typeParam = searchParams.get('type') || '';
   const selectedType = typeParam
     ? Object.keys(TOUR_TYPE_INFO).find(
@@ -64,6 +70,12 @@ const Packages = () => {
         setError(err.message);
         setLoading(false);
       });
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/catalog-categories').then(response => response.ok ? response.json() : []).then(data => {
+      if (Array.isArray(data) && data.length) setCatalogCategories(data.map(item => item.name));
+    }).catch(() => {});
   }, []);
 
   // Update query params when filters change (for deep linking)
@@ -100,8 +112,13 @@ const Packages = () => {
       pkg.tourType === selectedType ||
       (pkg.tourType && pkg.tourType.toLowerCase().includes(selectedType.toLowerCase()));
     const matchesCatalog = !selectedCatalog || categoriesForPackage(pkg).includes(selectedCatalog);
+    const matchesDays = !selectedDays || Number(pkg.durationDays) === Number(selectedDays);
+    const matchesStart = !selectedStart || (pkg.startingCity || '').toLowerCase().includes(selectedStart.toLowerCase());
+    const matchesEnd = !selectedEnd || (pkg.endingCity || '').toLowerCase().includes(selectedEnd.toLowerCase());
+    const matchesHotel = !selectedHotel || (pkg.hotelCategories || []).includes(selectedHotel);
+    const matchesRegion = !selectedRegion || pkg.regionScope === selectedRegion;
 
-    return matchesSearch && matchesCategory && matchesType && matchesCatalog;
+    return matchesSearch && matchesCategory && matchesType && matchesCatalog && matchesDays && matchesStart && matchesEnd && matchesHotel && matchesRegion;
   }).sort((a, b) => {
     if (sortBy === 'durationShort') return a.durationDays - b.durationDays;
     if (sortBy === 'durationLong') return b.durationDays - a.durationDays;
@@ -160,7 +177,7 @@ const Packages = () => {
       <div className="container">
         <section className="catalog-category-section" aria-labelledby="catalog-categories-heading">
           <div><h2 id="catalog-categories-heading">Browse by travel style</h2><p>Explore all SreePayanam tour categories. Ask our team for a tailored quote on any route.</p></div>
-          <div className="catalog-category-grid">{CATALOG_CATEGORIES.map(category => {
+          <div className="catalog-category-grid">{catalogCategories.map(category => {
             const count = packages.filter(pkg => categoriesForPackage(pkg).includes(category)).length;
             return <button type="button" key={category} className={selectedCatalog === category ? 'is-selected' : ''} onClick={() => updateQueryParams({ catalog: selectedCatalog === category ? null : category, category: null, type: null, page: null })} aria-pressed={selectedCatalog === category}>
               <strong>{category}</strong><span>{count ? `${count} tours` : 'Enquire for options'}</span>
@@ -202,9 +219,10 @@ const Packages = () => {
 
             {/* Search */}
             <div style={{ marginBottom: 24 }}>
-              <label style={filterLabel}>Search Tour</label>
+              <label htmlFor="catalog-search" style={filterLabel}>Search tour</label>
               <div style={{ position: 'relative' }}>
                 <input 
+                  id="catalog-search"
                   type="text" 
                   className="input-field" 
                   placeholder="Destination or title..." 
@@ -215,7 +233,16 @@ const Packages = () => {
                   style={{ paddingLeft: 40, height: 44, fontSize: '0.9rem' }}
                 />
                 <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: 14, top: 14 }} />
+                {searchQuery && <button type="button" className="catalog-search-clear" aria-label="Clear search" onClick={() => { updateQueryParams({ dest: null, page: null }); document.getElementById('catalog-search')?.focus(); }}>×</button>}
               </div>
+            </div>
+
+            <div className="catalog-filter-grid">
+              <label>Travel days<input className="input-field" type="number" min="1" max="60" value={selectedDays} onChange={event => updateQueryParams({ days: event.target.value, page: null })} placeholder="Any length" /></label>
+              <label>Starting location<input className="input-field" value={selectedStart} onChange={event => updateQueryParams({ start: event.target.value, page: null })} placeholder="e.g. Chennai" /></label>
+              <label>Ending location<input className="input-field" value={selectedEnd} onChange={event => updateQueryParams({ end: event.target.value, page: null })} placeholder="e.g. Madurai" /></label>
+              <label>Hotel category<select className="input-field" value={selectedHotel} onChange={event => updateQueryParams({ hotel: event.target.value, page: null })}><option value="">Any category</option><option value="3 Star">3-star</option><option value="4 Star">4-star</option><option value="5 Star">5-star</option></select></label>
+              <label>Route region<select className="input-field" value={selectedRegion} onChange={event => updateQueryParams({ region: event.target.value, page: null })}><option value="">Any region</option><option>Tamil Nadu</option><option>South India</option><option>India-wide</option><option>Other</option></select></label>
             </div>
 
             {/* Category Segment Tabs */}

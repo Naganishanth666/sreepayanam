@@ -60,7 +60,7 @@ Approved customer quotations follow the supplied Standard Travel Documents Pack'
 
 - **Audience and primary job:** Families, pilgrims, couples, student groups and corporate travellers need to turn a rough travel idea into a route, destination shortlist, time-aware route draft and enquiry.
 - **Target market(s) and evidence:** India-first travel planning, with domestic and international packages. Evidence is the existing National/International package model, the current planner fields, and the requested destination catalogue.
-- **Locale(s) and language policy:** English UI is shipped; Tamil localization remains a requirement from SRS v1.3. Public package listings are price-free. The planner may show INR room/night estimates from linked public hotel listings with an explicit indicative label; staff-reviewed quotation and financial views own final package prices. Use clear, non-legalistic English and avoid inventing package policies.
+- **Locale(s) and language policy:** English UI is shipped; Tamil localization remains a requirement from SRS v1.3. Public package listings are price-free. The planner shows a source-linked indicative group budget when enough destination room rates are available, using the standard 35% margin and a prominent final-quotation disclaimer. Staff-reviewed quotation and financial views own final prices. Use clear, non-legalistic English and avoid inventing package policies.
 - **Usage scene:** Primarily mobile and small laptop use, often while comparing routes or messaging a travel desk. Touch targets must be generous and progress must remain obvious.
 - **Register:** Hybrid. `/`, `/about`, `/packages`, `/services`, `/contact` are brand surfaces; `/ai-assistant`, `/bookings` and `/admin` are product surfaces with stronger state and recovery rules. The legacy direct checkout is retired until accepted-quotation booking is implemented.
 - **Memorable signature:** A twelve-frame route reel on the home hero, pairing each package type with a destination image and a practical route note.
@@ -100,11 +100,11 @@ Solid blue is the primary safe action. Outline ink is neutral. Orange is a focus
 
 ### Navigation and data display
 
-The navigation is a sticky white bar with a visible mobile menu button and blue link states. Featured package cards use real links and show only the opening route summary; full package highlights and seasonal details belong on the detail page. The planner's route ribbon and route-draft panel are the primary data display; the public planner and route brief never expose supplier cost, internal profit or commercial totals.
+The navigation is a sticky white bar with a visible mobile menu button and blue link states. Dropdowns close on pointer exit, selection, outside click and Escape. Blogs and brochures have separate links under one menu. Featured package cards use real links and show only the opening route summary; full package highlights and seasonal details belong on the detail page. The planner's route ribbon and route-draft panel are the primary data display. Public budget estimates reveal no supplier costs or internal line-item profit.
 
 ### Forms and overlays
 
-Product forms use `noValidate`, real labels, app-owned errors and first-error focus. Native select/date controls are intentional where platform-owned popups are acceptable; the destination picker is a searchable, grouped checkbox primitive because its broad guide, selection count, “select recommended” action and custom-place fallback are part of the product contract. A routebook is a starting point, not a restriction on customer requests. The public route draft uses the supplied DOCX quotation's headings and blue-header tables, displays day-by-day hotel requests, and keeps commercial fields pending for the travel desk. The admin enquiry view gives each approved quotation its own PDF download and contains a collapsed twelve-section document-pack editor. The editor preserves the supplied DOCX's section order and table wording, shows completion counts, and only unlocks the combined PDF after named-admin finalization.
+Product forms use `noValidate`, real labels, app-owned errors and first-error focus. Native select/date controls are intentional where platform-owned popups are acceptable; the destination picker is a searchable, grouped checkbox primitive because its broad guide, selection count, “select recommended” action and custom-place fallback are part of the product contract. A routebook is a starting point, not a restriction on customer requests. The public route draft stays on site with a day-by-day schedule, source-linked places, an indicative budget and a high-entropy reference for later lookup. No customer route download appears. Admin staff can edit package categories and publish only reviewed, distinct routes. The admin enquiry view gives each approved quotation its own PDF download and contains a collapsed twelve-section document-pack editor. The editor preserves the supplied DOCX's section order and table wording, shows completion counts, and only unlocks the combined PDF after named-admin finalization.
 
 ### Iconography
 
@@ -116,7 +116,7 @@ Motion has one job: make the route reveal feel like a journey. The home hero adv
 
 ### Content and data visualization
 
-Use plain travel language: “Choose a destination”, “Add places”, “Review the route”, “Download route draft”. Dates are stored as date-only input values and displayed as local calendar dates; both dates derive the day/night count and the server owns any internal commercial calculation.
+Use plain travel language: “Choose a destination”, “Add places”, “Review the route”, “Find a saved itinerary”. Dates are stored as date-only input values and displayed as local calendar dates; both dates derive the day/night count. Customer budgets distinguish sourced room rates, planning allowances and costs still to confirm.
 
 ## Do's and Don'ts
 

@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   MapPin, Clock, CheckCircle, XCircle,
-  ChevronDown, ChevronUp, Share2, Phone,
+  Share2, Phone,
   Tag, Home, Utensils, ArrowLeft, MessageCircle,
   Plane
 } from 'lucide-react';
@@ -23,7 +23,6 @@ const PackageDetails = () => {
   const [pkg, setPkg] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
-  const [openDay, setOpenDay] = useState(0);
   const [enquiry, setEnquiry] = useState({
     name: '', phone: '', email: '', date: '', dateFlexible: false,
     adults: 1, children: 0, childAges: '', rooms: 1, origin: '',
@@ -127,7 +126,7 @@ const PackageDetails = () => {
   const exclusions = Array.isArray(pkg.exclusions) ? pkg.exclusions : [];
   const addons = Array.isArray(pkg.optionalAddons) ? pkg.optionalAddons : [];
   const itinerary = Array.isArray(pkg.itinerary) ? pkg.itinerary : [];
-  const tabs = ['overview', 'itinerary', 'inclusions', 'policy'];
+  const tabs = ['overview', 'policy'];
 
   return (
     <div style={{ background: '#f1f5f9', minHeight: '100vh' }}>
@@ -194,7 +193,7 @@ const PackageDetails = () => {
                 style={{ flex: 1, padding: '10px 8px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', transition: 'all 0.2s',
                   background: activeTab === t ? 'var(--primary)' : 'transparent',
                   color: activeTab === t ? 'white' : 'var(--text-muted)' }}>
-                {t === 'overview' ? '📋 Overview' : t === 'itinerary' ? '🗓️ Itinerary' : t === 'inclusions' ? '✅ Inclusions' : '📄 Policy'}
+                {t === 'overview' ? '📋 Overview' : '📄 Policy'}
               </button>
             ))}
           </div>
@@ -238,77 +237,16 @@ const PackageDetails = () => {
             </motion.div>
           )}
 
-          {/* Tab: Itinerary */}
-          {activeTab === 'itinerary' && (
-            <motion.div key="it" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-              {itinerary.length === 0 ? (
-                <div className="glass-card" style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>No itinerary added yet.</div>
-              ) : itinerary.map((day, i) => (
-                <div key={i} className="glass-card" style={{ marginBottom: 12, overflow: 'hidden' }}>
-                  <button onClick={() => setOpenDay(openDay === i ? -1 : i)}
-                    style={{ width: '100%', padding: '18px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: openDay === i ? 'var(--primary)' : 'white', border: 'none', cursor: 'pointer', transition: 'background 0.2s' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                      <span style={{ background: openDay === i ? 'rgba(255,255,255,0.25)' : '#eff6ff', color: openDay === i ? 'white' : 'var(--primary)', padding: '4px 12px', borderRadius: 20, fontWeight: 800, fontSize: '0.9rem' }}>Day {day.day}</span>
-                      <span style={{ fontWeight: 700, color: openDay === i ? 'white' : 'var(--dark)' }}>{day.title || `Day ${day.day}`}</span>
-                    </div>
-                    {openDay === i ? <ChevronUp size={18} color={openDay === i ? 'white' : 'var(--text-muted)'} /> : <ChevronDown size={18} color="var(--text-muted)" />}
-                  </button>
-                  {openDay === i && (
-                    <div style={{ padding: '20px 24px', borderTop: '1px solid #e2e8f0' }}>
-                      <div style={{ color: 'var(--text-main)', lineHeight: 1.8, marginBottom: day.hotel || day.transport ? 16 : 0 }}>
-                        {renderRichText(day.activities)}
-                      </div>
-                      {(day.hotel || day.mealPlan || day.transport) && (
-                        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 16, paddingTop: 16, borderTop: '1px dashed #e2e8f0' }}>
-                          {day.hotel && <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.9rem', color: 'var(--text-muted)' }}><Home size={16} color="var(--primary)" /> <strong>Hotel:</strong> {day.hotel}</span>}
-                          {day.mealPlan && <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.9rem', color: 'var(--text-muted)' }}><Utensils size={16} color="var(--primary)" /> <strong>Meals:</strong> {day.mealPlan}</span>}
-                          {day.transport && <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.9rem', color: 'var(--text-muted)' }}><Plane size={16} color="var(--primary)" /> <strong>Suggested Travel:</strong> {day.transport}</span>}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </motion.div>
-          )}
-
-          {/* Tab: Inclusions */}
-          {activeTab === 'inclusions' && (
-            <motion.div key="inc" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
-                <div className="glass-card" style={{ padding: 24 }}>
-                  <h3 style={{ color: '#16a34a', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}><CheckCircle size={20} /> Inclusions</h3>
-                  {inclusions.length === 0 ? <p style={{ color: 'var(--text-muted)' }}>Not specified.</p> :
-                    inclusions.map((item, i) => (
-                      <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 10 }}>
-                        <CheckCircle size={16} color="#16a34a" style={{ marginTop: 3, flexShrink: 0 }} />
-                        <span style={{ color: 'var(--text-main)', fontSize: '0.95rem' }}>{item}</span>
-                      </div>
-                    ))}
-                </div>
-                <div className="glass-card" style={{ padding: 24 }}>
-                  <h3 style={{ color: '#ef4444', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}><XCircle size={20} /> Exclusions</h3>
-                  {exclusions.length === 0 ? <p style={{ color: 'var(--text-muted)' }}>Not specified.</p> :
-                    exclusions.map((item, i) => (
-                      <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 10 }}>
-                        <XCircle size={16} color="#ef4444" style={{ marginTop: 3, flexShrink: 0 }} />
-                        <span style={{ color: 'var(--text-main)', fontSize: '0.95rem' }}>{item}</span>
-                      </div>
-                    ))}
-                </div>
-              </div>
-              {addons.length > 0 && (
-                <div className="glass-card" style={{ padding: 24 }}>
-                  <h3 style={{ color: 'var(--primary)', marginBottom: 16 }}>⭐ Optional Add-ons</h3>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-                    {addons.map((a, i) => (
-                      <span key={i} style={{ background: '#eff6ff', color: 'var(--primary)', padding: '6px 14px', borderRadius: 20, fontSize: '0.9rem', fontWeight: 500 }}>+ {a}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </motion.div>
-          )}
+          <section className="package-plan" aria-labelledby="package-plan-heading">
+            <h2 id="package-plan-heading">Day-by-day itinerary</h2>
+            {itinerary.length === 0 ? <p>Our travel desk is preparing the day plan for this package.</p> : <ol>{itinerary.map((day, index) => <li key={`${day.day}-${index}`}>
+              <div className="package-plan-day"><span>Day {day.day || index + 1}</span><h3>{day.title || `Day ${index + 1}`}</h3></div>
+              <div>{renderRichText(day.activities)}</div>
+              <ul className="package-plan-facts">{day.hotel && <li><Home size={16} aria-hidden="true" /> Stay: {day.hotel}</li>}{day.mealPlan && <li><Utensils size={16} aria-hidden="true" /> Meals: {day.mealPlan}</li>}{day.transport && <li><Plane size={16} aria-hidden="true" /> Travel: {day.transport}</li>}</ul>
+            </li>)}</ol>}
+            <div className="package-terms-grid"><section aria-labelledby="package-inclusions-heading"><h3 id="package-inclusions-heading"><CheckCircle size={20} aria-hidden="true" /> Inclusions</h3>{inclusions.length ? <ul>{inclusions.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>Ask the travel desk to confirm inclusions before booking.</p>}</section><section aria-labelledby="package-exclusions-heading"><h3 id="package-exclusions-heading"><XCircle size={20} aria-hidden="true" /> Exclusions</h3>{exclusions.length ? <ul>{exclusions.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>Ask the travel desk to confirm exclusions before booking.</p>}</section></div>
+            {addons.length > 0 && <div className="package-addons"><h3>Optional add-ons</h3><ul>{addons.map((item, index) => <li key={index}>{item}</li>)}</ul></div>}
+          </section>
 
           {/* Tab: Policy */}
           {activeTab === 'policy' && (() => {
@@ -449,7 +387,7 @@ const PackageDetails = () => {
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Our travel desk will review your request. You can also contact us using the WhatsApp links below.</p>
                   </div>
                 ) : (
-                  <form onSubmit={handleEnquiry} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <form onSubmit={handleEnquiry} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <div className="package-enquiry-summary"><strong>{pkg.title}</strong><span>{pkg.packageId} · {pkg.destination}</span></div>
                     {enquiryError && <div className="form-status is-error" role="alert">{enquiryError}</div>}
                     <label>Full name *<input required className="input-field" autoComplete="name" value={enquiry.name} onChange={e => setEnquiry(f => ({ ...f, name: e.target.value }))} /></label>

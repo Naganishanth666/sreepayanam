@@ -11,6 +11,7 @@ const enquiryRoutes = require('./routes/enquiryRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
 const quotationRoutes = require('./routes/quotationRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const catalogCategoryRoutes = require('./routes/catalogCategoryRoutes');
 const { checkAdmin } = require('./middleware/auth');
 
 const app = express();
@@ -202,6 +203,7 @@ app.post('/api/migrate-packages', checkAdmin, async (req, res) => {
 
 // Routes
 app.use('/api/packages', packageRoutes);
+app.use('/api/catalog-categories', catalogCategoryRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);

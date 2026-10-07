@@ -200,6 +200,31 @@ router.post('/', async (req, res) => {
 });
 
 // CRM reads and updates are admin-only. Public clients never need this data.
+router.get('/route/:reference', async (req, res) => {
+  const reference = String(req.params.reference || '').toUpperCase();
+  if (!/^SP-DRAFT-\d{8}-[A-F0-9]{32}$/.test(reference)) return res.status(404).json({ message: 'Route not found. Check the reference number.' });
+  try {
+    const enquiry = await Enquiry.findOne({ quoteReference: reference, leadSource: 'planner' }).select('detailedPreferences.routeDraft').lean();
+    const draft = enquiry?.detailedPreferences?.routeDraft;
+    if (!draft || draft.planReference !== reference) return res.status(404).json({ message: 'Route not found. Check the reference number.' });
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({
+      planReference: reference,
+      title: draft.title, destination: draft.destination,
+      startingCity: draft.startingCity, endingCity: draft.endingCity,
+      travelStartDate: draft.travelStartDate, returnDate: draft.returnDate,
+      durationDays: draft.durationDays, durationNights: draft.durationNights,
+      overview: draft.overview, planningReview: draft.planningReview,
+      itinerary: Array.isArray(draft.itinerary) ? draft.itinerary.slice(0, 60) : [],
+      destinations: Array.isArray(draft.destinations) ? draft.destinations.slice(0, 15) : [],
+      indicativeBudget: draft.indicativeBudget || null
+    });
+  } catch (error) {
+    console.error('[EnquiryRoute] Route lookup failed:', error.message);
+    res.status(500).json({ message: 'Could not load this route right now.' });
+  }
+});
+
 router.get('/', checkAdmin, async (req, res) => {
   try {
     const enquiries = await Enquiry.find().sort({ createdAt: -1 }).limit(500);

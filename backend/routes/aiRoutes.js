@@ -1,13 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const { buildDaySchedule, validTime } = require('../utils/routeSchedule');
+const { buildDaySchedule, validTime, coordinateDistanceKm } = require('../utils/routeSchedule');
 const { OpenAI } = require('openai');
 const multer = require('multer');
 const { PDFParse } = require('pdf-parse');
 const Package = require('../models/Package');
 const { checkAdmin } = require('../middleware/auth');
 const { sanitizeHotelSuggestions } = require('../utils/hotelSuggestions');
+const { getPlaceContexts } = require('../utils/placeContext');
 
 const hotelSuggestionCache = new Map();
 const HOTEL_CACHE_MS = 6 * 60 * 60 * 1000;
@@ -109,7 +110,7 @@ const cleanPlaceList = (value, max = 120) => {
 
 const createPlanReference = () => {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  return `SP-DRAFT-${date}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+  return `SP-DRAFT-${date}-${crypto.randomBytes(16).toString('hex').toUpperCase()}`;
 };
 
 const sanitizePlanningSuggestions = (value, max = 12) => {
@@ -129,7 +130,32 @@ const sanitizeStructuredPlan = (payload, preferences) => {
   const durationNights = numberInRange(preferences.durationNights, Math.max(durationDays - 1, 0), 0, 59);
   const selectedPlaces = cleanPlaceList(preferences.selectedDestinations, 40);
   const selectedNames = new Map(selectedPlaces.map(place => [normalizePlaceKey(place), place]));
+  const coordinates = Object.fromEntries((preferences.placeContexts || [])
+    .filter(place => place.coordinates)
+    .map(place => [selectedNames.get(normalizePlaceKey(place.name)), place.coordinates])
+    .filter(([name]) => Boolean(name)));
   const rawItinerary = Array.isArray(payload?.itinerary) ? payload.itinerary : [];
+  const proposedDays = Array.from({ length: durationDays }, (_, index) => {
+    const day = rawItinerary.find(item => Number(item?.day) === index + 1) || rawItinerary[index] || {};
+    return cleanPlaceList(day.places, 10).map(place => selectedNames.get(normalizePlaceKey(place))).filter(Boolean);
+  });
+  const proposedKeys = new Set(proposedDays.flat().map(normalizePlaceKey));
+  for (const place of selectedPlaces) {
+    if (proposedKeys.has(normalizePlaceKey(place))) continue;
+    // Give a missing selected stop the least loaded practical day before
+    // labelling it unplaced. Arrival and departure days carry lower capacity.
+    const candidate = proposedDays.map((places, index) => ({
+      index,
+      free: (index === 0 || index === durationDays - 1 ? 2 : 3) - places.length,
+      proximity: Math.min(...places.map(other => coordinateDistanceKm(coordinates[place], coordinates[other]))
+        .filter(distance => distance != null), Infinity)
+    })).filter(day => day.free > 0)
+      .sort((a, b) => a.proximity - b.proximity || b.free - a.free || a.index - b.index)[0];
+    if (candidate) proposedDays[candidate.index].push(place);
+    proposedKeys.add(normalizePlaceKey(place));
+  }
+  let pendingPlaces = [];
+  const usedPlaces = new Set();
   const itinerary = Array.from({ length: durationDays }, (_, index) => {
     const day = rawItinerary.find(item => Number(item?.day) === index + 1) || rawItinerary[index] || {};
     const suggestedBase = cleanPlanningText(day.base || day.location, 120);
@@ -140,12 +166,24 @@ const sanitizeStructuredPlan = (payload, preferences) => {
     const hotelCategory = cleanPlanningText(preferences.hotelCategory, 50) || 'Preferred category';
     const preferredHotelName = cleanPlanningText(preferences.preferredHotelName, 120);
     const stayArea = preferredHotelArea || base || cleanPlanningText(preferences.destination, 120);
-    const requestedPlaces = cleanPlaceList(day.places, 10).map(place => selectedNames.get(normalizePlaceKey(place))).filter(Boolean);
+    const requestedPlaces = [...new Map([...pendingPlaces, ...proposedDays[index]]
+      .filter(place => !usedPlaces.has(normalizePlaceKey(place)))
+      .map(place => [normalizePlaceKey(place), place])).values()];
+    const orderedPlaces = requestedPlaces.length < 3 ? requestedPlaces : [requestedPlaces[0]];
+    const remaining = requestedPlaces.slice(orderedPlaces.length);
+    while (remaining.length) {
+      const previous = orderedPlaces.at(-1);
+      remaining.sort((a, b) => (coordinateDistanceKm(coordinates[previous], coordinates[a]) ?? Infinity)
+        - (coordinateDistanceKm(coordinates[previous], coordinates[b]) ?? Infinity));
+      orderedPlaces.push(remaining.shift());
+    }
     const timing = buildDaySchedule({
-      dayIndex: index, durationDays, durationNights, places: requestedPlaces,
-      arrivalTime: preferences.arrivalTime, departureTime: preferences.departureTime
+      dayIndex: index, durationDays, durationNights, places: orderedPlaces,
+      arrivalTime: preferences.arrivalTime, departureTime: preferences.departureTime, coordinates
     });
     const places = timing.placed;
+    places.forEach(place => usedPlaces.add(normalizePlaceKey(place)));
+    pendingPlaces = requestedPlaces.filter(place => !usedPlaces.has(normalizePlaceKey(place)));
     const openDay = places.length === 0;
     const adjustedDay = places.length < requestedPlaces.length;
     const openDayTitle = index === 0 ? 'Arrival & settle in' : index === durationDays - 1 ? 'Last light & return' : 'Flexible local discovery';
@@ -224,6 +262,7 @@ const sanitizeStructuredPlan = (payload, preferences) => {
       suggestedReplacements: sanitizePlanningSuggestions(review.suggestedReplacements)
     },
     itinerary,
+    destinations: Array.isArray(preferences.placeContexts) ? preferences.placeContexts : [],
     inclusions: cleanPlaceList(payload?.inclusions, 20).map(item => cleanPlanningText(item, 240)).filter(Boolean),
     exclusions: cleanPlaceList(payload?.exclusions, 20).map(item => cleanPlanningText(item, 240)).filter(Boolean)
   };
@@ -278,6 +317,7 @@ const sanitizeDestinationGuide = (payload, destination) => {
 
   return {
     destination: cleanAiText(payload?.destination, 180) || destination,
+    country: cleanAiText(payload?.country, 80),
     groups
   };
 };
@@ -584,6 +624,7 @@ router.post('/destination-guide', async (req, res) => {
       Return ONLY valid JSON in this shape. Aim for 4 to 8 recommended highlights, 6 to 12 nearby choices and up to 6 optional day trips when the destination genuinely supports them. Do not fill a quota with doubtful or distant places. Keep recommended places in or very close to the destination; use optional for longer detours:
       {
         "destination": ${JSON.stringify(destination)},
+        "country": "Country where the entered destination is located",
         "groups": [
           { "label": "Must-see landmarks", "kind": "recommended", "places": ["Place name"] },
           { "label": "Nearby attractions", "kind": "nearby", "places": ["Place name"] },
@@ -703,13 +744,15 @@ router.post('/plan-structured', async (req, res) => {
       availableDestinations: cleanPlaceList(availableDestinations, 120)
     };
 
+    safePreferences.placeContexts = await getPlaceContexts(safePreferences.selectedDestinations);
+
     const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
     if (!openai) return res.json(provisionalStructuredPlan(safePreferences));
 
     // Convert preferences object to a readable string for the AI prompt
     let formattedPreferences = '';
     for (const [key, value] of Object.entries(safePreferences)) {
-      if (['selectedDestinations', 'availableDestinations', 'planningFingerprint'].includes(key)) continue;
+      if (['selectedDestinations', 'availableDestinations', 'planningFingerprint', 'placeContexts'].includes(key)) continue;
       if (value !== undefined && value !== null && value !== '') {
         const formattedKey = key
           .split('_')
@@ -731,6 +774,7 @@ router.post('/plan-structured', async (req, res) => {
       - Additional guide places available for credible replacements: ${JSON.stringify(safePreferences.availableDestinations)}
       - Date-only travel window: ${safePreferences.travelStartDate || 'not supplied'} through ${safePreferences.returnDate || 'not supplied'}
       - Authoritative trip length: ${safePreferences.durationDays} days / ${safePreferences.durationNights} nights
+      - Source-linked place context and coordinates where available: ${JSON.stringify(safePreferences.placeContexts.map(place => ({ name: place.name, description: place.description, coordinates: place.coordinates, sourceUrl: place.sourceUrl })))}
 
       Instructions:
       1. You have no live supplier or attraction source in this request. Plan overnight stays around the requested ${safePreferences.hotelCategory || 'hotel'} category and ${safePreferences.preferredHotelArea || 'route area'}. ${safePreferences.preferredHotelName ? `The traveller named ${safePreferences.preferredHotelName} as a hotel preference; treat it only as a preference and do not claim it is available or booked.` : 'Do not invent a named property.'} The server will apply the traveller's hotel fields to the route brief after generation.
@@ -742,7 +786,7 @@ router.post('/plan-structured', async (req, res) => {
          - Local Car/Cab: If local_transport (e.g. 'Sedan', 'SUV') is specified and requested, detail road travel/excursions using that vehicle category.
       4. This is a route-planning draft, not a quotation. NEVER return prices, currency amounts, fares, rates, budgets, taxes, discounts or any other commercial figures.
       5. Use exactly ${safePreferences.durationDays} itinerary entries and ${safePreferences.durationNights} hotel nights. Treat the supplied dates and duration as authoritative; never silently change them.
-      6. Optimize the route geographically and by time. Keep places in the same neighbourhood, corridor or nearby area on the same day where practical; order each day and the overall trip to minimize backtracking; allow realistic travel, meal and rest time; do not force every selected place into the plan when the time window cannot support it. The daily "base" is the stay area for an overnight day when the traveller specified a preferred hotel area; a sightseeing day trip does not move the hotel base. Do not infer an attraction's town or district from a similar-sounding landmark. When its location is uncertain, say that staff must verify it instead of naming a guessed town.
+      6. Optimize the route geographically and by time. Use the source-linked coordinates above where available. Keep places in the same neighbourhood, corridor or nearby area on the same day where practical; order each day and the overall trip to minimize backtracking; allow realistic travel, meal and rest time; do not force every selected place into the plan when the time window cannot support it. The daily "base" is the stay area for an overnight day when the traveller specified a preferred hotel area; a sightseeing day trip does not move the hotel base. Do not infer an attraction's town or district from a similar-sounding landmark. When its location is uncertain, say that staff must verify it instead of naming a guessed town.
       7. Detect feasibility honestly. If the selection is too large or geographically spread out, set planningReview.status to "tight" or "not_feasible", explain the constraint in planningReview.summary, list every selected place that could not fit in planningReview.unplacedPlaces, and suggest specific removals in planningReview.suggestedRemovals. Suggest replacements only from the available guide places or credible nearby alternatives in planningReview.suggestedReplacements. Never invent exact distances or travel times when uncertain.
       8. For every itinerary day, the places array MUST contain only exact names from the customer-selected places above. Do not silently add other guide places to the itinerary. Put any alternative in planningReview.suggestedReplacements for staff/customer review. An arrival or rest day may use an empty places array; when it does, do not name an unselected attraction or city in that day's title or prose. Preserve the customer's selections whenever feasible.
       9. Plan a practical day, not a generic travel essay. Spread stops across days with at most two on arrival/departure days and three on full days; allow hotel departure, travel, a meaningful visit, lunch/rest and return. If the traveller gave an arrival time (${safePreferences.arrivalTime || 'not given'}) or final departure time (${safePreferences.departureTime || 'not given'}), respect it. The server will create provisional clock windows for each selected stop and will flag any stop that does not fit; do not try to invent exact road or venue times. Record ticket support only as a request where applicable. The traveller's darshan or entry preference is ${safePreferences.visitTimingPreferences || 'not supplied'}. Place it on the relevant day as a request, never as a confirmed slot.

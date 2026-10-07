@@ -2,6 +2,8 @@ const express = require('express');
 const crypto = require('crypto');
 const router = express.Router();
 const Package = require('../models/Package');
+const CatalogCategory = require('../models/CatalogCategory');
+const { ensureDefaults } = require('./catalogCategoryRoutes');
 const { publicationProblems } = require('../utils/catalogReadiness');
 const { checkAdmin } = require('../middleware/auth');
 
@@ -13,6 +15,26 @@ const safeEqual = (left, right) => {
 };
 
 const isAdminRequest = req => safeEqual(req.headers['x-admin-password'], process.env.ADMIN_PASSWORD);
+
+const normalized = value => String(value || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim();
+const routeSignature = pkg => crypto.createHash('sha256').update(JSON.stringify([
+  normalized(pkg.startingCity), normalized(pkg.endingCity), normalized(pkg.destination),
+  Number(pkg.durationDays), (pkg.itinerary || []).map(day => normalized(day.title))
+])).digest('hex');
+const validateCategories = async names => {
+  await ensureDefaults();
+  const unique = [...new Set((Array.isArray(names) ? names : []).map(name => String(name).trim()).filter(Boolean))];
+  const count = await CatalogCategory.countDocuments({ name: { $in: unique }, active: true });
+  return count === unique.length;
+};
+const duplicatePublishedRoute = async (signature, pkg, exceptId) => {
+  const candidates = await Package.find({
+    isActive: true, status: { $in: ['Approved', 'Published'] },
+    ...(exceptId ? { packageId: { $ne: exceptId } } : {}),
+    $or: [{ routeSignature: signature }, { startingCity: pkg.startingCity, endingCity: pkg.endingCity, durationDays: pkg.durationDays }]
+  }).select('packageId title routeSignature startingCity endingCity destination durationDays itinerary').lean();
+  return candidates.find(candidate => (candidate.routeSignature || routeSignature(candidate)) === signature) || null;
+};
 
 const toPublicPackage = packageDocument => {
   const result = packageDocument?.toObject ? packageDocument.toObject() : { ...packageDocument };
@@ -86,6 +108,22 @@ router.get('/', async (req, res) => {
         $and: [{ $or: [{ seasonStart: { $exists: false } }, { seasonStart: null }, { seasonStart: { $lte: now } }] },
           { $or: [{ seasonEnd: { $exists: false } }, { seasonEnd: null }, { seasonEnd: { $gte: now } }] }] };
     }
+    if (req.query.durationDays) {
+      const days = Number(req.query.durationDays);
+      if (!Number.isInteger(days) || days < 1 || days > 60) return res.status(400).json({ message: 'Choose a valid number of travel days.' });
+      query.durationDays = days;
+    }
+    for (const field of ['startingCity', 'endingCity']) {
+      if (req.query[field]) query[field] = new RegExp(`^${String(req.query[field]).slice(0, 100).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+    }
+    if (req.query.hotelCategory) {
+      if (!['3 Star', '4 Star', '5 Star'].includes(req.query.hotelCategory)) return res.status(400).json({ message: 'Choose a valid hotel category.' });
+      query.hotelCategories = req.query.hotelCategory;
+    }
+    if (req.query.regionScope) {
+      if (!['Tamil Nadu', 'South India', 'India-wide', 'Other'].includes(req.query.regionScope)) return res.status(400).json({ message: 'Choose a valid route region.' });
+      query.regionScope = req.query.regionScope;
+    }
     
     const packages = await Package.find(query).sort({ createdAt: -1 });
     res.json(isAdmin ? packages : packages.map(toPublicPackage));
@@ -95,7 +133,37 @@ router.get('/', async (req, res) => {
   }
 });
 
+// The menu is a curated subset of published packages, controlled in the CMS.
+router.get('/menu', async (_req, res) => {
+  try {
+    const now = new Date();
+    const packages = await Package.find({ isActive: true, showInMenu: true, status: { $in: ['Approved', 'Published'] },
+      $and: [{ $or: [{ seasonStart: { $exists: false } }, { seasonStart: null }, { seasonStart: { $lte: now } }] },
+        { $or: [{ seasonEnd: { $exists: false } }, { seasonEnd: null }, { seasonEnd: { $gte: now } }] }] })
+      .select('packageId title').sort({ menuOrder: 1, title: 1 }).limit(12).lean();
+    res.json(packages);
+  } catch (error) {
+    console.error('[Packages] Menu failed:', error.message);
+    res.status(500).json({ message: 'Could not load package menu.' });
+  }
+});
+
 // GET single package (Public - denies draft access, Admin - returns it)
+router.get('/brochures', async (_req, res) => {
+  try {
+    const now = new Date();
+    const packages = await Package.find({ isActive: true, status: { $in: ['Approved', 'Published'] }, brochureUrl: /^https:\/\//,
+      $and: [{ $or: [{ seasonStart: { $exists: false } }, { seasonStart: null }, { seasonStart: { $lte: now } }] },
+        { $or: [{ seasonEnd: { $exists: false } }, { seasonEnd: null }, { seasonEnd: { $gte: now } }] }] })
+      .select('packageId title destination durationDays brochureUrl').sort({ createdAt: -1 }).lean();
+    res.json(packages.filter(pkg => /^https:\/\/[^\s]+\.pdf(?:[?#]|$)/i.test(pkg.brochureUrl || ''))
+      .map(pkg => ({ packageId: pkg.packageId, title: pkg.title, destination: pkg.destination, durationDays: pkg.durationDays, url: pkg.brochureUrl })));
+  } catch (error) {
+    console.error('[Packages] Brochures failed:', error.message);
+    res.status(500).json({ message: 'Could not load brochures.' });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const isAdmin = isAdminRequest(req);
@@ -133,6 +201,8 @@ router.post('/', checkAdmin, async (req, res) => {
       status: 'Draft',
       isSpecialOffer: false,
     };
+    if (!await validateCategories(data.catalogCategories)) return res.status(422).json({ message: 'Choose only active catalogue categories.' });
+    data.routeSignature = routeSignature(data);
     
     // Process and run costing engine calculation if fields are present
     const calculatedCost = processCosting(req.body);
@@ -158,47 +228,9 @@ router.post('/', checkAdmin, async (req, res) => {
 });
 
 // Publish the user's requested price-free standard catalogue in one idempotent Admin action.
-router.post('/default-catalog', checkAdmin, async (_req, res) => {
-  try {
-    const { buildDefaultCatalog, DEFAULT_CATALOG_TOTAL, DEFAULT_CATALOG_CATEGORIES } = require('../utils/defaultCatalog');
-    const { ensureMandatoryPolicies } = require('../utils/policyConstants');
-    const catalog = buildDefaultCatalog().map(item => ensureMandatoryPolicies({ ...item }));
-    if (catalog.length !== DEFAULT_CATALOG_TOTAL) {
-      return res.status(500).json({ message: 'The default catalogue is incomplete and was not published.' });
-    }
-
-    const operations = catalog.map(item => ({
-      updateOne: {
-        filter: { catalogSeedKey: item.catalogSeedKey },
-        update: { $setOnInsert: item },
-        upsert: true
-      }
-    }));
-    const result = await Package.bulkWrite(operations, { ordered: false });
-    const seedKeys = catalog.map(item => item.catalogSeedKey);
-    const published = await Package.find({
-      catalogSeedKey: { $in: seedKeys },
-      isActive: true,
-      status: { $in: ['Approved', 'Published'] }
-    }).select('+catalogSeedKey packageId catalogCategories').lean();
-
-    const categoryCounts = DEFAULT_CATALOG_CATEGORIES.map(category => ({
-      category,
-      published: published.filter(item => item.catalogCategories?.includes(category)).length
-    }));
-    res.json({
-      success: true,
-      total: DEFAULT_CATALOG_TOTAL,
-      created: result.upsertedCount || 0,
-      alreadyPresent: DEFAULT_CATALOG_TOTAL - (result.upsertedCount || 0),
-      published: published.length,
-      categoryCounts
-    });
-  } catch (error) {
-    console.error('[Packages] Default catalogue publish failed:', error.message);
-    res.status(500).json({ message: 'The default package catalogue could not be published.' });
-  }
-});
+router.post('/default-catalog', checkAdmin, (_req, res) => res.status(410).json({
+  message: 'Bulk publishing is retired. Add distinct routes as drafts and complete the review before publishing.'
+}));
 
 // PUT update a package (Admin only)
 router.put('/:id', checkAdmin, async (req, res) => {
@@ -209,6 +241,8 @@ router.put('/:id', checkAdmin, async (req, res) => {
     
     let data = { ...req.body };
     data.isSpecialOffer = false;
+    if (!await validateCategories(data.catalogCategories || existing.catalogCategories)) return res.status(422).json({ message: 'Choose only active catalogue categories.' });
+    data.routeSignature = routeSignature({ ...existing.toObject(), ...data });
     
     // Process and run costing engine calculation if fields are present
     const calculatedCost = processCosting(req.body);
@@ -223,8 +257,10 @@ router.put('/:id', checkAdmin, async (req, res) => {
     
     // Ensure mandatory policies for National packages
     data = ensureMandatoryPolicies(data);
-    if (['Approved', 'Published'].includes(data.status) && !['Approved', 'Published'].includes(existing.status)) {
+    if (['Approved', 'Published'].includes(data.status)) {
       const problems = publicationProblems(data);
+      const duplicate = await duplicatePublishedRoute(data.routeSignature, { ...existing.toObject(), ...data }, existing.packageId);
+      if (duplicate) problems.push(`This route matches published package ${duplicate.packageId} (${duplicate.title}). Review and differentiate the route before publishing.`);
       if (problems.length) return res.status(422).json({ message: 'Complete content review before publishing this package.', problems });
     }
     

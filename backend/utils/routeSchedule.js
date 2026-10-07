@@ -4,8 +4,16 @@
 const validTime = value => typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : '';
 const minutes = value => Number(value.slice(0, 2)) * 60 + Number(value.slice(3));
 const clock = value => `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
+const coordinateDistanceKm = (from, to) => {
+  if (![from?.lat, from?.lon, to?.lat, to?.lon].every(Number.isFinite)) return null;
+  const radians = degrees => degrees * Math.PI / 180;
+  const dLat = radians(to.lat - from.lat);
+  const dLon = radians(to.lon - from.lon);
+  const arc = Math.sin(dLat / 2) ** 2 + Math.cos(radians(from.lat)) * Math.cos(radians(to.lat)) * Math.sin(dLon / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(arc), Math.sqrt(1 - arc));
+};
 
-const buildDaySchedule = ({ dayIndex, durationDays, durationNights, places = [], arrivalTime, departureTime }) => {
+const buildDaySchedule = ({ dayIndex, durationDays, durationNights, places = [], arrivalTime, departureTime, coordinates = {} }) => {
   const first = dayIndex === 0;
   const last = dayIndex === durationDays - 1;
   const arrival = validTime(arrivalTime);
@@ -55,14 +63,33 @@ const buildDaySchedule = ({ dayIndex, durationDays, durationNights, places = [],
       add(cursor, cursor + 60, 'Lunch and rest', 'meal', 'Allow time for the requested meal plan and a comfort break.');
       cursor += 60;
     }
-    const transfer = placed.length ? 35 : 40;
+    const separationKm = placed.length ? coordinateDistanceKm(coordinates[placed.at(-1)], coordinates[place]) : null;
+    // A conservative allowance from map coordinates only. It is intentionally
+    // labelled as a proxy: straight-line separation is not a road distance.
+    const transfer = separationKm == null ? (placed.length ? 35 : 40)
+      : Math.max(35, Math.ceil((separationKm * 1.4 / 40 * 60) / 5) * 5);
     const visit = first ? 75 : 90;
-    const finish = cursor + transfer + visit;
+    const lunchOnRoad = cursor < 12 * 60 && cursor + transfer >= 12 * 60 + 30
+      && !schedule.some(item => item.label === 'Lunch and rest');
+    const finish = cursor + transfer + visit + (lunchOnRoad ? 60 : 0);
     // Keep an end-of-day return/departure allowance. An omitted selected stop
     // is surfaced in planningReview instead of being packed into an impossible day.
     if (finish + 45 > end) break;
-    add(cursor, cursor + transfer, `Travel to ${place}`, 'transfer', 'Provisional transfer allowance; road time and distance have not been checked.', place);
-    cursor += transfer;
+    const transferDetail = separationKm == null
+      ? 'Provisional transfer allowance; road time and distance have not been checked.'
+      : `About ${transfer} minutes reserved using map-coordinate separation, not a checked road journey. Confirm actual route and traffic.`;
+    if (lunchOnRoad) {
+      const beforeLunch = 12 * 60 - cursor;
+      add(cursor, cursor + beforeLunch, `Travel toward ${place}`, 'transfer', transferDetail, place);
+      cursor += beforeLunch;
+      add(cursor, cursor + 60, 'Lunch and rest', 'meal', 'Find a suitable stop along this road leg; venue and service require confirmation.');
+      cursor += 60;
+      add(cursor, cursor + transfer - beforeLunch, `Continue to ${place}`, 'transfer', transferDetail, place);
+      cursor += transfer - beforeLunch;
+    } else {
+      add(cursor, cursor + transfer, `Travel to ${place}`, 'transfer', transferDetail, place);
+      cursor += transfer;
+    }
     add(cursor, cursor + visit, `Visit ${place}`, 'visit', 'Suggested visit window and duration. Confirm official opening hours, entry or darshan slot and access.', place);
     cursor += visit;
     placed.push(place);
@@ -92,11 +119,11 @@ const buildDaySchedule = ({ dayIndex, durationDays, durationNights, places = [],
     add(cursor, Math.min(cursor + 60, end), 'Rest or local time near hotel', 'rest', 'No additional attraction has been added to your selected route.');
   }
 
-  const assumptions = ['Clock times are a suggested sequence, not reservations.', 'Transfer allowances are provisional; no licensed road routing or live traffic was used.', 'Venue hours, tickets and darshan slots need official-source checks.'];
+  const assumptions = ['Clock times are a suggested sequence, not reservations.', 'Transfer allowances use a conservative map-coordinate proxy where coordinates exist; no road routing or live traffic was used.', 'Venue hours, tickets and darshan slots need official-source checks.'];
   if (first && !arrival) assumptions.push('Day 1 assumes arrival by 13:00 because no arrival time was given.');
   if (last && !departure) assumptions.push('Final day assumes departure after 17:00 because no departure time was given.');
   if (last && departure) assumptions.push(`Allows about one hour before the requested ${departure} departure; increase this for airport or station check-in.`);
   return { schedule, placed, assumptions };
 };
 
-module.exports = { buildDaySchedule, validTime };
+module.exports = { buildDaySchedule, validTime, coordinateDistanceKm };

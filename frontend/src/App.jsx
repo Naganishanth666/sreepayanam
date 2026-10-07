@@ -15,6 +15,8 @@ import Login from './pages/Login';
 import PackageDetails from './pages/PackageDetails';
 import Bookings from './pages/Bookings';
 import Services from './pages/Services';
+import { Blogs, Brochures } from './pages/BlogsBrochures';
+import SavedRoute from './pages/SavedRoute';
 import { NotFoundPage } from './pages/AccessPages';
 
 const routeTitles = {
@@ -26,6 +28,9 @@ const routeTitles = {
   '/login': 'Log in | SreePayanam',
   '/bookings': 'Book services | SreePayanam',
   '/services': 'Travel services | SreePayanam',
+  '/blogs': 'Travel articles | SreePayanam',
+  '/brochures': 'Brochures | SreePayanam',
+  '/route': 'Find your itinerary | SreePayanam',
   '/admin': 'Admin dashboard | SreePayanam'
 };
 
@@ -33,10 +38,25 @@ const PageTitle = () => {
   const location = useLocation();
 
   useEffect(() => {
-    const baseTitle = routeTitles[location.pathname] || (location.pathname.startsWith('/package/') ? 'Package details | SreePayanam' : location.pathname.startsWith('/services/') ? 'Travel service | SreePayanam' : 'Page not found | SreePayanam');
+    const baseTitle = routeTitles[location.pathname] || (location.pathname.startsWith('/route/') ? 'Find your itinerary | SreePayanam' : location.pathname.startsWith('/package/') ? 'Package details | SreePayanam' : location.pathname.startsWith('/services/') ? 'Travel service | SreePayanam' : 'Page not found | SreePayanam');
     document.title = baseTitle;
   }, [location.pathname]);
 
+  return null;
+};
+
+const PageScroll = () => {
+  const location = useLocation();
+  useEffect(() => {
+    if (!location.hash) {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView({ block: 'start' });
+    }, 100);
+    return () => window.clearTimeout(timer);
+  }, [location.pathname, location.hash]);
   return null;
 };
 
@@ -45,6 +65,7 @@ function App() {
     <Router>
       <AuthProvider>
         <PageTitle />
+        <PageScroll />
         <Navbar />
         <Routes>
           {/* Public Routes */}
@@ -54,6 +75,10 @@ function App() {
           <Route path="/package/:id"  element={<PackageDetails />} />
           <Route path="/contact"      element={<ContactUs />} />
           <Route path="/services"     element={<Services />} />
+          <Route path="/blogs"        element={<Blogs />} />
+          <Route path="/brochures"    element={<Brochures />} />
+          <Route path="/route"        element={<SavedRoute />} />
+          <Route path="/route/:reference" element={<SavedRoute />} />
           <Route path="/services/:slug" element={<Services />} />
           <Route path="/ai-assistant" element={<AiAssistant />} />
           <Route path="/login"        element={<Login />} />

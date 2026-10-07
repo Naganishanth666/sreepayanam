@@ -4,6 +4,7 @@ import { Trash2, Plus, LogIn, ChevronDown, ChevronUp, X, Edit, Eye, EyeOff, User
 import { IMAGE_PRESETS } from '../utils/imagePresets';
 import NicheTravelFields from '../components/NicheTravelFields';
 import ConfirmDialog from '../components/ConfirmDialog';
+import CategoryManager from '../components/CategoryManager';
 import QuotationDesk from '../components/QuotationDesk';
 import { renderRichText } from '../utils/textFormatter';
 import { calculateCosting } from '../utils/costingEngine';
@@ -27,7 +28,8 @@ const formatAccountDate = value => {
 };
 
 const emptyForm = {
-  title: '', destination: '', packageCategory: 'National', tourType: 'Family Tours', catalogCategories: [],
+  title: '', destination: '', packageCategory: 'National', tourType: 'Family Tours', catalogCategories: [], regionScope: 'Other', hotelCategories: [],
+  uniquenessReviewedBy: '', uniquenessReviewedAt: '', brochureUrl: '', showInMenu: false, menuOrder: 100,
   startingCity: '', endingCity: '', durationDays: '', durationNights: '', seasonStart: '', seasonEnd: '',
   overview: '', imageUrl: '', journeyTimeNotes: '', journeyDistanceNotes: '',
   accessibilityNotes: '', seasonConstraints: '', imageRightsNote: '', contentReviewedBy: '', contentReviewedAt: '',
@@ -266,7 +268,7 @@ const AdminPage = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [packages, setPackages] = useState([]);
-  const [catalogPublishing, setCatalogPublishing] = useState(false);
+  const [catalogCategories, setCatalogCategories] = useState(CATALOG_CATEGORIES);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -880,28 +882,6 @@ const AdminPage = () => {
     } catch (err) { console.error(err); }
   };
 
-  const publishDefaultCatalog = async () => {
-    if (catalogPublishing) return;
-    setCatalogPublishing(true);
-    setError('');
-    setSuccess('');
-    try {
-      const response = await fetch('/api/packages/default-catalog', {
-        method: 'POST',
-        headers: { 'x-admin-password': password }
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.message || 'The default package catalogue could not be published.');
-      const counts = (data.categoryCounts || []).map(item => item.category + ': ' + item.published).join(' · ');
-      setSuccess('Published ' + data.published + ' of ' + data.total + ' default packages (' + data.created + ' added; ' + data.alreadyPresent + ' already present). ' + counts);
-      await fetchPackages();
-    } catch (publishError) {
-      setError(publishError.message || 'The default package catalogue could not be published.');
-    } finally {
-      setCatalogPublishing(false);
-    }
-  };
-
   const fetchEnquiries = async () => {
     setEnquiriesLoading(true);
     try {
@@ -1221,6 +1201,9 @@ const AdminPage = () => {
       packageCategory: pkg.packageCategory || 'National',
       tourType: pkg.tourType || 'Family Tours',
       catalogCategories: categoriesForPackage(pkg),
+      regionScope: pkg.regionScope || 'Other', hotelCategories: pkg.hotelCategories || [],
+      uniquenessReviewedBy: pkg.uniquenessReviewedBy || '', uniquenessReviewedAt: pkg.uniquenessReviewedAt || '',
+      brochureUrl: pkg.brochureUrl || '', showInMenu: Boolean(pkg.showInMenu), menuOrder: pkg.menuOrder ?? 100,
       startingCity: pkg.startingCity || '',
       endingCity: pkg.endingCity || '',
       seasonStart: pkg.seasonStart ? new Date(pkg.seasonStart).toISOString().slice(0, 10) : '',
@@ -1363,6 +1346,7 @@ const AdminPage = () => {
       setEditingId(null);
       setOpenSection('basic');
       fetchPackages();
+      window.dispatchEvent(new Event('sreepayanam:catalog-updated'));
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
   };
@@ -1381,6 +1365,7 @@ const AdminPage = () => {
       setDeleteTarget(null);
       setSuccess(`Package "${deleteTarget.title}" was archived and can be restored.`);
       fetchPackages();
+      window.dispatchEvent(new Event('sreepayanam:catalog-updated'));
     } catch (err) {
       setError(err.message || 'Failed to delete package.');
     } finally {
@@ -1394,6 +1379,7 @@ const AdminPage = () => {
       if (!response.ok) throw new Error(data.message || 'Could not restore the package.');
       setSuccess(`Package "${pkg.title}" restored.`);
       fetchPackages();
+      window.dispatchEvent(new Event('sreepayanam:catalog-updated'));
     } catch (restoreError) { setError(restoreError.message); }
   };
 
@@ -2254,8 +2240,12 @@ const AdminPage = () => {
                   <fieldset className="admin-catalog-categories">
                     <legend>Browse categories</legend>
                     <p>Choose each category where this package should appear.</p>
-                    <div>{CATALOG_CATEGORIES.map(category => <label key={category}><input type="checkbox" checked={(formData.catalogCategories || []).includes(category)} onChange={event => setFormData(current => ({ ...current, catalogCategories: event.target.checked ? [...(current.catalogCategories || []), category] : (current.catalogCategories || []).filter(item => item !== category) }))} /> {category}</label>)}</div>
+                    <div>{catalogCategories.map(category => <label key={category}><input type="checkbox" checked={(formData.catalogCategories || []).includes(category)} onChange={event => setFormData(current => ({ ...current, catalogCategories: event.target.checked ? [...(current.catalogCategories || []), category] : (current.catalogCategories || []).filter(item => item !== category) }))} /> {category}</label>)}</div>
                   </fieldset>
+                  <Row>
+                    <Field label="Pilgrimage region"><select name="regionScope" className="input-field" value={formData.regionScope} onChange={handleChange}><option>Other</option><option>Tamil Nadu</option><option>South India</option><option>India-wide</option></select></Field>
+                    <Field label="Hotel categories offered"><div className="admin-hotel-categories">{['3 Star', '4 Star', '5 Star'].map(category => <label key={category}><input type="checkbox" checked={formData.hotelCategories.includes(category)} onChange={event => setFormData(current => ({ ...current, hotelCategories: event.target.checked ? [...current.hotelCategories, category] : current.hotelCategories.filter(item => item !== category) }))} /> {category.replace(' Star', '-star')}</label>)}</div></Field>
+                  </Row>
                   <Row>
                     <Field label="Meal Plan (e.g. CP/MAP/AP)">
                       <input name="mealPlan" className="input-field" placeholder="e.g. MAP Plan - Daily Breakfast & Dinner" value={formData.mealPlan} onChange={handleChange} />
@@ -2294,6 +2284,12 @@ const AdminPage = () => {
                       <button type="button" className="btn btn-ghost" aria-label={`Remove reference ${item.name || index + 1}`} onClick={() => setFormData(previous => ({ ...previous, destinationReferences: (previous.destinationReferences || []).filter((_, itemIndex) => itemIndex !== index) }))}>Remove</button>
                     </div>)}
                   </div>
+                  <Row>
+                    <Field label="Route uniqueness reviewed by"><input name="uniquenessReviewedBy" className="input-field" value={formData.uniquenessReviewedBy || ''} onChange={handleChange} placeholder="Reviewer name" /></Field>
+                    <Field label="Route uniqueness checked"><input name="uniquenessReviewedAt" type="date" className="input-field" value={formData.uniquenessReviewedAt || ''} onChange={handleChange} /></Field>
+                  </Row>
+                  <Field label="Marketing brochure PDF URL"><input name="brochureUrl" type="url" className="input-field" value={formData.brochureUrl || ''} onChange={handleChange} placeholder="https://example.com/brochure.pdf" /></Field>
+                  <Row><Field label="Packages menu"><label className="admin-menu-toggle"><input name="showInMenu" type="checkbox" checked={Boolean(formData.showInMenu)} onChange={event => setFormData(current => ({ ...current, showInMenu: event.target.checked }))} /> Feature this package in the dropdown after publication</label></Field><Field label="Menu order"><input name="menuOrder" type="number" className="input-field" value={formData.menuOrder ?? 100} onChange={handleChange} min="0" /></Field></Row>
                   <div className="package-reference-editor"><div className="package-reference-heading"><div><strong>Content review before publication</strong><small>Save new packages as drafts, then complete and check these details before changing status to Approved or Published.</small></div></div><Row><Field label="Approximate road journey times and basis"><input name="journeyTimeNotes" className="input-field" value={formData.journeyTimeNotes || ''} onChange={handleChange} placeholder="e.g. city-to-city drive estimates; source/date" /></Field><Field label="Approximate road distances and basis"><input name="journeyDistanceNotes" className="input-field" value={formData.journeyDistanceNotes || ''} onChange={handleChange} placeholder="e.g. route distances; source/date" /></Field></Row><Row><Field label="Accessibility and fitness notes"><input name="accessibilityNotes" className="input-field" value={formData.accessibilityNotes || ''} onChange={handleChange} placeholder="Steps, walking, mobility support" /></Field><Field label="Season and operating constraints"><input name="seasonConstraints" className="input-field" value={formData.seasonConstraints || ''} onChange={handleChange} placeholder="Weather, closure or session limits" /></Field></Row><Row><Field label="Image source and usage rights"><input name="imageRightsNote" className="input-field" value={formData.imageRightsNote || ''} onChange={handleChange} placeholder="Owner/licence/source and permitted use" /></Field><Field label="Content reviewed by"><input name="contentReviewedBy" className="input-field" value={formData.contentReviewedBy || ''} onChange={handleChange} placeholder="Reviewer name" /></Field><Field label="Last reviewed"><input name="contentReviewedAt" type="date" className="input-field" value={formData.contentReviewedAt || ''} onChange={handleChange} /></Field></Row></div>
                   <Row>
                     <Field label="Duration (Days) *">
@@ -2843,13 +2839,8 @@ const AdminPage = () => {
                 <h3 style={{ marginBottom: 20, color: 'var(--dark)', fontSize: '1.2rem', fontWeight: 700 }}>
                   📦 All Packages ({packages.length})
                 </h3>
-                <div className="catalog-coverage" aria-label="SRS v1.5 catalogue coverage"><strong>Category coverage · v1.5</strong><p>Target: 50–70 distinct packages in each category. Published packages count in every category shown to customers.</p><ul>{CATALOG_CATEGORIES.map(category => { const count = new Set(packages.filter(pkg => pkg.isActive && ['Approved', 'Published'].includes(pkg.status) && categoriesForPackage(pkg).includes(category)).map(pkg => pkg.packageId)).size; return <li key={category}><span>{category}</span><b>{count} / 50 minimum</b></li>; })}</ul></div>
-                <div className="catalog-default-publish">
-                  <p>Add 60 price-free route outlines to each travel style. The listings appear publicly after publishing; dates, services, suppliers and prices remain unconfirmed until a tailored quotation.</p>
-                  <button type="button" className="btn btn-outline" onClick={publishDefaultCatalog} disabled={catalogPublishing} aria-busy={catalogPublishing}>
-                    {catalogPublishing ? 'Publishing 720 packages…' : 'Publish 720 default packages'}
-                  </button>
-                </div>
+                <div className="catalog-coverage" aria-label="Pilgrimage catalogue coverage"><strong>Pilgrimage catalogue targets</strong><p>Distinct reviewed, published routes count toward the target.</p><ul>{[['Tamil Nadu', 80], ['South India', 50], ['India-wide', 50]].map(([region, target]) => { const count = new Set(packages.filter(pkg => pkg.isActive && ['Approved', 'Published'].includes(pkg.status) && pkg.regionScope === region && pkg.routeSignature).map(pkg => pkg.routeSignature)).size; return <li key={region}><span>{region}</span><b>{count} / {target}</b></li>; })}</ul></div>
+                <CategoryManager password={password} onChange={setCatalogCategories} />
                 {packages.length === 0 ? (
                   <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '20px 0' }}>No packages yet. Add one!</p>
                 ) : (
