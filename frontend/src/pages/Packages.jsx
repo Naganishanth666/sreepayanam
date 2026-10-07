@@ -497,7 +497,7 @@ const PackageCard = ({ pkg, index }) => {
             fontWeight: 700, 
             backdropFilter: 'blur(4px)' 
           }}>
-            {pkg.packageCategory || 'National'}
+            {pkg.regionScope || pkg.packageCategory || 'National'}
           </span>
         </div>
         <div style={{ position: 'absolute', top: 12, right: 12 }}>

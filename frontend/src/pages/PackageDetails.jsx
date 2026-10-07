@@ -150,7 +150,7 @@ const PackageDetails = () => {
           <div style={{ maxWidth: 1100, margin: '0 auto' }}>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
               <span style={badge('#64748b')}>ID: {pkg.packageId}</span>
-              <span style={badge('#3b82f6')}>{pkg.packageCategory}</span>
+              <span style={badge('#3b82f6')}>{pkg.regionScope || pkg.packageCategory}</span>
               <span style={badge('#10b981')}>{pkg.tourType}</span>
             </div>
             <h1 style={{ color: 'white', fontSize: '2.4rem', fontWeight: 800, marginBottom: 12, textShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>{pkg.title}</h1>
@@ -216,7 +216,7 @@ const PackageDetails = () => {
                     { icon: <Clock size={20} color="var(--primary)" />, label: 'Duration', val: `${pkg.durationDays}D / ${pkg.durationNights}N` },
                     { icon: <MapPin size={20} color="var(--primary)" />, label: 'Destination', val: pkg.destination },
                     { icon: <Tag size={20} color="var(--primary)" />, label: 'Tour Type', val: pkg.tourType },
-                    { icon: <Home size={20} color="var(--primary)" />, label: 'Category', val: pkg.packageCategory },
+                    { icon: <Home size={20} color="var(--primary)" />, label: pkg.regionScope ? 'Region' : 'Category', val: pkg.regionScope || pkg.packageCategory },
                     ...(pkg.startingCity ? [{ icon: <ArrowLeft size={20} color="var(--primary)" />, label: 'From', val: pkg.startingCity }] : []),
                     ...(pkg.endingCity ? [{ icon: <ArrowLeft size={20} color="var(--primary)" style={{ transform: 'rotate(180deg)' }} />, label: 'To', val: pkg.endingCity }] : []),
                     ...(pkg.mealPlan ? [{ icon: <Utensils size={20} color="var(--primary)" />, label: 'Meal Plan', val: pkg.mealPlan }] : []),
