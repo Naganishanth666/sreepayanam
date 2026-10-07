@@ -58,7 +58,7 @@ const SavedRoute = () => {
       </section>
       {route.destinations?.length > 0 && <section aria-labelledby="saved-places-heading"><h3 id="saved-places-heading"><MapPin size={20} aria-hidden="true" /> Places on your route</h3><div className="saved-route-places">{route.destinations.map(place => <article key={place.name}>
         {place.imageUrl && <img src={place.imageUrl} alt={place.title || place.name} loading="lazy" onError={event => { event.currentTarget.style.display = 'none'; }} />}
-        <div><h4>{place.name}</h4><p>{place.description}</p><p>{place.visitingInfo}</p><a href={place.sourceUrl} target="_blank" rel="noopener noreferrer">Destination information</a>{place.imageCreditUrl && <a href={place.imageCreditUrl} target="_blank" rel="noopener noreferrer">Image: {place.imageCredit}</a>}</div>
+        <div><h4>{place.name}</h4><p>{place.description}</p><p>{place.visitingInfo}</p>{place.visitingEvent && <p>Published event: {place.visitingEvent.description} ({place.visitingEvent.date}). <a href={place.visitingEvent.sourceUrl} target="_blank" rel="noopener noreferrer">Event source</a></p>}{place.sourceUrl && <a href={place.sourceUrl} target="_blank" rel="noopener noreferrer">Destination information</a>}{place.visitingHoursSourceUrl && <a href={place.visitingHoursSourceUrl} target="_blank" rel="noopener noreferrer">Visiting hours source</a>}{place.imageCreditUrl && <a href={place.imageCreditUrl} target="_blank" rel="noopener noreferrer">Image: {place.imageCredit}</a>}</div>
       </article>)}</div></section>}
       <Link className="btn btn-outline" to="/ai-assistant">Plan another route <ArrowRight size={16} aria-hidden="true" /></Link>
     </div>}

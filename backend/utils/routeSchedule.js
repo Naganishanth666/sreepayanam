@@ -13,7 +13,7 @@ const coordinateDistanceKm = (from, to) => {
   return 6371 * 2 * Math.atan2(Math.sqrt(arc), Math.sqrt(1 - arc));
 };
 
-const buildDaySchedule = ({ dayIndex, durationDays, durationNights, places = [], arrivalTime, departureTime, coordinates = {} }) => {
+const buildDaySchedule = ({ dayIndex, durationDays, durationNights, places = [], arrivalTime, departureTime, coordinates = {}, visitingHours = {}, travelStartDate = '' }) => {
   const first = dayIndex === 0;
   const last = dayIndex === durationDays - 1;
   const arrival = validTime(arrivalTime);
@@ -56,7 +56,12 @@ const buildDaySchedule = ({ dayIndex, durationDays, durationNights, places = [],
 
   const limit = first && last ? 2 : first || last ? 2 : 3;
   const placed = [];
-  for (const place of places.slice(0, limit)) {
+  const dayDate = /^\d{4}-\d{2}-\d{2}$/.test(travelStartDate)
+    ? new Date(`${travelStartDate}T00:00:00Z`).getTime() + dayIndex * 86400000 : NaN;
+  for (const place of places) {
+    if (placed.length >= limit) break;
+    const published = visitingHours[place];
+    if (Number.isFinite(dayDate) && published?.closedWeekdays?.includes(new Date(dayDate).getUTCDay())) continue;
     const mealDue = cursor >= 12 * 60 && cursor <= 14 * 60 && !schedule.some(item => item.kind === 'meal' && item.label === 'Lunch and rest');
     if (mealDue) {
       if (cursor + 60 > end) break;
@@ -71,7 +76,15 @@ const buildDaySchedule = ({ dayIndex, durationDays, durationNights, places = [],
     const visit = first ? 75 : 90;
     const lunchOnRoad = cursor < 12 * 60 && cursor + transfer >= 12 * 60 + 30
       && !schedule.some(item => item.label === 'Lunch and rest');
-    const finish = cursor + transfer + visit + (lunchOnRoad ? 60 : 0);
+    const arrivalAtPlace = cursor + transfer + (lunchOnRoad ? 60 : 0);
+    const publishedWindow = published?.windows?.length
+      ? published.windows.find(window => {
+        if (!validTime(window.start) || !validTime(window.end)) return false;
+        return Math.max(arrivalAtPlace, minutes(window.start)) + visit <= minutes(window.end);
+      }) : null;
+    if (published?.windows?.length && !publishedWindow) continue;
+    const visitStart = publishedWindow ? Math.max(arrivalAtPlace, minutes(publishedWindow.start)) : arrivalAtPlace;
+    const finish = visitStart + visit;
     // Keep an end-of-day return/departure allowance. An omitted selected stop
     // is surfaced in planningReview instead of being packed into an impossible day.
     if (finish + 45 > end) break;
@@ -90,7 +103,22 @@ const buildDaySchedule = ({ dayIndex, durationDays, durationNights, places = [],
       add(cursor, cursor + transfer, `Travel to ${place}`, 'transfer', transferDetail, place);
       cursor += transfer;
     }
-    add(cursor, cursor + visit, `Visit ${place}`, 'visit', 'Suggested visit window and duration. Confirm official opening hours, entry or darshan slot and access.', place);
+    if (visitStart > cursor) {
+      const hasLunch = schedule.some(item => item.label === 'Lunch and rest');
+      const lunchStart = Math.max(cursor, 12 * 60);
+      if (!hasLunch && lunchStart + 60 <= visitStart && lunchStart <= 13 * 60 + 30) {
+        add(cursor, lunchStart, 'Rest before visiting window', 'rest', 'The published visiting window begins later.');
+        add(lunchStart, lunchStart + 60, 'Lunch and rest', 'meal', 'Allow a comfortable break before the venue opens.');
+        add(lunchStart + 60, visitStart, 'Wait for visiting window', 'rest', 'Check any queue or entry requirements.');
+      } else {
+        add(cursor, visitStart, 'Wait for visiting window', 'rest', 'The published visiting window begins later; check any queue or entry requirements.');
+      }
+      cursor = visitStart;
+    }
+    const visitDetail = publishedWindow
+      ? `Fits published visiting hours ${published.windows.map(window => `${window.start}–${window.end}`).join(', ')}. Recheck the source and any special darshan or event restrictions for your date.`
+      : 'Suggested visit window and duration. Confirm official opening hours, entry or darshan slot and access.';
+    add(cursor, cursor + visit, `Visit ${place}`, 'visit', visitDetail, place);
     cursor += visit;
     placed.push(place);
   }
@@ -119,7 +147,7 @@ const buildDaySchedule = ({ dayIndex, durationDays, durationNights, places = [],
     add(cursor, Math.min(cursor + 60, end), 'Rest or local time near hotel', 'rest', 'No additional attraction has been added to your selected route.');
   }
 
-  const assumptions = ['Clock times are a suggested sequence, not reservations.', 'Transfer allowances use a conservative map-coordinate proxy where coordinates exist; no road routing or live traffic was used.', 'Venue hours, tickets and darshan slots need official-source checks.'];
+  const assumptions = ['Clock times are a suggested sequence, not reservations.', 'Transfer allowances use a conservative map-coordinate proxy where coordinates exist; no road routing or live traffic was used.', 'Published venue hours are used only where a cited source was found; recheck hours, tickets and darshan slots for your date.'];
   if (first && !arrival) assumptions.push('Day 1 assumes arrival by 13:00 because no arrival time was given.');
   if (last && !departure) assumptions.push('Final day assumes departure after 17:00 because no departure time was given.');
   if (last && departure) assumptions.push(`Allows about one hour before the requested ${departure} departure; increase this for airport or station check-in.`);
