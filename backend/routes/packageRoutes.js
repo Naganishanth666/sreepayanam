@@ -6,6 +6,7 @@ const CatalogCategory = require('../models/CatalogCategory');
 const { ensureDefaults } = require('./catalogCategoryRoutes');
 const { publicationProblems } = require('../utils/catalogReadiness');
 const { checkAdmin } = require('../middleware/auth');
+const { packages: curatedPackages, byId: curatedById, isPublicPackage, withOverrides } = require('../utils/regionalCatalog');
 
 const safeEqual = (left, right) => {
   if (typeof left !== 'string' || typeof right !== 'string' || !left || !right) return false;
@@ -33,7 +34,8 @@ const duplicatePublishedRoute = async (signature, pkg, exceptId) => {
     ...(exceptId ? { packageId: { $ne: exceptId } } : {}),
     $or: [{ routeSignature: signature }, { startingCity: pkg.startingCity, endingCity: pkg.endingCity, durationDays: pkg.durationDays }]
   }).select('packageId title routeSignature startingCity endingCity destination durationDays itinerary').lean();
-  return candidates.find(candidate => (candidate.routeSignature || routeSignature(candidate)) === signature) || null;
+  return candidates.find(candidate => (candidate.routeSignature || routeSignature(candidate)) === signature)
+    || curatedPackages.find(candidate => candidate.packageId !== exceptId && routeSignature(candidate) === signature) || null;
 };
 
 const toPublicPackage = packageDocument => {
@@ -54,6 +56,19 @@ const toPublicPackage = packageDocument => {
   delete result.isDefaultCatalogPackage;
   return result;
 };
+const toPublicSummary = packageDocument => {
+  const { packageId, title, destination, packageCategory, tourType, catalogCategories,
+    regionScope, hotelCategories, startingCity, endingCity, durationDays, durationNights,
+    overview, imageUrl, status } = toPublicPackage(packageDocument);
+  return { packageId, title, destination, packageCategory, tourType, catalogCategories,
+    regionScope, hotelCategories, startingCity, endingCity, durationDays, durationNights,
+    overview, imageUrl, status };
+};
+const matchesFilters = (pkg, filters) => (!filters.durationDays || pkg.durationDays === Number(filters.durationDays))
+  && (!filters.startingCity || normalized(pkg.startingCity) === normalized(filters.startingCity))
+  && (!filters.endingCity || normalized(pkg.endingCity) === normalized(filters.endingCity))
+  && (!filters.hotelCategory || pkg.hotelCategories?.includes(filters.hotelCategory))
+  && (!filters.regionScope || pkg.regionScope === filters.regionScope);
 
 // Helper to run costing calculation if costing fields are provided
 function processCosting(body) {
@@ -121,12 +136,18 @@ router.get('/', async (req, res) => {
       query.hotelCategories = req.query.hotelCategory;
     }
     if (req.query.regionScope) {
-      if (!['Tamil Nadu', 'South India', 'India-wide', 'Other'].includes(req.query.regionScope)) return res.status(400).json({ message: 'Choose a valid route region.' });
+      if (!['Tamil Nadu', 'South India', 'North India', 'India-wide', 'Other'].includes(req.query.regionScope)) return res.status(400).json({ message: 'Choose a valid route region.' });
       query.regionScope = req.query.regionScope;
     }
     
-    const packages = await Package.find(query).sort({ createdAt: -1 });
-    res.json(isAdmin ? packages : packages.map(toPublicPackage));
+    const databasePackages = await Package.find(query).sort({ createdAt: -1 });
+    // Fetch every curated-ID override, including drafts and archived records,
+    // so an edited or removed listing never falls back to its code version.
+    const overrides = await Package.find({ packageId: { $in: curatedPackages.map(pkg => pkg.packageId) } });
+    const byPackageId = new Map([...databasePackages, ...overrides].map(pkg => [pkg.packageId, pkg]));
+    const combined = withOverrides([...byPackageId.values()]);
+    if (isAdmin) return res.json(combined.filter(pkg => matchesFilters(pkg, req.query)));
+    res.json(combined.filter(pkg => isPublicPackage(pkg) && matchesFilters(pkg, req.query)).map(toPublicSummary));
   } catch (error) {
     console.error('[Packages] List failed:', error.message);
     res.status(500).json({ message: 'Could not load packages.' });
@@ -136,12 +157,15 @@ router.get('/', async (req, res) => {
 // The menu is a curated subset of published packages, controlled in the CMS.
 router.get('/menu', async (_req, res) => {
   try {
-    const now = new Date();
-    const packages = await Package.find({ isActive: true, showInMenu: true, status: { $in: ['Approved', 'Published'] },
-      $and: [{ $or: [{ seasonStart: { $exists: false } }, { seasonStart: null }, { seasonStart: { $lte: now } }] },
-        { $or: [{ seasonEnd: { $exists: false } }, { seasonEnd: null }, { seasonEnd: { $gte: now } }] }] })
-      .select('packageId title').sort({ menuOrder: 1, title: 1 }).limit(12).lean();
-    res.json(packages);
+    const databasePackages = await Package.find({ showInMenu: true }).lean();
+    const overrides = await Package.find({ packageId: { $in: curatedPackages.map(pkg => pkg.packageId) } })
+      .select('packageId').lean();
+    const overridden = new Set(overrides.map(pkg => pkg.packageId));
+    const menu = [...curatedPackages.filter(pkg => !overridden.has(pkg.packageId)), ...databasePackages]
+      .filter(pkg => pkg.showInMenu && isPublicPackage(pkg))
+      .sort((a, b) => (a.menuOrder || 100) - (b.menuOrder || 100) || a.title.localeCompare(b.title))
+      .slice(0, 12).map(pkg => ({ packageId: pkg.packageId, title: pkg.title }));
+    res.json(menu);
   } catch (error) {
     console.error('[Packages] Menu failed:', error.message);
     res.status(500).json({ message: 'Could not load package menu.' });
@@ -168,12 +192,9 @@ router.get('/:id', async (req, res) => {
   try {
     const isAdmin = isAdminRequest(req);
 
-    const pkg = await Package.findOne({ packageId: req.params.id });
+    const pkg = await Package.findOne({ packageId: req.params.id }) || curatedById.get(req.params.id);
     if (!pkg) return res.status(404).json({ message: 'Package not found' });
-    
-    const now = new Date();
-    if (!isAdmin && (!pkg.isActive || !['Approved', 'Published'].includes(pkg.status)
-      || (pkg.seasonStart && pkg.seasonStart > now) || (pkg.seasonEnd && pkg.seasonEnd < now))) {
+    if (!isAdmin && !isPublicPackage(pkg)) {
       return res.status(403).json({ message: 'Access denied. Package is in draft status.' });
     }
     
@@ -201,6 +222,7 @@ router.post('/', checkAdmin, async (req, res) => {
       status: 'Draft',
       isSpecialOffer: false,
     };
+    if (data.packageId && curatedById.has(data.packageId)) return res.status(409).json({ message: 'Edit this regional listing instead of creating a second copy.' });
     if (!await validateCategories(data.catalogCategories)) return res.status(422).json({ message: 'Choose only active catalogue categories.' });
     data.routeSignature = routeSignature(data);
     
@@ -236,13 +258,15 @@ router.post('/default-catalog', checkAdmin, (_req, res) => res.status(410).json(
 router.put('/:id', checkAdmin, async (req, res) => {
   try {
     const { ensureMandatoryPolicies } = require('../utils/policyConstants');
-    const existing = await Package.findOne({ packageId: req.params.id });
+    const databaseExisting = await Package.findOne({ packageId: req.params.id });
+    const existing = databaseExisting || curatedById.get(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Package not found' });
     
     let data = { ...req.body };
     data.isSpecialOffer = false;
     if (!await validateCategories(data.catalogCategories || existing.catalogCategories)) return res.status(422).json({ message: 'Choose only active catalogue categories.' });
-    data.routeSignature = routeSignature({ ...existing.toObject(), ...data });
+    const prior = existing.toObject ? existing.toObject() : existing;
+    data.routeSignature = routeSignature({ ...prior, ...data });
     
     // Process and run costing engine calculation if fields are present
     const calculatedCost = processCosting(req.body);
@@ -259,16 +283,14 @@ router.put('/:id', checkAdmin, async (req, res) => {
     data = ensureMandatoryPolicies(data);
     if (['Approved', 'Published'].includes(data.status)) {
       const problems = publicationProblems(data);
-      const duplicate = await duplicatePublishedRoute(data.routeSignature, { ...existing.toObject(), ...data }, existing.packageId);
+      const duplicate = await duplicatePublishedRoute(data.routeSignature, { ...prior, ...data }, existing.packageId);
       if (duplicate) problems.push(`This route matches published package ${duplicate.packageId} (${duplicate.title}). Review and differentiate the route before publishing.`);
       if (problems.length) return res.status(422).json({ message: 'Complete content review before publishing this package.', problems });
     }
     
-    const pkg = await Package.findOneAndUpdate(
-      { packageId: req.params.id },
-      { ...data, updatedAt: new Date() },
-      { new: true, runValidators: true }
-    );
+    const pkg = databaseExisting
+      ? await Package.findOneAndUpdate({ packageId: req.params.id }, { ...data, updatedAt: new Date() }, { new: true, runValidators: true })
+      : await new Package({ ...existing, ...data, packageId: req.params.id, updatedAt: new Date() }).save();
     res.json(pkg);
   } catch (error) {
     console.error('[Packages] Update failed:', error.message);
@@ -279,8 +301,12 @@ router.put('/:id', checkAdmin, async (req, res) => {
 // Archive a package without losing its enquiry and quote history.
 router.delete('/:id', checkAdmin, async (req, res) => {
   try {
-    const pkg = await Package.findOneAndUpdate({ packageId: req.params.id },
+    let pkg = await Package.findOneAndUpdate({ packageId: req.params.id },
       { isActive: false, archivedAt: new Date(), updatedAt: new Date() }, { new: true });
+    if (!pkg && curatedById.has(req.params.id)) {
+      pkg = await Package.create({ ...curatedById.get(req.params.id), isActive: false,
+        status: 'Draft', archivedAt: new Date(), updatedAt: new Date() });
+    }
     if (!pkg) return res.status(404).json({ message: 'Package not found' });
     res.json({ message: 'Package archived successfully', package: pkg });
   } catch (error) {
@@ -291,8 +317,11 @@ router.delete('/:id', checkAdmin, async (req, res) => {
 
 router.post('/:id/restore', checkAdmin, async (req, res) => {
   try {
-    const pkg = await Package.findOneAndUpdate({ packageId: req.params.id },
+    let pkg = await Package.findOneAndUpdate({ packageId: req.params.id },
       { isActive: true, archivedAt: null, updatedAt: new Date() }, { new: true });
+    if (!pkg && curatedById.has(req.params.id)) {
+      pkg = await Package.create({ ...curatedById.get(req.params.id), isActive: true, archivedAt: null });
+    }
     if (!pkg) return res.status(404).json({ message: 'Package not found' });
     res.json({ message: 'Package restored successfully', package: pkg });
   } catch { res.status(500).json({ message: 'Package could not be restored.' }); }

@@ -1,0 +1,794 @@
+{
+  "CH-MA": {
+    "roadKm": 58,
+    "baseDriveMinutes": 57,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=13.0825%2C80.275%3B12.61972222%2C80.19444444",
+    "checkedAt": "2026-10-07"
+  },
+  "MA-PU": {
+    "roadKm": 95,
+    "baseDriveMinutes": 97,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=12.61972222%2C80.19444444%3B11.9340568%2C79.8306447",
+    "checkedAt": "2026-10-07"
+  },
+  "PU-KA": {
+    "roadKm": 119,
+    "baseDriveMinutes": 116,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=11.9340568%2C79.8306447%3B12.83200528%2C79.70365833",
+    "checkedAt": "2026-10-07"
+  },
+  "KA-VE": {
+    "roadKm": 70,
+    "baseDriveMinutes": 58,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=12.83200528%2C79.70365833%3B12.9165%2C79.1325",
+    "checkedAt": "2026-10-07"
+  },
+  "VE-TI": {
+    "roadKm": 76,
+    "baseDriveMinutes": 54,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=12.9165%2C79.1325%3B12.28%2C79.07",
+    "checkedAt": "2026-10-07"
+  },
+  "TI-CHD": {
+    "roadKm": 159,
+    "baseDriveMinutes": 124,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=12.28%2C79.07%3B11.407%2C79.6912",
+    "checkedAt": "2026-10-07"
+  },
+  "TR-TH": {
+    "roadKm": 58,
+    "baseDriveMinutes": 60,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=10.79027778%2C78.70472222%3B10.78694444%2C79.13777778",
+    "checkedAt": "2026-10-07"
+  },
+  "TH-KUM": {
+    "roadKm": 39,
+    "baseDriveMinutes": 37,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=10.78694444%2C79.13777778%3B10.9602%2C79.3845",
+    "checkedAt": "2026-10-07"
+  },
+  "KUM-THV": {
+    "roadKm": 41,
+    "baseDriveMinutes": 39,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=10.9602%2C79.3845%3B10.773%2C79.637",
+    "checkedAt": "2026-10-07"
+  },
+  "TR-KUM": {
+    "roadKm": 87,
+    "baseDriveMinutes": 85,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=10.79027778%2C78.70472222%3B10.9602%2C79.3845",
+    "checkedAt": "2026-10-07"
+  },
+  "KUM-TH": {
+    "roadKm": 40,
+    "baseDriveMinutes": 38,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=10.9602%2C79.3845%3B10.78694444%2C79.13777778",
+    "checkedAt": "2026-10-07"
+  },
+  "TH-NAG": {
+    "roadKm": 85,
+    "baseDriveMinutes": 63,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=10.78694444%2C79.13777778%3B10.7672%2C79.8449",
+    "checkedAt": "2026-10-07"
+  },
+  "KUM-MAY": {
+    "roadKm": 35,
+    "baseDriveMinutes": 25,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=10.9602%2C79.3845%3B11.1019%2C79.65",
+    "checkedAt": "2026-10-07"
+  },
+  "MAY-NAG": {
+    "roadKm": 61,
+    "baseDriveMinutes": 50,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=11.1019%2C79.65%3B10.7672%2C79.8449",
+    "checkedAt": "2026-10-07"
+  },
+  "NAG-THV": {
+    "roadKm": 27,
+    "baseDriveMinutes": 21,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=10.7672%2C79.8449%3B10.773%2C79.637",
+    "checkedAt": "2026-10-07"
+  },
+  "CHD-MAY": {
+    "roadKm": 44,
+    "baseDriveMinutes": 34,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=11.407%2C79.6912%3B11.1019%2C79.65",
+    "checkedAt": "2026-10-07"
+  },
+  "MAY-KUM": {
+    "roadKm": 35,
+    "baseDriveMinutes": 25,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=11.1019%2C79.65%3B10.9602%2C79.3845",
+    "checkedAt": "2026-10-07"
+  },
+  "MAD-KAR": {
+    "roadKm": 81,
+    "baseDriveMinutes": 73,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=9.9252%2C78.1198%3B10.0735%2C78.7732",
+    "checkedAt": "2026-10-07"
+  },
+  "KAR-RAM": {
+    "roadKm": 141,
+    "baseDriveMinutes": 138,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=10.0735%2C78.7732%3B9.288%2C79.313",
+    "checkedAt": "2026-10-07"
+  },
+  "RAM-TIR": {
+    "roadKm": 219,
+    "baseDriveMinutes": 196,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=9.288%2C79.313%3B8.71361111%2C77.75666667",
+    "checkedAt": "2026-10-07"
+  },
+  "MAD-TIR": {
+    "roadKm": 161,
+    "baseDriveMinutes": 140,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=9.9252%2C78.1198%3B8.71361111%2C77.75666667",
+    "checkedAt": "2026-10-07"
+  },
+  "TIR-TCD": {
+    "roadKm": 60,
+    "baseDriveMinutes": 56,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=8.71361111%2C77.75666667%3B8.4946%2C78.1219",
+    "checkedAt": "2026-10-07"
+  },
+  "TCD-KAN": {
+    "roadKm": 90,
+    "baseDriveMinutes": 65,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=8.4946%2C78.1219%3B8.0883%2C77.5385",
+    "checkedAt": "2026-10-07"
+  },
+  "MAD-PAL": {
+    "roadKm": 115,
+    "baseDriveMinutes": 106,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=9.9252%2C78.1198%3B10.45%2C77.5161",
+    "checkedAt": "2026-10-07"
+  },
+  "PAL-COI": {
+    "roadKm": 101,
+    "baseDriveMinutes": 102,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=10.45%2C77.5161%3B11.00083333%2C76.96333333",
+    "checkedAt": "2026-10-07"
+  },
+  "COI-OO": {
+    "roadKm": 101,
+    "baseDriveMinutes": 110,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=11.00083333%2C76.96333333%3B11.41%2C76.7",
+    "checkedAt": "2026-10-07"
+  },
+  "TCD-NGC": {
+    "roadKm": 101,
+    "baseDriveMinutes": 78,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=8.4946%2C78.1219%3B8.175%2C77.43055556",
+    "checkedAt": "2026-10-07"
+  },
+  "NGC-KAN": {
+    "roadKm": 17,
+    "baseDriveMinutes": 18,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=8.175%2C77.43055556%3B8.0883%2C77.5385",
+    "checkedAt": "2026-10-07"
+  },
+  "TIR-TEN": {
+    "roadKm": 68,
+    "baseDriveMinutes": 64,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=8.71361111%2C77.75666667%3B8.9564%2C77.3152",
+    "checkedAt": "2026-10-07"
+  },
+  "TEN-TCD": {
+    "roadKm": 127,
+    "baseDriveMinutes": 118,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=8.9564%2C77.3152%3B8.4946%2C78.1219",
+    "checkedAt": "2026-10-07"
+  },
+  "RAM-MAD": {
+    "roadKm": 173,
+    "baseDriveMinutes": 173,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=9.288%2C79.313%3B9.9252%2C78.1198",
+    "checkedAt": "2026-10-07"
+  },
+  "SA-NAM": {
+    "roadKm": 39,
+    "baseDriveMinutes": 39,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=11.6469616%2C78.2106958%3B11.21666667%2C78.16666667",
+    "checkedAt": "2026-10-07"
+  },
+  "NAM-COI": {
+    "roadKm": 161,
+    "baseDriveMinutes": 138,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=11.21666667%2C78.16666667%3B11.00083333%2C76.96333333",
+    "checkedAt": "2026-10-07"
+  },
+  "COI-PAL": {
+    "roadKm": 101,
+    "baseDriveMinutes": 97,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=11.00083333%2C76.96333333%3B10.45%2C77.5161",
+    "checkedAt": "2026-10-07"
+  },
+  "OO-CUN": {
+    "roadKm": 18,
+    "baseDriveMinutes": 32,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=11.41%2C76.7%3B11.345%2C76.795",
+    "checkedAt": "2026-10-07"
+  },
+  "CUN-SA": {
+    "roadKm": 219,
+    "baseDriveMinutes": 191,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=11.345%2C76.795%3B11.6469616%2C78.2106958",
+    "checkedAt": "2026-10-07"
+  },
+  "CH-KA": {
+    "roadKm": 77,
+    "baseDriveMinutes": 60,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=13.0825%2C80.275%3B12.83200528%2C79.70365833",
+    "checkedAt": "2026-10-07"
+  },
+  "TH-THV": {
+    "roadKm": 60,
+    "baseDriveMinutes": 45,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=10.78694444%2C79.13777778%3B10.773%2C79.637",
+    "checkedAt": "2026-10-07"
+  },
+  "THV-NAG": {
+    "roadKm": 27,
+    "baseDriveMinutes": 21,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=10.773%2C79.637%3B10.7672%2C79.8449",
+    "checkedAt": "2026-10-07"
+  },
+  "NAG-MAY": {
+    "roadKm": 55,
+    "baseDriveMinutes": 50,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=10.7672%2C79.8449%3B11.1019%2C79.65",
+    "checkedAt": "2026-10-07"
+  },
+  "TH-CHD": {
+    "roadKm": 109,
+    "baseDriveMinutes": 93,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=10.78694444%2C79.13777778%3B11.407%2C79.6912",
+    "checkedAt": "2026-10-07"
+  },
+  "CHD-PU": {
+    "roadKm": 65,
+    "baseDriveMinutes": 55,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=11.407%2C79.6912%3B11.9340568%2C79.8306447",
+    "checkedAt": "2026-10-07"
+  },
+  "TIR-NGC": {
+    "roadKm": 82,
+    "baseDriveMinutes": 64,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=8.71361111%2C77.75666667%3B8.175%2C77.43055556",
+    "checkedAt": "2026-10-07"
+  },
+  "NAM-TR": {
+    "roadKm": 88,
+    "baseDriveMinutes": 71,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=11.21666667%2C78.16666667%3B10.79027778%2C78.70472222",
+    "checkedAt": "2026-10-07"
+  },
+  "PU-CHD": {
+    "roadKm": 71,
+    "baseDriveMinutes": 62,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=11.9340568%2C79.8306447%3B11.407%2C79.6912",
+    "checkedAt": "2026-10-07"
+  },
+  "TUP-SLK": {
+    "roadKm": 41,
+    "baseDriveMinutes": 34,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=13.6355%2C79.4236%3B13.76%2C79.7",
+    "checkedAt": "2026-10-07"
+  },
+  "SLK-NEL": {
+    "roadKm": 97,
+    "baseDriveMinutes": 73,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=13.76%2C79.7%3B14.44305556%2C79.98611111",
+    "checkedAt": "2026-10-07"
+  },
+  "NEL-CH": {
+    "roadKm": 174,
+    "baseDriveMinutes": 144,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=14.44305556%2C79.98611111%3B13.0825%2C80.275",
+    "checkedAt": "2026-10-07"
+  },
+  "TUP-KA": {
+    "roadKm": 109,
+    "baseDriveMinutes": 88,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=13.6355%2C79.4236%3B12.83200528%2C79.70365833",
+    "checkedAt": "2026-10-07"
+  },
+  "KA-CH": {
+    "roadKm": 78,
+    "baseDriveMinutes": 60,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=12.83200528%2C79.70365833%3B13.0825%2C80.275",
+    "checkedAt": "2026-10-07"
+  },
+  "HYD-YAD": {
+    "roadKm": 51,
+    "baseDriveMinutes": 53,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=17.36166667%2C78.47472222%3B17.51%2C78.89",
+    "checkedAt": "2026-10-07"
+  },
+  "YAD-WAR": {
+    "roadKm": 104,
+    "baseDriveMinutes": 82,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=17.51%2C78.89%3B17.9689%2C79.5941",
+    "checkedAt": "2026-10-07"
+  },
+  "WAR-HYD": {
+    "roadKm": 152,
+    "baseDriveMinutes": 128,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=17.9689%2C79.5941%3B17.36166667%2C78.47472222",
+    "checkedAt": "2026-10-07"
+  },
+  "HYD-BAS": {
+    "roadKm": 207,
+    "baseDriveMinutes": 180,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=17.36166667%2C78.47472222%3B18.8845844%2C77.95259",
+    "checkedAt": "2026-10-07"
+  },
+  "BAS-WAR": {
+    "roadKm": 260,
+    "baseDriveMinutes": 194,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=18.8845844%2C77.95259%3B17.9689%2C79.5941",
+    "checkedAt": "2026-10-07"
+  },
+  "BEN-MYS": {
+    "roadKm": 140,
+    "baseDriveMinutes": 115,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=12.97888889%2C77.59166667%3B12.30861111%2C76.65305556",
+    "checkedAt": "2026-10-07"
+  },
+  "MYS-SRP": {
+    "roadKm": 16,
+    "baseDriveMinutes": 20,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=12.30861111%2C76.65305556%3B12.414%2C76.704",
+    "checkedAt": "2026-10-07"
+  },
+  "SRP-MEL": {
+    "roadKm": 37,
+    "baseDriveMinutes": 32,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=12.414%2C76.704%3B12.65944444%2C76.64833333",
+    "checkedAt": "2026-10-07"
+  },
+  "BEN-BEL": {
+    "roadKm": 247,
+    "baseDriveMinutes": 199,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=12.97888889%2C77.59166667%3B13.1645671%2C75.8634851",
+    "checkedAt": "2026-10-07"
+  },
+  "BEL-MYS": {
+    "roadKm": 160,
+    "baseDriveMinutes": 128,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=13.1645671%2C75.8634851%3B12.30861111%2C76.65305556",
+    "checkedAt": "2026-10-07"
+  },
+  "HAM-PAT": {
+    "roadKm": 134,
+    "baseDriveMinutes": 116,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=15.33444444%2C76.46222222%3B15.95138889%2C75.81472222",
+    "checkedAt": "2026-10-07"
+  },
+  "PAT-BAD": {
+    "roadKm": 21,
+    "baseDriveMinutes": 19,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=15.95138889%2C75.81472222%3B15.92%2C75.68027778",
+    "checkedAt": "2026-10-07"
+  },
+  "BAD-HAM": {
+    "roadKm": 142,
+    "baseDriveMinutes": 114,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=15.92%2C75.68027778%3B15.33444444%2C76.46222222",
+    "checkedAt": "2026-10-07"
+  },
+  "MAN-UDU": {
+    "roadKm": 58,
+    "baseDriveMinutes": 54,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=12.8717%2C74.8425%3B13.3389%2C74.7451",
+    "checkedAt": "2026-10-07"
+  },
+  "UDU-MUR": {
+    "roadKm": 102,
+    "baseDriveMinutes": 83,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=13.3389%2C74.7451%3B14.09361667%2C74.483825",
+    "checkedAt": "2026-10-07"
+  },
+  "MUR-GOK": {
+    "roadKm": 77,
+    "baseDriveMinutes": 74,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=14.09361667%2C74.483825%3B14.5439629%2C74.3184418",
+    "checkedAt": "2026-10-07"
+  },
+  "KOC-THR": {
+    "roadKm": 85,
+    "baseDriveMinutes": 82,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=9.93119444%2C76.26730556%3B10.52761111%2C76.21438889",
+    "checkedAt": "2026-10-07"
+  },
+  "THR-GUR": {
+    "roadKm": 26,
+    "baseDriveMinutes": 33,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=10.52761111%2C76.21438889%3B10.59461111%2C76.03688889",
+    "checkedAt": "2026-10-07"
+  },
+  "GUR-KOC": {
+    "roadKm": 87,
+    "baseDriveMinutes": 100,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=10.59461111%2C76.03688889%3B9.93119444%2C76.26730556",
+    "checkedAt": "2026-10-07"
+  },
+  "TVM-VAR": {
+    "roadKm": 43,
+    "baseDriveMinutes": 51,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=8.52411111%2C76.93661111%3B8.7432986%2C76.6968401",
+    "checkedAt": "2026-10-07"
+  },
+  "VAR-KOC": {
+    "roadKm": 161,
+    "baseDriveMinutes": 165,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=8.7432986%2C76.6968401%3B9.93119444%2C76.26730556",
+    "checkedAt": "2026-10-07"
+  },
+  "KOC-ALA": {
+    "roadKm": 54,
+    "baseDriveMinutes": 53,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=9.93119444%2C76.26730556%3B9.49%2C76.33",
+    "checkedAt": "2026-10-07"
+  },
+  "KOC-MUN": {
+    "roadKm": 126,
+    "baseDriveMinutes": 133,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=9.93119444%2C76.26730556%3B10.08916667%2C77.05972222",
+    "checkedAt": "2026-10-07"
+  },
+  "MUN-THE": {
+    "roadKm": 87,
+    "baseDriveMinutes": 98,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=10.08916667%2C77.05972222%3B9.533%2C77.2",
+    "checkedAt": "2026-10-07"
+  },
+  "THE-KOC": {
+    "roadKm": 158,
+    "baseDriveMinutes": 156,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=9.533%2C77.2%3B9.93119444%2C76.26730556",
+    "checkedAt": "2026-10-07"
+  },
+  "KOC-KKR": {
+    "roadKm": 53,
+    "baseDriveMinutes": 55,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=9.93119444%2C76.26730556%3B9.595%2C76.43027778",
+    "checkedAt": "2026-10-07"
+  },
+  "KKR-ALA": {
+    "roadKm": 37,
+    "baseDriveMinutes": 39,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=9.595%2C76.43027778%3B9.49%2C76.33",
+    "checkedAt": "2026-10-07"
+  },
+  "ALA-VAR": {
+    "roadKm": 109,
+    "baseDriveMinutes": 117,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=9.49%2C76.33%3B8.7432986%2C76.6968401",
+    "checkedAt": "2026-10-07"
+  },
+  "KAN-TVM": {
+    "roadKm": 94,
+    "baseDriveMinutes": 96,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=8.0883%2C77.5385%3B8.52411111%2C76.93661111",
+    "checkedAt": "2026-10-07"
+  },
+  "VAR-ALA": {
+    "roadKm": 108,
+    "baseDriveMinutes": 113,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=8.7432986%2C76.6968401%3B9.49%2C76.33",
+    "checkedAt": "2026-10-07"
+  },
+  "OO-MYS": {
+    "roadKm": 157,
+    "baseDriveMinutes": 114,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=11.41%2C76.7%3B12.30861111%2C76.65305556",
+    "checkedAt": "2026-10-07"
+  },
+  "TIR-KAN": {
+    "roadKm": 84,
+    "baseDriveMinutes": 61,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=8.71361111%2C77.75666667%3B8.0883%2C77.5385",
+    "checkedAt": "2026-10-07"
+  },
+  "DEL-MAT": {
+    "roadKm": 143,
+    "baseDriveMinutes": 108,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=28.61%2C77.23%3B27.4925%2C77.67361111",
+    "checkedAt": "2026-10-07"
+  },
+  "MAT-VRI": {
+    "roadKm": 12,
+    "baseDriveMinutes": 15,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=27.4925%2C77.67361111%3B27.58%2C77.7",
+    "checkedAt": "2026-10-07"
+  },
+  "VRI-AGR": {
+    "roadKm": 71,
+    "baseDriveMinutes": 57,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=27.58%2C77.7%3B27.18%2C78.02",
+    "checkedAt": "2026-10-07"
+  },
+  "DEL-AGR": {
+    "roadKm": 201,
+    "baseDriveMinutes": 149,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=28.61%2C77.23%3B27.18%2C78.02",
+    "checkedAt": "2026-10-07"
+  },
+  "AGR-FAT": {
+    "roadKm": 39,
+    "baseDriveMinutes": 32,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=27.18%2C78.02%3B27.091%2C77.661",
+    "checkedAt": "2026-10-07"
+  },
+  "FAT-JAI": {
+    "roadKm": 203,
+    "baseDriveMinutes": 145,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=27.091%2C77.661%3B26.915%2C75.82",
+    "checkedAt": "2026-10-07"
+  },
+  "JAI-AJM": {
+    "roadKm": 135,
+    "baseDriveMinutes": 107,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=26.915%2C75.82%3B26.4499%2C74.6399",
+    "checkedAt": "2026-10-07"
+  },
+  "AJM-PUS": {
+    "roadKm": 15,
+    "baseDriveMinutes": 13,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=26.4499%2C74.6399%3B26.487652%2C74.555922",
+    "checkedAt": "2026-10-07"
+  },
+  "PUS-JOD": {
+    "roadKm": 217,
+    "baseDriveMinutes": 157,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=26.487652%2C74.555922%3B26.28%2C73.02",
+    "checkedAt": "2026-10-07"
+  },
+  "JOD-OSI": {
+    "roadKm": 76,
+    "baseDriveMinutes": 79,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=26.28%2C73.02%3B26.7909482%2C72.998004",
+    "checkedAt": "2026-10-07"
+  },
+  "OSI-JAS": {
+    "roadKm": 254,
+    "baseDriveMinutes": 215,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=26.7909482%2C72.998004%3B26.913%2C70.915",
+    "checkedAt": "2026-10-07"
+  },
+  "JAS-JOD": {
+    "roadKm": 279,
+    "baseDriveMinutes": 203,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=26.913%2C70.915%3B26.28%2C73.02",
+    "checkedAt": "2026-10-07"
+  },
+  "UDA-CHI": {
+    "roadKm": 117,
+    "baseDriveMinutes": 91,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=24.58%2C73.68%3B24.88%2C74.63",
+    "checkedAt": "2026-10-07"
+  },
+  "CHI-KBG": {
+    "roadKm": 158,
+    "baseDriveMinutes": 134,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=24.88%2C74.63%3B25.14888889%2C73.58027778",
+    "checkedAt": "2026-10-07"
+  },
+  "KBG-UDA": {
+    "roadKm": 97,
+    "baseDriveMinutes": 78,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=25.14888889%2C73.58027778%3B24.58%2C73.68",
+    "checkedAt": "2026-10-07"
+  },
+  "VAN-SAR": {
+    "roadKm": 8,
+    "baseDriveMinutes": 9,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=25.31888889%2C83.01277778%3B25.378%2C83.0251",
+    "checkedAt": "2026-10-07"
+  },
+  "SAR-PRA": {
+    "roadKm": 135,
+    "baseDriveMinutes": 99,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=25.378%2C83.0251%3B25.43583333%2C81.84638889",
+    "checkedAt": "2026-10-07"
+  },
+  "PRA-CHT": {
+    "roadKm": 105,
+    "baseDriveMinutes": 78,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=25.43583333%2C81.84638889%3B25.217139%2C81.1045927",
+    "checkedAt": "2026-10-07"
+  },
+  "LUC-AYO": {
+    "roadKm": 135,
+    "baseDriveMinutes": 100,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=26.85%2C80.95%3B26.79916667%2C82.20444444",
+    "checkedAt": "2026-10-07"
+  },
+  "AYO-VAN": {
+    "roadKm": 209,
+    "baseDriveMinutes": 151,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=26.79916667%2C82.20444444%3B25.31888889%2C83.01277778",
+    "checkedAt": "2026-10-07"
+  },
+  "PRA-AYO": {
+    "roadKm": 168,
+    "baseDriveMinutes": 122,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=25.43583333%2C81.84638889%3B26.79916667%2C82.20444444",
+    "checkedAt": "2026-10-07"
+  },
+  "AYO-LUC": {
+    "roadKm": 136,
+    "baseDriveMinutes": 100,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=26.79916667%2C82.20444444%3B26.85%2C80.95",
+    "checkedAt": "2026-10-07"
+  },
+  "LUC-PRA": {
+    "roadKm": 208,
+    "baseDriveMinutes": 146,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=26.85%2C80.95%3B25.43583333%2C81.84638889",
+    "checkedAt": "2026-10-07"
+  },
+  "HAR-RIS": {
+    "roadKm": 25,
+    "baseDriveMinutes": 27,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=29.945%2C78.163%3B30.10833333%2C78.29722222",
+    "checkedAt": "2026-10-07"
+  },
+  "RIS-DEV": {
+    "roadKm": 68,
+    "baseDriveMinutes": 103,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=30.10833333%2C78.29722222%3B30.146%2C78.598",
+    "checkedAt": "2026-10-07"
+  },
+  "DEV-DEH": {
+    "roadKm": 112,
+    "baseDriveMinutes": 147,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=30.146%2C78.598%3B30.345%2C78.029",
+    "checkedAt": "2026-10-07"
+  },
+  "DEH-MUS": {
+    "roadKm": 25,
+    "baseDriveMinutes": 28,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=30.345%2C78.029%3B30.45%2C78.08",
+    "checkedAt": "2026-10-07"
+  },
+  "MUS-HAR": {
+    "roadKm": 77,
+    "baseDriveMinutes": 79,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=30.45%2C78.08%3B29.945%2C78.163",
+    "checkedAt": "2026-10-07"
+  },
+  "CHN-SHI": {
+    "roadKm": 114,
+    "baseDriveMinutes": 94,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=30.7333%2C76.7797%3B31.10333333%2C77.17222222",
+    "checkedAt": "2026-10-07"
+  },
+  "SHI-KUF": {
+    "roadKm": 15,
+    "baseDriveMinutes": 13,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=31.10333333%2C77.17222222%3B31.1006627%2C77.2633837",
+    "checkedAt": "2026-10-07"
+  },
+  "KUF-CHN": {
+    "roadKm": 127,
+    "baseDriveMinutes": 110,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=31.1006627%2C77.2633837%3B30.7333%2C76.7797",
+    "checkedAt": "2026-10-07"
+  },
+  "KUF-MLI": {
+    "roadKm": 235,
+    "baseDriveMinutes": 262,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=31.1006627%2C77.2633837%3B32.2454608%2C77.1872926",
+    "checkedAt": "2026-10-07"
+  },
+  "MLI-KUL": {
+    "roadKm": 41,
+    "baseDriveMinutes": 34,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=32.2454608%2C77.1872926%3B31.95%2C77.11",
+    "checkedAt": "2026-10-07"
+  },
+  "AMR-ANP": {
+    "roadKm": 192,
+    "baseDriveMinutes": 145,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=31.64%2C74.86%3B31.234961%2C76.498808",
+    "checkedAt": "2026-10-07"
+  },
+  "ANP-CHN": {
+    "roadKm": 84,
+    "baseDriveMinutes": 79,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=31.234961%2C76.498808%3B30.7333%2C76.7797",
+    "checkedAt": "2026-10-07"
+  },
+  "JAM-KAT": {
+    "roadKm": 40,
+    "baseDriveMinutes": 36,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=32.73%2C74.87%3B32.9924858%2C74.9318127",
+    "checkedAt": "2026-10-07"
+  },
+  "KAT-PTP": {
+    "roadKm": 107,
+    "baseDriveMinutes": 143,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=32.9924858%2C74.9318127%3B33.0908%2C75.3264",
+    "checkedAt": "2026-10-07"
+  },
+  "PTP-JAM": {
+    "roadKm": 105,
+    "baseDriveMinutes": 102,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=33.0908%2C75.3264%3B32.73%2C74.87",
+    "checkedAt": "2026-10-07"
+  },
+  "SRI-GUL": {
+    "roadKm": 50,
+    "baseDriveMinutes": 60,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=34.09%2C74.79%3B34.05%2C74.38",
+    "checkedAt": "2026-10-07"
+  },
+  "GUL-PAH": {
+    "roadKm": 104,
+    "baseDriveMinutes": 114,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=34.05%2C74.38%3B34.01%2C75.19",
+    "checkedAt": "2026-10-07"
+  },
+  "PAH-SRI": {
+    "roadKm": 55,
+    "baseDriveMinutes": 59,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=34.01%2C75.19%3B34.09%2C74.79",
+    "checkedAt": "2026-10-07"
+  },
+  "DHA-PAM": {
+    "roadKm": 36,
+    "baseDriveMinutes": 53,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=32.21527778%2C76.31861111%3B32.109722%2C76.536641",
+    "checkedAt": "2026-10-07"
+  },
+  "PAM-CHN": {
+    "roadKm": 214,
+    "baseDriveMinutes": 254,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=32.109722%2C76.536641%3B30.7333%2C76.7797",
+    "checkedAt": "2026-10-07"
+  },
+  "DEL-HAS": {
+    "roadKm": 120,
+    "baseDriveMinutes": 123,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=28.61%2C77.23%3B29.17%2C78.02",
+    "checkedAt": "2026-10-07"
+  },
+  "HAS-AGR": {
+    "roadKm": 265,
+    "baseDriveMinutes": 222,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=29.17%2C78.02%3B27.18%2C78.02",
+    "checkedAt": "2026-10-07"
+  },
+  "JAI-ALW": {
+    "roadKm": 131,
+    "baseDriveMinutes": 105,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=26.915%2C75.82%3B27.55%2C76.636",
+    "checkedAt": "2026-10-07"
+  },
+  "ALW-DEL": {
+    "roadKm": 167,
+    "baseDriveMinutes": 119,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=27.55%2C76.636%3B28.61%2C77.23",
+    "checkedAt": "2026-10-07"
+  },
+  "KUR-PAN": {
+    "roadKm": 84,
+    "baseDriveMinutes": 67,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=29.965717%2C76.837006%3B29.3875%2C76.97",
+    "checkedAt": "2026-10-07"
+  },
+  "PAN-DEL": {
+    "roadKm": 115,
+    "baseDriveMinutes": 82,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=29.3875%2C76.97%3B28.61%2C77.23",
+    "checkedAt": "2026-10-07"
+  },
+  "DEL-CHN": {
+    "roadKm": 265,
+    "baseDriveMinutes": 196,
+    "sourceUrl": "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=28.61%2C77.23%3B30.7333%2C76.7797",
+    "checkedAt": "2026-10-07"
+  }
+}

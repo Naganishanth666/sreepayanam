@@ -5,12 +5,20 @@ const publicationProblems = pkg => {
     && !Number.isNaN(Date.parse(`${value}T00:00:00Z`)) && value <= new Date().toISOString().slice(0, 10);
   const days = Number(pkg.durationDays);
   if (!Array.isArray(pkg.catalogCategories) || !pkg.catalogCategories.length) problems.push('Choose at least one active catalogue category.');
-  if (!['Tamil Nadu', 'South India', 'India-wide', 'Other'].includes(pkg.regionScope)) problems.push('Tag the route region.');
+  if (!['Tamil Nadu', 'South India', 'North India', 'India-wide', 'Other'].includes(pkg.regionScope)) problems.push('Tag the route region.');
   if (!Array.isArray(pkg.hotelCategories) || !pkg.hotelCategories.length) problems.push('Choose the hotel categories available for this package.');
   if (!text(pkg.title) || !text(pkg.destination) || !text(pkg.startingCity) || !text(pkg.endingCity)) problems.push('Complete the title, destination and route start/end.');
   if (!Number.isInteger(days) || days < 1 || !Array.isArray(pkg.itinerary) || pkg.itinerary.length !== days
     || pkg.itinerary.some(day => !text(day.title) || !text(day.activities) || !text(day.hotel) || !text(day.mealPlan) || !text(day.transport))) {
     problems.push('Provide a complete day itinerary with stay, meals and travel mode for every day.');
+  }
+  if (!Array.isArray(pkg.itinerary) || pkg.itinerary.some(day => !Array.isArray(day.schedule) || !day.schedule.length
+    || day.schedule.some((item, index) => !/^([01]\d|2[0-3]):[0-5]\d$/.test(item.time || '')
+      || !text(item.title) || !text(item.description)
+      || (index > 0 && item.time < day.schedule[index - 1].time))
+    || !day.schedule.some(item => item.kind === 'visit' && text(item.place)
+      && /^https:\/\//.test(item.sourceUrl || '')))) {
+    problems.push('Add a chronologically timed programme and a named, source-linked visit with a location brief to every day.');
   }
   if (!text(pkg.journeyTimeNotes) || !text(pkg.journeyDistanceNotes)) problems.push('Record approximate journey times and distances with their basis.');
   if (!Array.isArray(pkg.inclusions) || !pkg.inclusions.length || !Array.isArray(pkg.exclusions) || !pkg.exclusions.length || !text(pkg.mealPlan)) problems.push('Complete inclusions, exclusions and the meal plan.');

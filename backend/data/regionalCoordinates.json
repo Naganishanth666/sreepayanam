@@ -1,0 +1,68 @@
+{
+  "Puducherry": {
+    "lat": 11.9340568,
+    "lon": 79.8306447,
+    "sourceUrl": "https://www.openstreetmap.org/node/245600130",
+    "displayName": "Puducherry, Puducherry Taluk, Puducherry, 605001, India"
+  },
+  "Salem": {
+    "lat": 11.6469616,
+    "lon": 78.2106958,
+    "sourceUrl": "https://www.openstreetmap.org/relation/1819322",
+    "displayName": "Salem, Tamil Nadu, India"
+  },
+  "Basara": {
+    "lat": 18.8845844,
+    "lon": 77.95259,
+    "sourceUrl": "https://www.openstreetmap.org/search?query=Basar%2C%20Nirmal%2C%20Telangana",
+    "displayName": "Basar, Basar mandal, Nirmal, Telangana, 504101, India"
+  },
+  "Belur": {
+    "lat": 13.1645671,
+    "lon": 75.8634851,
+    "sourceUrl": "https://www.openstreetmap.org/node/245618812",
+    "displayName": "Belur, Beluru taluk, Hassan, Karnataka, 573115, India"
+  },
+  "Gokarna": {
+    "lat": 14.5439629,
+    "lon": 74.3184418,
+    "sourceUrl": "https://www.openstreetmap.org/node/245628061",
+    "displayName": "Gokarna, Kumata taluk, Uttara Kannada, Karnataka, 581326, India"
+  },
+  "Osian": {
+    "lat": 26.7909482,
+    "lon": 72.998004,
+    "sourceUrl": "https://www.openstreetmap.org/relation/9631238",
+    "displayName": "Osian Tehsil, Jodhpur, Rajasthan, 342303, India"
+  },
+  "Chitrakoot": {
+    "lat": 25.217139,
+    "lon": 81.1045927,
+    "sourceUrl": "https://www.openstreetmap.org/relation/9538920",
+    "displayName": "Chitrakoot, Uttar Pradesh, India"
+  },
+  "Kufri": {
+    "lat": 31.1006627,
+    "lon": 77.2633837,
+    "sourceUrl": "https://www.openstreetmap.org/node/956636270",
+    "displayName": "Kufri, Shimla ( Rural ), Shimla, Himachal Pradesh, 171007, India"
+  },
+  "Manali": {
+    "lat": 32.2454608,
+    "lon": 77.1872926,
+    "sourceUrl": "https://www.openstreetmap.org/node/245773022",
+    "displayName": "Manali, Kullu, Himachal Pradesh, 175131, India"
+  },
+  "Katra": {
+    "lat": 32.9924858,
+    "lon": 74.9318127,
+    "sourceUrl": "https://www.openstreetmap.org/node/773643303",
+    "displayName": "Katra, Reasi, Reasi district, Jammu and Kashmir, 182301, India"
+  },
+  "Patnitop": {
+    "lat": 33.0908,
+    "lon": 75.3264,
+    "sourceUrl": "https://www.openstreetmap.org/node/342119120",
+    "displayName": "Patnitop, Udhampur district, Jammu and Kashmir, India"
+  }
+}

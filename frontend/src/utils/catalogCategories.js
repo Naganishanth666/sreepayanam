@@ -1,7 +1,8 @@
 export const CATALOG_CATEGORIES = [
   'National Tours', 'International Tours', 'Pilgrimage Tours', 'Honeymoon Packages',
   'Family Holidays', 'Hill Station Tours', 'Educational Tours', 'Medical Tourism',
-  'Corporate & MICE', 'Festival & Cultural Tours', 'Cruise Holidays', 'IRCTC Rail Tours'
+  'Corporate & MICE', 'Festival & Cultural Tours', 'Cruise Holidays', 'IRCTC Rail Tours',
+  'Tamil Nadu Pilgrimages', 'South India Pilgrimages', 'North India Pilgrimages', 'India-wide Pilgrimages'
 ];
 
 const tourTypeCategories = {

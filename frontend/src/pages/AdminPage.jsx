@@ -33,7 +33,7 @@ const emptyForm = {
   startingCity: '', endingCity: '', durationDays: '', durationNights: '', seasonStart: '', seasonEnd: '',
   overview: '', imageUrl: '', journeyTimeNotes: '', journeyDistanceNotes: '',
   accessibilityNotes: '', seasonConstraints: '', imageRightsNote: '', contentReviewedBy: '', contentReviewedAt: '',
-  itinerary: [{ day: 1, title: '', activities: '', hotel: '', mealPlan: '', transport: '' }],
+  itinerary: [{ day: 1, title: '', activities: '', hotel: '', mealPlan: '', transport: '', schedule: [] }],
   inclusions: '', exclusions: '', optionalAddons: '',
   templesList: [], destinationReferences: [], priceBreakdown: '', mealPlan: '', baseCost: '',
   originalPrice: '', offerPrice: '', isSpecialOffer: false, offerValidity: '',
@@ -629,7 +629,7 @@ const AdminPage = () => {
         activities: day.activities || '',
         hotel: day.hotel || '',
         mealPlan: day.mealPlan || '',
-        transport: day.transport || ''
+        transport: day.transport || '', schedule: Array.isArray(day.schedule) ? day.schedule : []
       })) : [{ day: 1, title: '', activities: '', hotel: '', mealPlan: '', transport: '' }],
       inclusions: Array.isArray(data.inclusions) ? data.inclusions.join('\n') : (data.inclusions || ''),
       exclusions: Array.isArray(data.exclusions) ? data.exclusions.join('\n') : (data.exclusions || ''),
@@ -780,7 +780,7 @@ const AdminPage = () => {
           activities: day.activities || '',
           hotel: day.hotel || '',
           mealPlan: day.mealPlan || '',
-          transport: day.transport || ''
+        transport: day.transport || '', schedule: Array.isArray(day.schedule) ? day.schedule : []
         })) : [{ day: 1, title: '', activities: '', hotel: '', mealPlan: '', transport: '' }],
         inclusions: data.inclusions || '',
         exclusions: data.exclusions || '',
@@ -1179,10 +1179,35 @@ const AdminPage = () => {
     });
   };
 
+  const updateSchedule = (dayIndex, rowIndex, field, value) => {
+    setFormData(current => {
+      const itinerary = current.itinerary.map((day, index) => {
+        if (index !== dayIndex) return day;
+        const schedule = [...(day.schedule || [])];
+        schedule[rowIndex] = { ...schedule[rowIndex], [field]: value,
+          ...(field === 'place' && value !== schedule[rowIndex].place ? { imageUrl: '', imageCredit: '', imageCreditUrl: '' } : {}) };
+        return { ...day, schedule };
+      });
+      return { ...current, itinerary };
+    });
+  };
+  const addScheduleVisit = dayIndex => setFormData(current => ({
+    ...current,
+    itinerary: current.itinerary.map((day, index) => index === dayIndex
+      ? { ...day, schedule: [...(day.schedule || []), { time: '09:00', kind: 'visit', title: '', place: '', description: '', sourceUrl: '' }] }
+      : day)
+  }));
+  const removeScheduleRow = (dayIndex, rowIndex) => setFormData(current => ({
+    ...current,
+    itinerary: current.itinerary.map((day, index) => index === dayIndex
+      ? { ...day, schedule: (day.schedule || []).filter((_, itemIndex) => itemIndex !== rowIndex) }
+      : day)
+  }));
+
   const addDay = () => {
     setFormData(f => ({
       ...f,
-      itinerary: [...f.itinerary, { day: f.itinerary.length + 1, title: '', activities: '', hotel: '', mealPlan: '' }]
+      itinerary: [...f.itinerary, { day: f.itinerary.length + 1, title: '', activities: '', hotel: '', mealPlan: '', transport: '', schedule: [] }]
     }));
   };
 
@@ -1222,7 +1247,7 @@ const AdminPage = () => {
             activities: day.activities || '',
             hotel: day.hotel || '',
             mealPlan: day.mealPlan || '',
-            transport: day.transport || ''
+            transport: day.transport || '', schedule: Array.isArray(day.schedule) ? day.schedule : []
           })) 
         : [{ day: 1, title: '', activities: '', hotel: '', mealPlan: '', transport: '' }],
       inclusions: Array.isArray(pkg.inclusions) ? pkg.inclusions.join('\n') : (pkg.inclusions || ''),
@@ -1242,6 +1267,7 @@ const AdminPage = () => {
       seoTitle: pkg.seoTitle || '',
       seoMetaDescription: pkg.seoMetaDescription || '',
       isActive: pkg.isActive !== undefined ? pkg.isActive : true,
+      status: pkg.status || 'Draft',
       ...flattenCostingData(pkg)
     });
     setOpenSection('basic');
@@ -2243,7 +2269,7 @@ const AdminPage = () => {
                     <div>{catalogCategories.map(category => <label key={category}><input type="checkbox" checked={(formData.catalogCategories || []).includes(category)} onChange={event => setFormData(current => ({ ...current, catalogCategories: event.target.checked ? [...(current.catalogCategories || []), category] : (current.catalogCategories || []).filter(item => item !== category) }))} /> {category}</label>)}</div>
                   </fieldset>
                   <Row>
-                    <Field label="Pilgrimage region"><select name="regionScope" className="input-field" value={formData.regionScope} onChange={handleChange}><option>Other</option><option>Tamil Nadu</option><option>South India</option><option>India-wide</option></select></Field>
+                    <Field label="Pilgrimage region"><select name="regionScope" className="input-field" value={formData.regionScope} onChange={handleChange}><option>Other</option><option>Tamil Nadu</option><option>South India</option><option>North India</option><option>India-wide</option></select></Field>
                     <Field label="Hotel categories offered"><div className="admin-hotel-categories">{['3 Star', '4 Star', '5 Star'].map(category => <label key={category}><input type="checkbox" checked={formData.hotelCategories.includes(category)} onChange={event => setFormData(current => ({ ...current, hotelCategories: event.target.checked ? [...current.hotelCategories, category] : current.hotelCategories.filter(item => item !== category) }))} /> {category.replace(' Star', '-star')}</label>)}</div></Field>
                   </Row>
                   <Row>
@@ -2385,6 +2411,22 @@ const AdminPage = () => {
                         value={day.title} onChange={e => updateItinerary(i, 'title', e.target.value)} />
                       <textarea className="input-field resize-none" rows="3" placeholder="Activities for the day..."
                         value={day.activities} onChange={e => updateItinerary(i, 'activities', e.target.value)} style={{ marginBottom: 10 }} />
+                      <details className="admin-schedule-editor" defaultOpen={i === 0}>
+                        <summary>Timed programme · {(day.schedule || []).length} stops</summary>
+                        <p>For publication, add at least one timed visit per day with a named place, a short description and an HTTPS source.</p>
+                        {(day.schedule || []).map((item, rowIndex) => <div className="admin-schedule-row" key={`${i}-${rowIndex}`}>
+                          <div className="admin-schedule-row-head">
+                            <input aria-label="Time" className="input-field" type="time" value={item.time || ''} onChange={e => updateSchedule(i, rowIndex, 'time', e.target.value)} />
+                            <select aria-label="Stop type" className="input-field" value={item.kind || 'visit'} onChange={e => updateSchedule(i, rowIndex, 'kind', e.target.value)}><option value="visit">Visit</option><option value="transfer">Transfer</option><option value="meal">Meal</option><option value="rest">Rest</option><option value="start">Start</option><option value="end">End</option></select>
+                            <button type="button" className="btn" onClick={() => removeScheduleRow(i, rowIndex)} aria-label={`Remove stop ${rowIndex + 1}`}><Trash2 size={16} /></button>
+                          </div>
+                          <input aria-label="Stop title" className="input-field" placeholder="Visit Meenakshi Temple" value={item.title || ''} onChange={e => updateSchedule(i, rowIndex, 'title', e.target.value)} />
+                          <input aria-label="Place name" className="input-field" placeholder="Place name" value={item.place || ''} onChange={e => updateSchedule(i, rowIndex, 'place', e.target.value)} />
+                          <textarea aria-label="What visitors will see" className="input-field" rows="2" placeholder="What visitors will see here" value={item.description || ''} onChange={e => updateSchedule(i, rowIndex, 'description', e.target.value)} />
+                          <input aria-label="Visit source URL" className="input-field" type="url" placeholder="https://source.example/place" value={item.sourceUrl || ''} onChange={e => updateSchedule(i, rowIndex, 'sourceUrl', e.target.value)} />
+                        </div>)}
+                        <button type="button" className="btn" onClick={() => addScheduleVisit(i)}><Plus size={16} /> Add timed visit</button>
+                      </details>
                       {day.activities && (day.activities.includes('**') || day.activities.includes('\n')) && (
                         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 12, marginBottom: 10, fontSize: '0.85rem' }}>
                           <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, display: 'block', marginBottom: 4 }}>Formatted Preview:</span>
@@ -2839,7 +2881,7 @@ const AdminPage = () => {
                 <h3 style={{ marginBottom: 20, color: 'var(--dark)', fontSize: '1.2rem', fontWeight: 700 }}>
                   📦 All Packages ({packages.length})
                 </h3>
-                <div className="catalog-coverage" aria-label="Pilgrimage catalogue coverage"><strong>Pilgrimage catalogue targets</strong><p>Distinct reviewed, published routes count toward the target.</p><ul>{[['Tamil Nadu', 80], ['South India', 50], ['India-wide', 50]].map(([region, target]) => { const count = new Set(packages.filter(pkg => pkg.isActive && ['Approved', 'Published'].includes(pkg.status) && pkg.regionScope === region && pkg.routeSignature).map(pkg => pkg.routeSignature)).size; return <li key={region}><span>{region}</span><b>{count} / {target}</b></li>; })}</ul></div>
+                <div className="catalog-coverage" aria-label="Pilgrimage catalogue coverage"><strong>Regional catalogue targets</strong><p>Distinct reviewed, published routes count toward the target.</p><ul>{[['Tamil Nadu', 80], ['South India', 60], ['North India', 80]].map(([region, target]) => { const count = new Set(packages.filter(pkg => pkg.isActive && ['Approved', 'Published'].includes(pkg.status) && pkg.regionScope === region && pkg.routeSignature).map(pkg => pkg.routeSignature)).size; return <li key={region}><span>{region}</span><b>{count} / {target}</b></li>; })}</ul></div>
                 <CategoryManager password={password} onChange={setCatalogCategories} />
                 {packages.length === 0 ? (
                   <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '20px 0' }}>No packages yet. Add one!</p>

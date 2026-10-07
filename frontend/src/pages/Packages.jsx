@@ -135,6 +135,9 @@ const Packages = () => {
     }
     return acc;
   }, {});
+  const availableCategories = catalogCategories.map(category => ({
+    category, count: packages.filter(pkg => categoriesForPackage(pkg).includes(category)).length
+  })).filter(item => item.count > 0);
 
   return (
     <div className="page-container" style={{ background: '#f8fafc', paddingTop: 0, paddingBottom: 80 }}>
@@ -175,15 +178,12 @@ const Packages = () => {
       </section>
 
       <div className="container">
-        <section className="catalog-category-section" aria-labelledby="catalog-categories-heading">
-          <div><h2 id="catalog-categories-heading">Browse by travel style</h2><p>Explore all SreePayanam tour categories. Ask our team for a tailored quote on any route.</p></div>
-          <div className="catalog-category-grid">{catalogCategories.map(category => {
-            const count = packages.filter(pkg => categoriesForPackage(pkg).includes(category)).length;
-            return <button type="button" key={category} className={selectedCatalog === category ? 'is-selected' : ''} onClick={() => updateQueryParams({ catalog: selectedCatalog === category ? null : category, category: null, type: null, page: null })} aria-pressed={selectedCatalog === category}>
-              <strong>{category}</strong><span>{count ? `${count} tours` : 'Enquire for options'}</span>
-            </button>;
-          })}</div>
-        </section>
+        {availableCategories.length > 0 && <section className="catalog-category-section" aria-labelledby="catalog-categories-heading">
+          <div><h2 id="catalog-categories-heading">Browse by travel style</h2><p>Choose a published route and ask our team for a quote tailored to your dates.</p></div>
+          <div className="catalog-category-grid">{availableCategories.map(({ category, count }) => <button type="button" key={category} className={selectedCatalog === category ? 'is-selected' : ''} onClick={() => updateQueryParams({ catalog: selectedCatalog === category ? null : category, category: null, type: null, page: null })} aria-pressed={selectedCatalog === category}>
+              <strong>{category}</strong><span>{count} tours</span>
+            </button>)}</div>
+        </section>}
         <div className="catalog-results-layout" style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 32, alignItems: 'start' }}>
           
           {/* 1. FILTER SIDEBAR (Desktop) */}
@@ -242,7 +242,7 @@ const Packages = () => {
               <label>Starting location<input className="input-field" value={selectedStart} onChange={event => updateQueryParams({ start: event.target.value, page: null })} placeholder="e.g. Chennai" /></label>
               <label>Ending location<input className="input-field" value={selectedEnd} onChange={event => updateQueryParams({ end: event.target.value, page: null })} placeholder="e.g. Madurai" /></label>
               <label>Hotel category<select className="input-field" value={selectedHotel} onChange={event => updateQueryParams({ hotel: event.target.value, page: null })}><option value="">Any category</option><option value="3 Star">3-star</option><option value="4 Star">4-star</option><option value="5 Star">5-star</option></select></label>
-              <label>Route region<select className="input-field" value={selectedRegion} onChange={event => updateQueryParams({ region: event.target.value, page: null })}><option value="">Any region</option><option>Tamil Nadu</option><option>South India</option><option>India-wide</option><option>Other</option></select></label>
+              <label>Route region<select className="input-field" value={selectedRegion} onChange={event => updateQueryParams({ region: event.target.value, page: null })}><option value="">Any region</option><option>Tamil Nadu</option><option>South India</option><option>North India</option><option>India-wide</option><option>Other</option></select></label>
             </div>
 
             {/* Category Segment Tabs */}

@@ -239,9 +239,20 @@ const PackageDetails = () => {
 
           <section className="package-plan" aria-labelledby="package-plan-heading">
             <h2 id="package-plan-heading">Day-by-day itinerary</h2>
+            <p className="package-plan-note">These clock times show the planned route. The travel desk checks current opening hours, darshan slots, road conditions and reservations for your travel dates before the final quotation.</p>
             {itinerary.length === 0 ? <p>Our travel desk is preparing the day plan for this package.</p> : <ol>{itinerary.map((day, index) => <li key={`${day.day}-${index}`}>
               <div className="package-plan-day"><span>Day {day.day || index + 1}</span><h3>{day.title || `Day ${index + 1}`}</h3></div>
-              <div>{renderRichText(day.activities)}</div>
+              {Array.isArray(day.schedule) && day.schedule.length > 0 ? <ol className="package-timeline">{day.schedule.map((stop, stopIndex) => <li key={`${stop.time}-${stop.place}-${stopIndex}`} className={stop.kind === 'visit' ? 'is-visit' : ''}>
+                <time dateTime={stop.time}>{stop.time}</time>
+                <div className="package-timeline-content">
+                  <strong>{stop.title}</strong>
+                  {stop.place && <span className="package-timeline-place"><MapPin size={13} aria-hidden="true" /> {stop.place}</span>}
+                  {stop.description && <p>{stop.description}</p>}
+                  {stop.kind === 'visit' && stop.visitingInfo && !/^check the venue|^recheck venue/i.test(stop.visitingInfo) && <p className="package-visit-note">Visit note: {stop.visitingInfo}</p>}
+                  {stop.sourceUrl && <a href={stop.sourceUrl} target="_blank" rel="noopener noreferrer">{stop.kind === 'transfer' ? 'View mapped route ↗' : 'About this location ↗'}</a>}
+                </div>
+                {stop.kind === 'visit' && stop.imageUrl && <figure className="package-timeline-image"><img src={stop.imageUrl} alt={stop.place} loading="lazy" />{stop.imageCredit && <figcaption>{stop.imageCreditUrl ? <a href={stop.imageCreditUrl} target="_blank" rel="noopener noreferrer">Photo: {stop.imageCredit}</a> : `Photo: ${stop.imageCredit}`}</figcaption>}</figure>}
+              </li>)}</ol> : <div>{renderRichText(day.activities)}</div>}
               <ul className="package-plan-facts">{day.hotel && <li><Home size={16} aria-hidden="true" /> Stay: {day.hotel}</li>}{day.mealPlan && <li><Utensils size={16} aria-hidden="true" /> Meals: {day.mealPlan}</li>}{day.transport && <li><Plane size={16} aria-hidden="true" /> Travel: {day.transport}</li>}</ul>
             </li>)}</ol>}
             <div className="package-terms-grid"><section aria-labelledby="package-inclusions-heading"><h3 id="package-inclusions-heading"><CheckCircle size={20} aria-hidden="true" /> Inclusions</h3>{inclusions.length ? <ul>{inclusions.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>Ask the travel desk to confirm inclusions before booking.</p>}</section><section aria-labelledby="package-exclusions-heading"><h3 id="package-exclusions-heading"><XCircle size={20} aria-hidden="true" /> Exclusions</h3>{exclusions.length ? <ul>{exclusions.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>Ask the travel desk to confirm exclusions before booking.</p>}</section></div>

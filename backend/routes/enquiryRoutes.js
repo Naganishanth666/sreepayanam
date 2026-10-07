@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const crypto = require('crypto');
 const Enquiry = require('../models/Enquiry');
 const Package = require('../models/Package');
+const { byId: curatedById, isPublicPackage } = require('../utils/regionalCatalog');
 const { checkAdmin } = require('../middleware/auth');
 const { sendEnquiryEmail } = require('../utils/mailer');
 
@@ -121,8 +122,9 @@ router.post('/', async (req, res) => {
 
     const publicFields = pickPublicFields(body);
     if (body.enquiryType === 'Tour Package' && body.packageId) {
-      const pkg = await Package.findOne({ packageId: String(body.packageId).slice(0, 80), status: { $in: ['Approved', 'Published'] }, isActive: true });
-      if (!pkg) return res.status(404).json({ message: 'This package is not currently available for an enquiry.' });
+      const requestedPackageId = String(body.packageId).slice(0, 80);
+      const pkg = await Package.findOne({ packageId: requestedPackageId }) || curatedById.get(requestedPackageId);
+      if (!isPublicPackage(pkg)) return res.status(404).json({ message: 'This package is not currently available for an enquiry.' });
       const now = new Date();
       if ((pkg.seasonStart && pkg.seasonStart > now) || (pkg.seasonEnd && pkg.seasonEnd < now)) {
         return res.status(409).json({ message: 'This package is outside its published travel season.' });

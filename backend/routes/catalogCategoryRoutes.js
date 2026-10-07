@@ -1,6 +1,7 @@
 const express = require('express');
 const CatalogCategory = require('../models/CatalogCategory');
 const Package = require('../models/Package');
+const { packages: curatedPackages } = require('../data/curatedRegionalCatalog');
 const { checkAdmin } = require('../middleware/auth');
 
 const router = express.Router();
@@ -8,7 +9,7 @@ const DEFAULTS = [
   'National Tours', 'International Tours', 'Pilgrimage Tours', 'Honeymoon Packages',
   'Family Holidays', 'Hill Station Tours', 'Educational Tours', 'Medical Tourism',
   'Corporate & MICE', 'Festival & Cultural Tours', 'Cruise Holidays', 'IRCTC Rail Tours',
-  'Tamil Nadu Pilgrimages', 'South India Pilgrimages', 'India-wide Pilgrimages'
+  'Tamil Nadu Pilgrimages', 'South India Pilgrimages', 'North India Pilgrimages', 'India-wide Pilgrimages'
 ];
 
 const ensureDefaults = async () => {
@@ -55,7 +56,8 @@ router.put('/:id', checkAdmin, async (req, res) => {
     if (!category) return res.status(404).json({ message: 'Category not found.' });
     const name = String(req.body?.name || '').trim().slice(0, 80);
     if (!name) return res.status(400).json({ message: 'Enter a category name.' });
-    if (name !== category.name && await Package.exists({ catalogCategories: category.name })) {
+    if (name !== category.name && (await Package.exists({ catalogCategories: category.name })
+      || curatedPackages.some(pkg => pkg.catalogCategories.includes(category.name)))) {
       return res.status(409).json({ message: 'Move packages out of this category before renaming it.' });
     }
     category.name = name;
@@ -73,7 +75,8 @@ router.delete('/:id', checkAdmin, async (req, res) => {
   try {
     const category = await CatalogCategory.findById(req.params.id);
     if (!category) return res.status(404).json({ message: 'Category not found.' });
-    if (await Package.exists({ catalogCategories: category.name })) {
+    if (await Package.exists({ catalogCategories: category.name })
+      || curatedPackages.some(pkg => pkg.catalogCategories.includes(category.name))) {
       return res.status(409).json({ message: 'Move packages out of this category before removing it.' });
     }
     category.active = false;

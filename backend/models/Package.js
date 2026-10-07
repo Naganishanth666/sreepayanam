@@ -10,7 +10,7 @@ const packageSchema = new mongoose.Schema({
     required: true 
   },
   catalogCategories: [{ type: String, trim: true, maxlength: 80 }],
-  regionScope: { type: String, enum: ['Tamil Nadu', 'South India', 'India-wide', 'Other'], default: 'Other', index: true },
+  regionScope: { type: String, enum: ['Tamil Nadu', 'South India', 'North India', 'India-wide', 'Other'], default: 'Other', index: true },
   hotelCategories: [{ type: String, enum: ['3 Star', '4 Star', '5 Star'] }],
   routeSignature: { type: String, index: true },
   showInMenu: { type: Boolean, default: false },
@@ -49,7 +49,19 @@ const packageSchema = new mongoose.Schema({
     activities: String,
     hotel: String,
     mealPlan: String,
-    transport: String
+    transport: String,
+    schedule: [{
+      time: { type: String, match: /^([01]\d|2[0-3]):[0-5]\d$/ },
+      kind: { type: String, enum: ['start', 'visit', 'meal', 'transfer', 'rest', 'end'] },
+      title: String,
+      place: String,
+      description: String,
+      sourceUrl: String,
+      imageUrl: String,
+      imageCredit: String,
+      imageCreditUrl: String,
+      visitingInfo: String
+    }]
   }],
   
   inclusions: [String],

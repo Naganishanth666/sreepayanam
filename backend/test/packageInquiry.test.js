@@ -23,6 +23,10 @@ const withServer = async callback => {
     await callback(`http://127.0.0.1:${server.address().port}`);
   } finally { await new Promise(resolve => server.close(resolve)); }
 };
+const visitDay = (day, place) => ({ day, title: place, activities: `09:00 Visit ${place}`,
+  hotel: 'Hotel to be confirmed', mealPlan: 'Breakfast', transport: 'Car',
+  schedule: [{ time: '09:00', kind: 'visit', place, title: `Visit ${place}`,
+    description: `Explore the heritage of ${place}.`, sourceUrl: 'https://example.com/place' }] });
 
 test.after(() => {
   Package.findOne = originalFindOne;
@@ -33,6 +37,7 @@ test.after(() => {
 test('public package response excludes all stored commercial amounts', async () => {
   Package.findOne = async () => ({
     packageId: 'SP-PKG-TEST', title: 'Trichy temples', status: 'Approved', isActive: true,
+    durationDays: 1, itinerary: [visitDay(1, 'Rockfort')],
     baseCost: 100000, originalPrice: 154000, offerPrice: 146300,
     priceBreakdown: 'Private supplier cost', costingBreakdown: { targetMarginPercent: 35 },
     brochureUrl: 'https://example.com/old-priced-brochure.pdf'
@@ -51,8 +56,9 @@ test('public package response excludes all stored commercial amounts', async () 
 test('package enquiry requires consent and saves a staff-review route with selected places', async () => {
   Package.findOne = async () => ({
     packageId: 'SP-PKG-TEST', title: 'Trichy temples', destination: 'Trichy',
+    status: 'Approved', isActive: true,
     durationDays: 2, durationNights: 1, startingCity: 'Chennai', endingCity: 'Chennai',
-    overview: 'A temple circuit', itinerary: [{ title: 'Rockfort', activities: 'Visit temple', hotel: '3 Star hotel', mealPlan: 'Breakfast', transport: 'Car' }]
+    overview: 'A temple circuit', itinerary: [visitDay(1, 'Rockfort'), visitDay(2, 'Srirangam')]
   });
   Enquiry.findOne = async () => null;
   let saved;
@@ -69,7 +75,7 @@ test('package enquiry requires consent and saves a staff-review route with selec
     const response = await fetch(`${base}/api/enquiries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, contactConsent: true }) });
     assert.equal(response.status, 201);
     assert.deepEqual(saved.selectedDestinations, ['Rockfort Temple']);
-    assert.equal(saved.detailedPreferences.routeDraft.itinerary[0].hotel.name, '3 Star hotel');
+    assert.equal(saved.detailedPreferences.routeDraft.itinerary[0].hotel.name, 'Hotel to be confirmed');
     assert.equal(saved.detailedPreferences.routeDraft.planningReview.status, 'tight');
     assert.equal(saved.detailedPreferences.preferredTier, 'Deluxe');
   });
