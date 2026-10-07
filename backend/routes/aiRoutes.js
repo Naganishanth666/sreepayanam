@@ -1846,3 +1846,4 @@ router.post('/compile-draft', checkAdmin, async (req, res) => {
 
 module.exports = router;
 module.exports.sanitizeDestinationGuide = sanitizeDestinationGuide;
+module.exports.sanitizeStructuredPlan = sanitizeStructuredPlan;
