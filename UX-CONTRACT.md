@@ -2,10 +2,11 @@
 
 ## Scope and sources
 
-This contract covers the public planner/route-brief workflow, the shared public shell, and the admin account directory. It records observable UI behavior; business policy remains in the API and package records.
+This contract covers the public planner/route-brief workflow, the package catalogue and detail pages, the shared public shell, and the admin account directory. It records observable UI behavior; business policy remains in the API and package records.
 
 | Concern | Source | Consequence in the UI |
 |---|---|---|
+| Package page language | `frontend/src/hooks/usePackageLanguage.js`, `frontend/src/components/PackageLanguagePicker.jsx`, `frontend/src/utils/catalogCategories.js`, package catalogue/detail pages | English, Tamil and Hindi controls translate catalogue filters, package detail labels, enquiry form states and package data. The selected language persists between catalogue and detail pages; each missing translated data field falls back to English. |
 | Destination guide and customer-selected places | SRS v1.5 and public AI destination guide route (`backend/routes/aiRoutes.js`, `frontend/src/pages/AiAssistant.jsx`) | The customer enters any city, region or country; the planner requests a searchable grouped set of suggested places. Published packages do not constrain discovery: customers can choose listed places or add their own before staff verification. Suggested places start unselected; the customer can explicitly choose an individual stop or the suggested shortlist. |
 | Time-aware route draft and saved itinerary | Current customer route request, structured planner route, and sourced hotel research (`backend/routes/aiRoutes.js`, `frontend/src/pages/AiAssistant.jsx`, `frontend/src/pages/SavedRoute.jsx`) | Nearby guide places start unselected. The traveller chooses stops explicitly. The review step shows day dates, sequential visit windows, meal/rest, and return with provisional coordinate-based transfer allowances. Unplaced selected stops require a keep-or-remove decision. The saved route has a high-entropy reference and on-site lookup; the customer route has no PDF action. Sourced destination context and eligible Commons images appear where available. Unverified venue hours and events remain labelled for staff checking. |
 | Approved tour quotation and combined document pack | Revised SRS 1.1, all twelve sections of the supplied Standard Travel Documents Pack, and quotation route (`backend/routes/quotationRoutes.js`) | Admin staff copy the saved enquiry route, edit the day plan and entry-window status, record destination links and verified tier costs, and enter approved commercial wording. A named Admin account approves and locks the quotation, which can then be downloaded separately from its approved card. Staff then complete the eleven remaining templates in the same admin enquiry, including financial and supplier records. A named Admin finalizes the completed pack before its single PDF download unlocks. |
@@ -18,6 +19,7 @@ This contract covers the public planner/route-brief workflow, the shared public 
 ## Canonical owners
 
 - Navigation: `frontend/src/components/Navbar.jsx` and `.site-nav` styles.
+- Package language: `frontend/src/hooks/usePackageLanguage.js` owns the persisted selection; `frontend/src/utils/catalogCategories.js` owns UI copy and field-level content fallback; `PackageLanguagePicker.jsx` is shared by `Packages.jsx` and `PackageDetails.jsx`.
 - Package destination references: `backend/models/Package.js` stores staff-entered HTTPS source links, and `frontend/src/pages/PackageDetails.jsx` presents their type and last-check date.
 - Home hero: `frontend/src/pages/LandingPage.jsx`, `frontend/src/data/heroSlides.js` and `.hero-carousel` styles. It is a twelve-slide package-style carousel with pause-on-hover/focus and manual controls.
 - Form fields and validation: each product form owns the same `noValidate` + inline error + summary pattern; the new planner is the canonical customer route-brief flow.

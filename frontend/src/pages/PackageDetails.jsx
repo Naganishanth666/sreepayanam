@@ -9,7 +9,8 @@ import {
 } from 'lucide-react';
 import { renderRichText } from '../utils/textFormatter';
 import PackageLanguagePicker from '../components/PackageLanguagePicker';
-import { getPackageContent, packagePageCopy } from '../utils/catalogCategories';
+import { formatPackageDuration, getPackageContent, localizeCategory, localizeTourType, packagePageCopy } from '../utils/catalogCategories';
+import usePackageLanguage from '../hooks/usePackageLanguage';
 import {
   MANDATORY_GENERAL_TERMS,
   MANDATORY_PAYMENT_POLICY,
@@ -24,11 +25,10 @@ const PackageDetails = () => {
   const navigate = useNavigate();
   const [pkg, setPkg] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
-  const [language, setLanguage] = useState(() => {
-    const saved = window.localStorage.getItem('sreepayanam-package-language');
-    return ['en', 'ta', 'hi'].includes(saved) ? saved : 'en';
-  });
+  const [language, selectLanguage] = usePackageLanguage();
+  const copy = packagePageCopy[language] || packagePageCopy.en;
   const [enquiry, setEnquiry] = useState({
     name: '', phone: '', email: '', date: '', dateFlexible: false,
     adults: 1, children: 0, childAges: '', rooms: 1, origin: '',
@@ -44,9 +44,12 @@ const PackageDetails = () => {
 
   useEffect(() => {
     fetch(`/api/packages/${id}`)
-      .then(r => r.ok ? r.json() : null)
+      .then(r => {
+        if (!r.ok) throw new Error('package-unavailable');
+        return r.json();
+      })
       .then(data => { setPkg(data); setLoading(false); })
-      .catch(() => setLoading(false));
+      .catch(() => { setLoadFailed(true); setLoading(false); });
   }, [id]);
 
   useEffect(() => {
@@ -61,19 +64,19 @@ const PackageDetails = () => {
     const children = Number(enquiry.children);
     const childAges = enquiry.childAges.split(',').map(age => age.trim()).filter(Boolean).map(Number);
     if (!enquiry.name.trim() || enquiry.phone.replace(/\D/g, '').length < 10 || !/^\S+@\S+\.\S+$/.test(enquiry.email.trim())) {
-      setEnquiryError('Enter your name, mobile number and a valid email address.');
+      setEnquiryError('identity');
       return;
     }
     if (!enquiry.date && !enquiry.dateFlexible) {
-      setEnquiryError('Choose a travel date or mark your dates as flexible.');
+      setEnquiryError('date');
       return;
     }
     if (!Number.isInteger(children) || children < 0 || childAges.length !== children || childAges.some(age => !Number.isInteger(age) || age < 0 || age > 17)) {
-      setEnquiryError('Enter one age (0–17) for each child, separated by commas.');
+      setEnquiryError('childAges');
       return;
     }
     if (!enquiry.contactConsent) {
-      setEnquiryError('Please agree to be contacted about this enquiry.');
+      setEnquiryError('consent');
       return;
     }
     setSubmitting(true);
@@ -100,40 +103,36 @@ const PackageDetails = () => {
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.message || 'We could not submit your enquiry. Please try again.');
+      if (!res.ok) throw new Error('submit');
       setSubmittedReference(data.enquiry?.quoteReference || enquiryReference);
       setSubmitted(true);
-    } catch (err) {
-      setEnquiryError(err.message || 'We could not submit your enquiry. Please try again.');
+    } catch {
+      setEnquiryError('submit');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const waMessage = pkg ? encodeURIComponent(`Hello SreePayanam, please help with ${pkg.title}${submittedReference ? `, enquiry ${submittedReference}` : ''}.`) : '';
+  const content = pkg ? getPackageContent(pkg, language) : null;
+  const waMessage = pkg ? encodeURIComponent(`${copy.whatsappIntro} ${content.title || pkg.title}${submittedReference ? `, ${copy.reference} ${submittedReference}` : ''}.`) : '';
+  const durationText = pkg ? formatPackageDuration(pkg.durationDays, pkg.durationNights, language) : '';
 
   if (loading) return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#f1f5f9' }}>
+    <div lang={language} style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#f1f5f9' }}>
       <div style={{ textAlign: 'center' }}>
         <div style={{ width: 48, height: 48, border: '4px solid var(--primary)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
-        <p style={{ color: 'var(--text-muted)' }}>Loading package details...</p>
+        <p style={{ color: 'var(--text-muted)' }}>{copy.loading}</p>
       </div>
     </div>
   );
 
   if (!pkg) return (
-    <div style={{ textAlign: 'center', paddingTop: 140 }}>
-      <h2>Package not found</h2>
-      <Link to="/packages" className="btn btn-primary" style={{ marginTop: 20, display: 'inline-flex' }}>Browse Packages</Link>
+    <div lang={language} style={{ textAlign: 'center', paddingTop: 140 }}>
+      <h2>{loadFailed ? copy.loadError : copy.notFound}</h2>
+      <Link to="/packages" className="btn btn-primary" style={{ marginTop: 20, display: 'inline-flex' }}>{copy.browsePackages}</Link>
     </div>
   );
 
-  const content = getPackageContent(pkg, language);
-  const copy = packagePageCopy[language] || packagePageCopy.en;
-  const selectLanguage = code => {
-    setLanguage(code);
-    window.localStorage.setItem('sreepayanam-package-language', code);
-  };
   const inclusions = Array.isArray(content.inclusions) ? content.inclusions : [];
   const exclusions = Array.isArray(content.exclusions) ? content.exclusions : [];
   const addons = Array.isArray(pkg.optionalAddons) ? pkg.optionalAddons : [];
@@ -141,7 +140,7 @@ const PackageDetails = () => {
   const tabs = ['overview', 'policy'];
 
   return (
-    <div style={{ background: '#f1f5f9', minHeight: '100vh' }}>
+    <div lang={language} style={{ background: '#f1f5f9', minHeight: '100vh' }}>
       {/* Hero Banner */}
       <div style={{ position: 'relative', height: 420, overflow: 'hidden' }}>
         <img
@@ -156,20 +155,20 @@ const PackageDetails = () => {
         <button onClick={() => navigate(-1)} style={{ position: 'absolute', top: 24, left: 24, background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
           <ArrowLeft size={18} /> {copy.back}
         </button>
-        <div style={{ position: 'absolute', top: 24, right: 24 }}><PackageLanguagePicker value={language} onChange={selectLanguage} /></div>
+        <div style={{ position: 'absolute', top: 24, right: 24 }}><PackageLanguagePicker value={language} onChange={selectLanguage} label={copy.languageLabel} /></div>
 
         {/* Hero Info */}
         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '0 40px 32px' }}>
           <div style={{ maxWidth: 1100, margin: '0 auto' }}>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
               <span style={badge('#64748b')}>ID: {pkg.packageId}</span>
-              <span style={badge('#3b82f6')}>{content.catalogCategory || pkg.regionScope || pkg.packageCategory}</span>
-              <span style={badge('#10b981')}>{content.tourType || pkg.tourType}</span>
+              <span style={badge('#3b82f6')}>{content.catalogCategory || localizeCategory(pkg.catalogCategories?.[0] || pkg.regionScope || pkg.packageCategory, language)}</span>
+              <span style={badge('#10b981')}>{content.tourType || localizeTourType(pkg.tourType, language)}</span>
             </div>
             <h1 style={{ color: 'white', fontSize: '2.4rem', fontWeight: 800, marginBottom: 12, textShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>{content.title || pkg.title}</h1>
             <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', color: 'rgba(255,255,255,0.9)' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><MapPin size={16} /> {content.destination || pkg.destination}</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Clock size={16} /> {pkg.durationDays}D / {pkg.durationNights}N</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Clock size={16} /> {durationText}</span>
               {pkg.startingCity && <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><ArrowLeft size={16} style={{ transform: 'rotate(180deg)' }} /> {content.startingCity || pkg.startingCity} → {content.endingCity || pkg.endingCity}</span>}
             </div>
           </div>
@@ -192,7 +191,7 @@ const PackageDetails = () => {
                 style={{ background: '#25d366', color: 'white', border: 'none', borderRadius: 8, padding: '10px 20px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, textDecoration: 'none' }}>
                 <MessageCircle size={18} /> WhatsApp
               </a>
-              <button onClick={() => navigator.share?.({ title: content.title || pkg.title, url: window.location.href })}
+              <button aria-label={copy.share} title={copy.share} onClick={() => navigator.share?.({ title: content.title || pkg.title, url: window.location.href })}
                 style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Share2 size={18} />
               </button>
@@ -226,13 +225,13 @@ const PackageDetails = () => {
                 <h3 style={{ marginBottom: 18, color: 'var(--dark)', fontWeight: 700 }}>{copy.quickFacts}</h3>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 16 }}>
                   {[
-                    { icon: <Clock size={20} color="var(--primary)" />, label: copy.duration, val: `${pkg.durationDays}D / ${pkg.durationNights}N` },
+                    { icon: <Clock size={20} color="var(--primary)" />, label: copy.duration, val: durationText },
                     { icon: <MapPin size={20} color="var(--primary)" />, label: copy.destination, val: content.destination || pkg.destination },
-                    { icon: <Tag size={20} color="var(--primary)" />, label: copy.category, val: content.catalogCategory || content.tourType || pkg.tourType },
+                    { icon: <Tag size={20} color="var(--primary)" />, label: copy.category, val: content.catalogCategory || localizeTourType(pkg.tourType, language) },
                     ...(pkg.startingCity ? [{ icon: <ArrowLeft size={20} color="var(--primary)" />, label: copy.from, val: content.startingCity || pkg.startingCity }] : []),
                     ...(pkg.endingCity ? [{ icon: <ArrowLeft size={20} color="var(--primary)" style={{ transform: 'rotate(180deg)' }} />, label: copy.to, val: content.endingCity || pkg.endingCity }] : []),
                     ...(content.mealPlan ? [{ icon: <Utensils size={20} color="var(--primary)" />, label: copy.mealPlan, val: content.mealPlan }] : []),
-                    ...(pkg.templesList && pkg.templesList.length > 0 ? [{ icon: <MapPin size={20} color="var(--primary)" />, label: 'Temples Included', val: pkg.templesList.join(', ') }] : []),
+                    ...(pkg.templesList && pkg.templesList.length > 0 ? [{ icon: <MapPin size={20} color="var(--primary)" />, label: copy.templesIncluded, val: pkg.templesList.join(', ') }] : []),
                   ].map((f, i) => (
                     <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 16px', background: '#f8fafc', borderRadius: 10 }}>
                       <div style={{ marginTop: 2 }}>{f.icon}</div>
@@ -268,7 +267,7 @@ const PackageDetails = () => {
           <section className="package-plan" aria-labelledby="package-plan-heading">
             <h2 id="package-plan-heading">{copy.itinerary}</h2>
             <p className="package-plan-note">{copy.itineraryNote}</p>
-            {itinerary.length === 0 ? <p>Our travel desk is preparing the day plan for this package.</p> : <ol>{itinerary.map((day, index) => <li key={`${day.day}-${index}`}>
+            {itinerary.length === 0 ? <p>{copy.itineraryPreparing}</p> : <ol>{itinerary.map((day, index) => <li key={`${day.day}-${index}`}>
               <div className="package-plan-day"><span>{language === 'ta' ? 'நாள்' : language === 'hi' ? 'दिन' : 'Day'} {day.day || index + 1}</span><h3>{day.title || `${language === 'ta' ? 'நாள்' : language === 'hi' ? 'दिन' : 'Day'} ${index + 1}`}</h3></div>
               {Array.isArray(day.schedule) && day.schedule.length > 0 ? <ol className="package-timeline">{day.schedule.map((stop, stopIndex) => <li key={`${stop.time}-${stop.place}-${stopIndex}`} className={stop.kind === 'visit' ? 'is-visit' : ''}>
                 <time dateTime={stop.time}>{stop.time}</time>
@@ -279,12 +278,12 @@ const PackageDetails = () => {
                   {stop.kind === 'visit' && stop.visitingInfo && <p className="package-visit-note">{copy.visitNote}: {stop.visitingInfo}</p>}
                   {stop.sourceUrl && <a href={stop.sourceUrl} target="_blank" rel="noopener noreferrer">{copy.aboutLocation}</a>}
                 </div>
-                {stop.kind === 'visit' && stop.imageUrl && <figure className="package-timeline-image"><img src={stop.imageUrl} alt={stop.place} loading="lazy" />{stop.imageCredit && <figcaption>{stop.imageCreditUrl ? <a href={stop.imageCreditUrl} target="_blank" rel="noopener noreferrer">Photo: {stop.imageCredit}</a> : `Photo: ${stop.imageCredit}`}</figcaption>}</figure>}
+                {stop.kind === 'visit' && stop.imageUrl && <figure className="package-timeline-image"><img src={stop.imageUrl} alt={stop.place} loading="lazy" />{stop.imageCredit && <figcaption>{stop.imageCreditUrl ? <a href={stop.imageCreditUrl} target="_blank" rel="noopener noreferrer">{copy.photo}: {stop.imageCredit}</a> : `${copy.photo}: ${stop.imageCredit}`}</figcaption>}</figure>}
               </li>)}</ol> : <div>{renderRichText(day.activities)}</div>}
               <ul className="package-plan-facts">{day.hotel && <li><Home size={16} aria-hidden="true" /> {copy.stay}: {day.hotel}</li>}{day.mealPlan && <li><Utensils size={16} aria-hidden="true" /> {copy.meals}: {day.mealPlan}</li>}{day.transport && <li><Plane size={16} aria-hidden="true" /> {copy.travel}: {day.transport}</li>}</ul>
             </li>)}</ol>}
-            <div className="package-terms-grid"><section aria-labelledby="package-inclusions-heading"><h3 id="package-inclusions-heading"><CheckCircle size={20} aria-hidden="true" /> {copy.inclusions}</h3>{inclusions.length ? <ul>{inclusions.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>Ask the travel desk to confirm inclusions before booking.</p>}</section><section aria-labelledby="package-exclusions-heading"><h3 id="package-exclusions-heading"><XCircle size={20} aria-hidden="true" /> {copy.exclusions}</h3>{exclusions.length ? <ul>{exclusions.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>Ask the travel desk to confirm exclusions before booking.</p>}</section></div>
-            {addons.length > 0 && <div className="package-addons"><h3>Optional add-ons</h3><ul>{addons.map((item, index) => <li key={index}>{item}</li>)}</ul></div>}
+            <div className="package-terms-grid"><section aria-labelledby="package-inclusions-heading"><h3 id="package-inclusions-heading"><CheckCircle size={20} aria-hidden="true" /> {copy.inclusions}</h3>{inclusions.length ? <ul>{inclusions.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>{copy.inclusionPending}</p>}</section><section aria-labelledby="package-exclusions-heading"><h3 id="package-exclusions-heading"><XCircle size={20} aria-hidden="true" /> {copy.exclusions}</h3>{exclusions.length ? <ul>{exclusions.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>{copy.exclusionPending}</p>}</section></div>
+            {addons.length > 0 && <div className="package-addons"><h3>{copy.optionalAddons}</h3><ul>{addons.map((item, index) => <li key={index}>{item}</li>)}</ul></div>}
           </section>
 
           {/* Tab: Policy */}
@@ -404,7 +403,7 @@ const PackageDetails = () => {
                 )}
 
                 {!cleanTerms && !cleanCancellation && !isNational && (
-                  <div className="glass-card" style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>Policy details not added yet.</div>
+                  <div className="glass-card" style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>{copy.policyMissing}</div>
                 )}
               </motion.div>
             );
@@ -415,49 +414,49 @@ const PackageDetails = () => {
         <div id="package-enquiry" style={{ position: 'sticky', top: 90, scrollMarginTop: 105 }}>
           <div className="glass-card" style={{ padding: 28, marginBottom: 20 }}>
             <>
-                <h3 style={{ marginBottom: 4, color: 'var(--dark)', fontWeight: 700, fontSize: '1.2rem' }}>Request for price</h3>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: 20 }}>Tell us your plans. Staff will confirm availability and send a personalized quotation.</p>
+                <h3 style={{ marginBottom: 4, color: 'var(--dark)', fontWeight: 700, fontSize: '1.2rem' }}>{copy.priceRequest}</h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: 20 }}>{copy.requestDescription}</p>
 
                 {submitted ? (
                   <div role="status" style={{ textAlign: 'center', padding: '20px 0' }}>
                     <CheckCircle size={42} color="#15803d" aria-hidden="true" />
-                    <h4 style={{ color: '#15803d', marginBottom: 8 }}>Enquiry received</h4>
-                    <p>Reference: <strong>{submittedReference}</strong></p>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Our travel desk will review your request. You can also contact us using the WhatsApp links below.</p>
+                    <h4 style={{ color: '#15803d', marginBottom: 8 }}>{copy.enquiryReceived}</h4>
+                    <p>{copy.reference}: <strong>{submittedReference}</strong></p>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{copy.enquiryReceivedNote}</p>
                   </div>
                 ) : (
                   <form onSubmit={handleEnquiry} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <div className="package-enquiry-summary"><strong>{content.title || pkg.title}</strong><span>{pkg.packageId} · {content.destination || pkg.destination}</span></div>
-                    {enquiryError && <div className="form-status is-error" role="alert">{enquiryError}</div>}
-                    <label>Full name *<input required className="input-field" autoComplete="name" value={enquiry.name} onChange={e => setEnquiry(f => ({ ...f, name: e.target.value }))} /></label>
-                    <label>Mobile / WhatsApp *<input required className="input-field" autoComplete="tel" type="tel" value={enquiry.phone} onChange={e => setEnquiry(f => ({ ...f, phone: e.target.value }))} /></label>
-                    <label>Email *<input required className="input-field" autoComplete="email" type="email" value={enquiry.email} onChange={e => setEnquiry(f => ({ ...f, email: e.target.value }))} /></label>
-                    <label>Travel date<input className="input-field" type="date" value={enquiry.date} onChange={e => setEnquiry(f => ({ ...f, date: e.target.value }))} /></label>
-                    <label className="package-enquiry-check"><input type="checkbox" checked={enquiry.dateFlexible} onChange={e => setEnquiry(f => ({ ...f, dateFlexible: e.target.checked }))} /> My dates are flexible</label>
+                    {enquiryError && <div className="form-status is-error" role="alert">{copy.errors[enquiryError] || copy.errors.submit}</div>}
+                    <label>{copy.form.fullName} *<input required className="input-field" autoComplete="name" value={enquiry.name} onChange={e => setEnquiry(f => ({ ...f, name: e.target.value }))} /></label>
+                    <label>{copy.form.mobile} *<input required className="input-field" autoComplete="tel" type="tel" value={enquiry.phone} onChange={e => setEnquiry(f => ({ ...f, phone: e.target.value }))} /></label>
+                    <label>{copy.form.email} *<input required className="input-field" autoComplete="email" type="email" value={enquiry.email} onChange={e => setEnquiry(f => ({ ...f, email: e.target.value }))} /></label>
+                    <label>{copy.form.travelDate}<input className="input-field" lang={language} type="date" value={enquiry.date} onChange={e => setEnquiry(f => ({ ...f, date: e.target.value }))} /></label>
+                    <label className="package-enquiry-check"><input type="checkbox" checked={enquiry.dateFlexible} onChange={e => setEnquiry(f => ({ ...f, dateFlexible: e.target.checked }))} /> {copy.form.flexibleDates}</label>
                     <div className="package-enquiry-split">
-                      <label>Adults *<input required className="input-field" type="number" min="1" max="100" value={enquiry.adults} onChange={e => setEnquiry(f => ({ ...f, adults: e.target.value }))} /></label>
-                      <label>Children<input className="input-field" type="number" min="0" max="30" value={enquiry.children} onChange={e => setEnquiry(f => ({ ...f, children: e.target.value }))} /></label>
+                      <label>{copy.form.adults} *<input required className="input-field" type="number" min="1" max="100" value={enquiry.adults} onChange={e => setEnquiry(f => ({ ...f, adults: e.target.value }))} /></label>
+                      <label>{copy.form.children}<input className="input-field" type="number" min="0" max="30" value={enquiry.children} onChange={e => setEnquiry(f => ({ ...f, children: e.target.value }))} /></label>
                     </div>
-                    {Number(enquiry.children) > 0 && <label>Child ages, comma separated *<input className="input-field" placeholder="6, 12" value={enquiry.childAges} onChange={e => setEnquiry(f => ({ ...f, childAges: e.target.value }))} /></label>}
+                    {Number(enquiry.children) > 0 && <label>{copy.form.childAges} *<input className="input-field" placeholder="6, 12" value={enquiry.childAges} onChange={e => setEnquiry(f => ({ ...f, childAges: e.target.value }))} /></label>}
                     <div className="package-enquiry-split">
-                      <label>Rooms *<input required className="input-field" type="number" min="1" max="30" value={enquiry.rooms} onChange={e => setEnquiry(f => ({ ...f, rooms: e.target.value }))} /></label>
-                      <label>Starting city *<input required className="input-field" value={enquiry.origin} onChange={e => setEnquiry(f => ({ ...f, origin: e.target.value }))} /></label>
+                      <label>{copy.form.rooms} *<input required className="input-field" type="number" min="1" max="30" value={enquiry.rooms} onChange={e => setEnquiry(f => ({ ...f, rooms: e.target.value }))} /></label>
+                      <label>{copy.form.startingCity} *<input required className="input-field" value={enquiry.origin} onChange={e => setEnquiry(f => ({ ...f, origin: e.target.value }))} /></label>
                     </div>
                     {Array.isArray(pkg.destinationReferences) && pkg.destinationReferences.length > 0 && <fieldset className="package-enquiry-destinations">
-                      <legend>Places you want to include</legend>
+                      <legend>{copy.form.placesToInclude}</legend>
                       {pkg.destinationReferences.map((place, index) => {
                         const visits = itinerary.flatMap(day => day.schedule || []).filter(stop => stop.kind === 'visit');
                         const translatedPlace = visits[index]?.place || place.name;
                         return <label key={place.name} className="package-enquiry-check"><input type="checkbox" checked={enquiry.selectedDestinations.includes(place.name)} onChange={e => setEnquiry(f => ({ ...f, selectedDestinations: e.target.checked ? [...f.selectedDestinations, place.name] : f.selectedDestinations.filter(name => name !== place.name) }))} /> {translatedPlace}</label>;
                       })}
                     </fieldset>}
-                    <label>Another place to include<input className="input-field" value={enquiry.customDestination} onChange={e => setEnquiry(f => ({ ...f, customDestination: e.target.value }))} /></label>
-                    <label>Preferred tier<select className="input-field" value={enquiry.preferredTier} onChange={e => setEnquiry(f => ({ ...f, preferredTier: e.target.value }))}><option value="">Please suggest</option><option>Economic</option><option>Deluxe</option><option>Premium</option></select></label>
-                    <label>Meal preference<select className="input-field" value={enquiry.mealPreference} onChange={e => setEnquiry(f => ({ ...f, mealPreference: e.target.value }))}><option value="">Please suggest</option><option>Vegetarian</option><option>Non vegetarian</option><option>Jain</option><option>Other</option></select></label>
-                    <label>Special requests<textarea className="input-field" rows="3" maxLength="1000" placeholder="Room, accessibility or visit preferences. Do not include medical records or payment details." value={enquiry.notes} onChange={e => setEnquiry(f => ({ ...f, notes: e.target.value }))} /></label>
-                    <label className="package-enquiry-check"><input type="checkbox" required checked={enquiry.contactConsent} onChange={e => setEnquiry(f => ({ ...f, contactConsent: e.target.checked }))} /> I agree to be contacted by SreePayanam about this quotation request. *</label>
+                    <label>{copy.form.anotherPlace}<input className="input-field" value={enquiry.customDestination} onChange={e => setEnquiry(f => ({ ...f, customDestination: e.target.value }))} /></label>
+                    <label>{copy.form.preferredTier}<select className="input-field" value={enquiry.preferredTier} onChange={e => setEnquiry(f => ({ ...f, preferredTier: e.target.value }))}><option value="">{copy.form.pleaseSuggest}</option><option value="Economic">{copy.form.economic}</option><option value="Deluxe">{copy.form.deluxe}</option><option value="Premium">{copy.form.premium}</option></select></label>
+                    <label>{copy.form.mealPreference}<select className="input-field" value={enquiry.mealPreference} onChange={e => setEnquiry(f => ({ ...f, mealPreference: e.target.value }))}><option value="">{copy.form.pleaseSuggest}</option><option value="Vegetarian">{copy.form.vegetarian}</option><option value="Non vegetarian">{copy.form.nonVegetarian}</option><option value="Jain">{copy.form.jain}</option><option value="Other">{copy.form.other}</option></select></label>
+                    <label>{copy.form.specialRequests}<textarea className="input-field" rows="3" maxLength="1000" placeholder={copy.form.notesPlaceholder} value={enquiry.notes} onChange={e => setEnquiry(f => ({ ...f, notes: e.target.value }))} /></label>
+                    <label className="package-enquiry-check"><input type="checkbox" required checked={enquiry.contactConsent} onChange={e => setEnquiry(f => ({ ...f, contactConsent: e.target.checked }))} /> {copy.form.contactConsent} *</label>
                     <button type="submit" disabled={submitting} className="btn btn-primary" style={{ marginTop: 4, padding: '12px' }}>
-                      <Phone size={16} style={{ marginRight: 8 }} /> {submitting ? 'Sending request…' : 'Request for price'}
+                      <Phone size={16} style={{ marginRight: 8 }} /> {submitting ? copy.form.sending : copy.form.submit}
                     </button>
                   </form>
                 )}
@@ -465,9 +464,9 @@ const PackageDetails = () => {
                 <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #e2e8f0' }}>
                   {WHATSAPP_NUMBERS.map((number, index) => <a key={number} href={`https://wa.me/${number}?text=${waMessage}`} target="_blank" rel="noreferrer"
                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, background: '#25d366', color: 'white', padding: '12px', borderRadius: 8, fontWeight: 700, textDecoration: 'none', marginBottom: 8 }}>
-                    <MessageCircle size={18} /> WhatsApp {index + 1}: +91 {number.slice(2, 7)} {number.slice(7)}
+                    <MessageCircle size={18} /> {copy.whatsappNumber.replace('{number}', index + 1)}: +91 {number.slice(2, 7)} {number.slice(7)}
                   </a>)}
-                  {submitted && <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>WhatsApp opens a message draft. Tap Send in WhatsApp to contact us.</p>}
+                  {submitted && <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>{copy.whatsappDraftNote}</p>}
                 </div>
               </>
           </div>

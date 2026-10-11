@@ -1,10 +1,10 @@
 import { languageLabels } from '../utils/catalogCategories';
 
-const PackageLanguagePicker = ({ value, onChange }) => (
-  <div role="group" aria-label="Package language" className="package-language-picker">
+const PackageLanguagePicker = ({ value, onChange, label = 'Package language' }) => (
+  <div role="group" aria-label={label} className="package-language-picker">
     {Object.entries(languageLabels).map(([code, label]) => (
       <button key={code} type="button" aria-pressed={value === code}
-        className={value === code ? 'is-active' : ''} onClick={() => onChange(code)}>
+        lang={code} className={value === code ? 'is-active' : ''} onClick={() => onChange(code)}>
         {label}
       </button>
     ))}

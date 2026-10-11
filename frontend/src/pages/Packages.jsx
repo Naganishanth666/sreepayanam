@@ -2,8 +2,13 @@ import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, Clock, Search, SlidersHorizontal, ArrowUpDown, RefreshCw } from 'lucide-react';
-import { CATALOG_CATEGORIES, categoriesForPackage, getPackageContent, localizeCategory } from '../utils/catalogCategories';
+import {
+  CATALOG_CATEGORIES, categoriesForPackage, formatPackageDuration,
+  formatTourCount, getPackageContent, localizeCategory, localizePackageCategory, localizeRegion,
+  localizeTourType, packagesPageCopy
+} from '../utils/catalogCategories';
 import PackageLanguagePicker from '../components/PackageLanguagePicker';
+import usePackageLanguage from '../hooks/usePackageLanguage';
 
 const FALLBACK_IMG = 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=600&q=80';
 
@@ -26,10 +31,8 @@ const Packages = () => {
   const [catalogCategories, setCatalogCategories] = useState(CATALOG_CATEGORIES);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [language, setLanguage] = useState(() => {
-    const saved = window.localStorage.getItem('sreepayanam-package-language');
-    return ['en', 'ta', 'hi'].includes(saved) ? saved : 'en';
-  });
+  const [language, selectLanguage] = usePackageLanguage();
+  const copy = packagesPageCopy[language] || packagesPageCopy.en;
 
   // Search & Filter State
   const [sortBy, setSortBy] = useState('recommended');
@@ -61,7 +64,7 @@ const Packages = () => {
         setLoading(false);
       })
       .catch(err => {
-        setError(err.message);
+        setError(Boolean(err));
         setLoading(false);
       });
   }, []);
@@ -84,11 +87,6 @@ const Packages = () => {
     });
     setSearchParams(params);
   };
-  const selectLanguage = code => {
-    setLanguage(code);
-    window.localStorage.setItem('sreepayanam-package-language', code);
-  };
-
   // Reset all filters
   const resetFilters = () => {
     setSortBy('recommended');
@@ -138,7 +136,7 @@ const Packages = () => {
   })).filter(item => item.count > 0);
 
   return (
-    <div className="page-container" style={{ background: '#f8fafc', paddingTop: 0, paddingBottom: 80 }}>
+    <div lang={language} className="page-container" style={{ background: '#f8fafc', paddingTop: 0, paddingBottom: 80 }}>
       {/* Top Banner / Hero */}
       <section style={{ 
         background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%)', 
@@ -165,25 +163,25 @@ const Packages = () => {
               display: 'inline-block',
               marginBottom: 16
             }}>
-              🌴 Wanderlust Awaits
+              🌴 {copy.eyebrow}
             </span>
-            <h1 style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', fontWeight: 800, marginBottom: 12 }}>Explore Tour Packages</h1>
+            <h1 style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', fontWeight: 800, marginBottom: 12 }}>{copy.title}</h1>
             <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '1.1rem', maxWidth: 600, margin: '0 auto' }}>
-              Explore routes and request a current quotation tailored to your dates and travellers.
+              {copy.subtitle}
             </p>
           </motion.div>
         </div>
       </section>
 
       <div className="container" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -24, marginBottom: 24, position: 'relative', zIndex: 2 }}>
-        <PackageLanguagePicker value={language} onChange={selectLanguage} />
+        <PackageLanguagePicker value={language} onChange={selectLanguage} label={copy.languageLabel} />
       </div>
 
       <div className="container">
         {availableCategories.length > 0 && <section className="catalog-category-section" aria-labelledby="catalog-categories-heading">
-          <div><h2 id="catalog-categories-heading">Browse by travel style</h2><p>Choose a published route and ask our team for a quote tailored to your dates.</p></div>
+          <div><h2 id="catalog-categories-heading">{copy.browseStyles}</h2><p>{copy.browseStylesNote}</p></div>
           <div className="catalog-category-grid">{availableCategories.map(({ category, count }) => <button type="button" key={category} className={selectedCatalog === category ? 'is-selected' : ''} onClick={() => updateQueryParams({ catalog: selectedCatalog === category ? null : category, category: null, type: null, page: null })} aria-pressed={selectedCatalog === category}>
-              <strong>{localizeCategory(category, language)}</strong><span>{count} tours</span>
+              <strong>{localizeCategory(category, language)}</strong><span>{formatTourCount(count, language)}</span>
             </button>)}</div>
         </section>}
         <div className="catalog-results-layout" style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 32, alignItems: 'start' }}>
@@ -199,7 +197,7 @@ const Packages = () => {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: '1px solid #f1f5f9', paddingBottom: 12 }}>
               <h3 style={{ fontWeight: 800, color: 'var(--dark)', display: 'flex', alignItems: 'center', gap: 8, fontSize: '1.15rem' }}>
-                <SlidersHorizontal size={18} color="var(--primary)" /> Filters
+                <SlidersHorizontal size={18} color="var(--primary)" /> {copy.filters}
               </h3>
               <button 
                 onClick={resetFilters}
@@ -215,19 +213,19 @@ const Packages = () => {
                   gap: 4
                 }}
               >
-                <RefreshCw size={12} /> Clear All
+                <RefreshCw size={12} /> {copy.clearAll}
               </button>
             </div>
 
             {/* Search */}
             <div style={{ marginBottom: 24 }}>
-              <label htmlFor="catalog-search" style={filterLabel}>Search tour</label>
+              <label htmlFor="catalog-search" style={filterLabel}>{copy.searchTour}</label>
               <div style={{ position: 'relative' }}>
                 <input 
                   id="catalog-search"
                   type="text" 
                   className="input-field" 
-                  placeholder="Destination or title..." 
+                  placeholder={copy.searchPlaceholder}
                   value={searchQuery}
                   onChange={e => {
                     updateQueryParams({ dest: e.target.value });
@@ -240,16 +238,16 @@ const Packages = () => {
             </div>
 
             <div className="catalog-filter-grid">
-              <label>Travel days<input className="input-field" type="number" min="1" max="60" value={selectedDays} onChange={event => updateQueryParams({ days: event.target.value, page: null })} placeholder="Any length" /></label>
-              <label>Starting location<input className="input-field" value={selectedStart} onChange={event => updateQueryParams({ start: event.target.value, page: null })} placeholder="e.g. Chennai" /></label>
-              <label>Ending location<input className="input-field" value={selectedEnd} onChange={event => updateQueryParams({ end: event.target.value, page: null })} placeholder="e.g. Madurai" /></label>
-              <label>Hotel category<select className="input-field" value={selectedHotel} onChange={event => updateQueryParams({ hotel: event.target.value, page: null })}><option value="">Any category</option><option value="3 Star">3-star</option><option value="4 Star">4-star</option><option value="5 Star">5-star</option></select></label>
-              <label>Route region<select className="input-field" value={selectedRegion} onChange={event => updateQueryParams({ region: event.target.value, page: null })}><option value="">Any region</option><option>Tamil Nadu</option><option>South India</option><option>North India</option><option>West India</option><option>Northeast India</option><option>Islands</option><option>India-wide</option><option>Other</option></select></label>
+              <label>{copy.travelDays}<input className="input-field" type="number" min="1" max="60" value={selectedDays} onChange={event => updateQueryParams({ days: event.target.value, page: null })} placeholder={copy.anyLength} /></label>
+              <label>{copy.startingLocation}<input className="input-field" value={selectedStart} onChange={event => updateQueryParams({ start: event.target.value, page: null })} placeholder={copy.startPlaceholder} /></label>
+              <label>{copy.endingLocation}<input className="input-field" value={selectedEnd} onChange={event => updateQueryParams({ end: event.target.value, page: null })} placeholder={copy.endPlaceholder} /></label>
+              <label>{copy.hotelCategory}<select className="input-field" value={selectedHotel} onChange={event => updateQueryParams({ hotel: event.target.value, page: null })}><option value="">{copy.anyCategory}</option>{['3 Star', '4 Star', '5 Star'].map(value => <option key={value} value={value}>{copy.stars[value[0]]}</option>)}</select></label>
+              <label>{copy.routeRegion}<select className="input-field" value={selectedRegion} onChange={event => updateQueryParams({ region: event.target.value, page: null })}><option value="">{copy.anyRegion}</option>{['Tamil Nadu', 'South India', 'North India', 'West India', 'Northeast India', 'Islands', 'India-wide', 'Other'].map(region => <option key={region} value={region}>{localizeRegion(region, language)}</option>)}</select></label>
             </div>
 
             {/* Category Segment Tabs */}
             <div style={{ marginBottom: 24 }}>
-              <label style={filterLabel}>Package Category</label>
+              <label style={filterLabel}>{copy.packageCategory}</label>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4, background: '#f1f5f9', padding: 4, borderRadius: 10 }}>
                 {['All', 'Domestic', 'International'].map(cat => {
                   const isActive = selectedCategory === cat;
@@ -272,7 +270,7 @@ const Packages = () => {
                         transition: 'all 0.2s'
                       }}
                     >
-                      {cat}
+                      {localizePackageCategory(cat, language)}
                     </button>
                   );
                 })}
@@ -281,7 +279,7 @@ const Packages = () => {
 
             {/* Tour Types */}
             <div>
-              <label style={filterLabel}>Tour Type</label>
+              <label style={filterLabel}>{copy.tourType}</label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 300, overflowY: 'auto', paddingRight: 6 }}>
                 <button 
                   onClick={() => {
@@ -303,7 +301,7 @@ const Packages = () => {
                     transition: 'all 0.15s'
                   }}
                 >
-                  <span>✨ All Tour Types</span>
+                  <span>✨ {copy.allTourTypes}</span>
                   <span style={{ fontSize: '0.75rem', background: !selectedType ? 'rgba(255,255,255,0.25)' : '#e2e8f0', color: !selectedType ? 'white' : 'var(--text-muted)', padding: '2px 6px', borderRadius: 10 }}>
                     {packages.length}
                   </span>
@@ -343,7 +341,7 @@ const Packages = () => {
                     >
                       <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span>{info.icon}</span>
-                        <span>{type.replace(' Tours', '').replace(' Packages', '')}</span>
+                        <span>{localizeTourType(type, language)}</span>
                       </span>
                       <span style={{ 
                         fontSize: '0.75rem', 
@@ -364,7 +362,7 @@ const Packages = () => {
 
           {/* 2. RESULTS CONTAINER */}
           <main>
-            {error && <div className="form-status is-error" role="alert" style={{ marginBottom: 16 }}>{error}</div>}
+            {error && <div className="form-status is-error" role="alert" style={{ marginBottom: 16 }}>{copy.loadError}</div>}
             {/* Sorting & Stats Top Bar */}
             <div style={{ 
               display: 'flex', 
@@ -379,11 +377,11 @@ const Packages = () => {
               boxShadow: '0 4px 20px rgba(0,0,0,0.02)'
             }}>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.92rem', fontWeight: 600 }}>
-                Showing <strong style={{ color: 'var(--dark)' }}>{filteredPackages.length}</strong> beautiful packages
+                {copy.showing.replace('{count}', filteredPackages.length)}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.88rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                  <ArrowUpDown size={14} /> Sort By:
+                  <ArrowUpDown size={14} /> {copy.sortBy}:
                 </span>
                 <select 
                   className="input-field" 
@@ -391,9 +389,9 @@ const Packages = () => {
                   onChange={e => setSortBy(e.target.value)}
                   style={{ width: 180, height: 38, padding: '0 12px', fontSize: '0.88rem', borderRadius: 8, cursor: 'pointer' }}
                 >
-                  <option value="recommended">Recommended</option>
-                  <option value="durationShort">Duration: Shortest</option>
-                  <option value="durationLong">Duration: Longest</option>
+                  <option value="recommended">{copy.recommended}</option>
+                  <option value="durationShort">{copy.shortest}</option>
+                  <option value="durationLong">{copy.longest}</option>
                 </select>
               </div>
             </div>
@@ -425,12 +423,12 @@ const Packages = () => {
                 }}
               >
                 <div style={{ fontSize: '4rem', marginBottom: 20 }}>🛸</div>
-                <h3 style={{ color: 'var(--dark)', fontWeight: 800, marginBottom: 10, fontSize: '1.4rem' }}>No Matching Packages Found</h3>
+                <h3 style={{ color: 'var(--dark)', fontWeight: 800, marginBottom: 10, fontSize: '1.4rem' }}>{copy.noMatches}</h3>
                 <p style={{ maxWidth: 460, margin: '0 auto 24px', lineHeight: 1.6 }}>
-                  We couldn't find any tour matching your current filters. Try expanding your search query or choosing another type.
+                  {copy.noMatchesNote}
                 </p>
                 <button onClick={resetFilters} className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                  <RefreshCw size={16} /> Reset All Filters
+                  <RefreshCw size={16} /> {copy.resetFilters}
                 </button>
               </motion.div>
             ) : (
@@ -440,15 +438,15 @@ const Packages = () => {
               >
                 <AnimatePresence>
                   {visiblePackages.map((pkg, i) => (
-                    <PackageCard key={pkg.packageId} pkg={pkg} index={i} language={language} />
+                    <PackageCard key={pkg.packageId} pkg={pkg} index={i} language={language} copy={copy} />
                   ))}
                 </AnimatePresence>
               </motion.div>
             )}
-            {pageCount > 1 && <nav className="catalog-pagination" aria-label="Package pages">
-              <button type="button" disabled={currentPage === 1} onClick={() => updateQueryParams({ page: currentPage - 1 })}>Previous</button>
-              <span>Page {currentPage} of {pageCount}</span>
-              <button type="button" disabled={currentPage === pageCount} onClick={() => updateQueryParams({ page: currentPage + 1 })}>Next</button>
+            {pageCount > 1 && <nav className="catalog-pagination" aria-label={copy.packageCategory}>
+              <button type="button" disabled={currentPage === 1} onClick={() => updateQueryParams({ page: currentPage - 1 })}>{copy.previous}</button>
+              <span>{copy.page.replace('{page}', currentPage).replace('{total}', pageCount)}</span>
+              <button type="button" disabled={currentPage === pageCount} onClick={() => updateQueryParams({ page: currentPage + 1 })}>{copy.next}</button>
             </nav>}
           </main>
         </div>
@@ -461,7 +459,7 @@ const Packages = () => {
 };
 
 // Internal Card Component
-const PackageCard = ({ pkg, index, language }) => {
+const PackageCard = ({ pkg, index, language, copy }) => {
   const navigate = useNavigate();
   const content = getPackageContent(pkg, language);
   
@@ -500,7 +498,7 @@ const PackageCard = ({ pkg, index, language }) => {
             fontWeight: 700, 
             backdropFilter: 'blur(4px)' 
           }}>
-              {pkg.regionScope || pkg.packageCategory || 'Domestic'}
+              {localizeRegion(pkg.regionScope || pkg.packageCategory || 'Domestic', language)}
           </span>
         </div>
         <div style={{ position: 'absolute', top: 12, right: 12 }}>
@@ -516,7 +514,7 @@ const PackageCard = ({ pkg, index, language }) => {
             gap: 4,
             fontWeight: 600
           }}>
-            <Clock size={11} /> {pkg.durationDays}D/{pkg.durationNights || (pkg.durationDays - 1)}N
+            <Clock size={11} /> {formatPackageDuration(pkg.durationDays, pkg.durationNights || (pkg.durationDays - 1), language)}
           </span>
         </div>
       </div>
@@ -527,7 +525,7 @@ const PackageCard = ({ pkg, index, language }) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontSize: '1rem' }}>{typeInfo.icon}</span>
             <span style={{ fontSize: '0.78rem', color: typeInfo.color, fontWeight: 700 }}>
-              {content.tourType || pkg.tourType || 'Tour'}
+              {content.tourType || localizeTourType(pkg.tourType || 'Tour', language)}
             </span>
           </div>
           <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>
@@ -555,13 +553,13 @@ const PackageCard = ({ pkg, index, language }) => {
         </div>
 
         <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ color: 'var(--color-ink-soft)', fontWeight: 700, fontSize: '0.85rem' }}>Price confirmed after your enquiry</span>
+          <span style={{ color: 'var(--color-ink-soft)', fontWeight: 700, fontSize: '0.85rem' }}>{copy.priceNote}</span>
           <button 
             className="btn btn-primary" 
             style={{ padding: '8px 16px', fontSize: '0.85rem', borderRadius: 8 }} 
             onClick={e => { e.stopPropagation(); navigate(`/package/${pkg.packageId}#package-enquiry`); }}
           >
-            Request for price
+            {copy.requestPrice}
           </button>
         </div>
       </div>
