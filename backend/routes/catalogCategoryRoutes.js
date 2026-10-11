@@ -1,16 +1,13 @@
 const express = require('express');
 const CatalogCategory = require('../models/CatalogCategory');
 const Package = require('../models/Package');
-const { packages: curatedPackages } = require('../data/curatedRegionalCatalog');
+const { packages: curatedPackages, isPublicPackage } = require('../utils/regionalCatalog');
+const { categoryLabels } = require('../data/curatedLeisureCatalog');
 const { checkAdmin } = require('../middleware/auth');
 
 const router = express.Router();
-const DEFAULTS = [
-  'National Tours', 'International Tours', 'Pilgrimage Tours', 'Honeymoon Packages',
-  'Family Holidays', 'Hill Station Tours', 'Educational Tours', 'Medical Tourism',
-  'Corporate & MICE', 'Festival & Cultural Tours', 'Cruise Holidays', 'IRCTC Rail Tours',
-  'Tamil Nadu Pilgrimages', 'South India Pilgrimages', 'North India Pilgrimages', 'India-wide Pilgrimages'
-];
+const DEFAULTS = Object.keys(categoryLabels);
+const isForbiddenCategory = value => /national|pilgrim|festival|cultur|irctc|temple|church|mosque|relig|hajj|umrah/i.test(String(value || ''));
 
 const ensureDefaults = async () => {
   await CatalogCategory.bulkWrite(DEFAULTS.map((name, order) => ({
@@ -22,7 +19,14 @@ router.get('/', async (_req, res) => {
   try {
     await ensureDefaults();
     const categories = await CatalogCategory.find({ active: true }).sort({ order: 1, name: 1 }).lean();
-    res.json(categories.map(({ name, order }) => ({ name, order })));
+    const databasePackages = await Package.find({ isActive: true, status: { $in: ['Approved', 'Published'] } })
+      .select('packageId title destination packageCategory tourType catalogCategories regionScope destinationStates locationTags translations mealPlan inclusions itinerary isActive status seasonStart seasonEnd').lean();
+    const usedCategories = new Set([
+      ...curatedPackages.filter(pkg => isPublicPackage(pkg)).flatMap(pkg => pkg.catalogCategories || []),
+      ...databasePackages.filter(pkg => isPublicPackage(pkg)).flatMap(pkg => pkg.catalogCategories || [])
+    ]);
+    res.json(categories.filter(category => !isForbiddenCategory(category.name)
+      && (DEFAULTS.includes(category.name) || usedCategories.has(category.name))).map(({ name, order }) => ({ name, order })));
   } catch (error) {
     console.error('[Categories] List failed:', error.message);
     res.status(500).json({ message: 'Could not load catalogue categories.' });
@@ -43,6 +47,7 @@ router.post('/', checkAdmin, async (req, res) => {
   try {
     const name = String(req.body?.name || '').trim().slice(0, 80);
     if (!name) return res.status(400).json({ message: 'Enter a category name.' });
+    if (isForbiddenCategory(name)) return res.status(422).json({ message: 'This category is not available in the current leisure catalogue.' });
     const category = await CatalogCategory.create({ name, order: Number.isFinite(Number(req.body?.order)) ? Number(req.body.order) : 100 });
     res.status(201).json(category);
   } catch (error) {
@@ -56,6 +61,7 @@ router.put('/:id', checkAdmin, async (req, res) => {
     if (!category) return res.status(404).json({ message: 'Category not found.' });
     const name = String(req.body?.name || '').trim().slice(0, 80);
     if (!name) return res.status(400).json({ message: 'Enter a category name.' });
+    if (isForbiddenCategory(name)) return res.status(422).json({ message: 'This category is not available in the current leisure catalogue.' });
     if (name !== category.name && (await Package.exists({ catalogCategories: category.name })
       || curatedPackages.some(pkg => pkg.catalogCategories.includes(category.name)))) {
       return res.status(409).json({ message: 'Move packages out of this category before renaming it.' });

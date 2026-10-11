@@ -1027,8 +1027,8 @@ JSON Schema to conform to:
     {
       "title": "Title of the tour package. If not explicitly found, create a premium catchphrase title.",
       "destination": "The primary destination/region (e.g. Kerala, Munnar, Dubai, Singapore, Europe)",
-      "packageCategory": "Either 'National' or 'International'. Determine this based on whether the destination is in India (National) or outside India (International).",
-      "tourType": "One of the following exact strings: 'Family Tours', 'Pilgrimage Tours', 'Honeymoon Tours', 'Hill Station Tours', 'Resort Packages', 'Weekend Tours', 'Group Tours', 'School / College Tours', 'Corporate Tours', 'Festival Tours', 'Cultural Tours', 'Medical Tours', 'Event / Sports Tours', 'Cruise Packages', 'Luxury Tours', 'Budget Tours', 'MICE Tours', 'Adventure Tours'. Choose the best match.",
+      "packageCategory": "Either 'Domestic' or 'International'. Do not use 'National'.",
+      "tourType": "Choose only a permitted leisure type: 'Honeymoon Tours', 'Family Tours', 'Wildlife & Nature Tours', 'Adventure & Trekking Tours', 'Hill Station & Leisure Tours', 'Beach & Coastal Tours', 'Luxury & Wellness Tours', 'Corporate / MICE Tours', or 'Budget Weekend Getaways'. Do not create pilgrimage, religious, festival, cultural or rail-tour packages.",
       "durationDays": number,
       "durationNights": number,
       "startingCity": "Starting city if mentioned, otherwise leave empty.",
@@ -1040,12 +1040,12 @@ JSON Schema to conform to:
           "title": "Short title of the day's program",
           "activities": "Detailed, highly descriptive paragraph (at least 4-5 sentences) showcasing the sights, their cultural/natural/historical highlights, specific spots visited, and key experiences",
           "hotel": "Hotel stay recommendation details or tier matching the package style",
-          "mealPlan": "Meal plan details (e.g. Breakfast, Lunch, Dinner or MAPAI/CP/EP) and local dining recommendations",
+          "mealPlan": "Daily Breakfast Included — Breakfast Only",
           "transport": "Local transfer details, vehicle types, routes, distance, and duration"
         }
       ],
-      "inclusions": ["List of included items, e.g. '3-star hotel stay', 'Daily breakfast', 'Airport transfers'"],
-      "exclusions": ["List of excluded items, e.g. 'Flight tickets', 'Personal expenses', 'Entry tickets'"],
+      "inclusions": ["List included services and explicitly state Daily Breakfast Included — Breakfast Only"],
+      "exclusions": ["Explicitly list lunch and dinner as excluded, followed by other exclusions"],
       "optionalAddons": ["Optional addons, e.g. 'Houseboat upgrade', 'Candlelight dinner'"],
       "termsAndConditions": "Terms and conditions text if found, otherwise general terms",
       "cancellationPolicy": "Cancellation policy text if found, otherwise general policy",
@@ -1086,7 +1086,7 @@ JSON Schema to conform to:
       
       const generatorPrompt = `
         You are an expert travel coordinator at "SreePayanam Tours & Travels".
-        Your task is to analyze the text content of a travel brochure PDF and extract all the distinct tour packages/itineraries found within it. A brochure may contain one or multiple different tour packages (e.g. South India Pilgrimage, Munnar Family Tour, etc.). Extract each distinct package separately.
+        Your task is to analyze the text content of a travel brochure PDF and extract only distinct leisure packages in the permitted categories. Exclude pilgrimage, religious, festival, cultural, national-tour and rail-tour packages.
         
         CRITICAL INSTRUCTION: Scan the entire text very carefully. Do NOT skip, omit, or merge any package. Every different itinerary (whether different duration, different destinations, or different pricing) must be returned as a separate entry in the "packages" array.
 
@@ -1109,8 +1109,8 @@ JSON Schema to conform to:
             {
               "title": "Title of the tour package. If not explicitly found, create a premium catchphrase title.",
               "destination": "The primary destination/region (e.g. Kerala, Munnar, Dubai, Singapore, Europe)",
-              "packageCategory": "Either 'National' or 'International'. Determine this based on whether the destination is in India (National) or outside India (International).",
-              "tourType": "One of the following exact strings: 'Family Tours', 'Pilgrimage Tours', 'Honeymoon Tours', 'Hill Station Tours', 'Resort Packages', 'Weekend Tours', 'Group Tours', 'School / College Tours', 'Corporate Tours', 'Festival Tours', 'Cultural Tours', 'Medical Tours', 'Event / Sports Tours', 'Cruise Packages', 'Luxury Tours', 'Budget Tours', 'MICE Tours', 'Adventure Tours'. Choose the best match.",
+              "packageCategory": "Either 'Domestic' or 'International'. Do not use 'National'.",
+              "tourType": "Choose only a permitted leisure type: 'Honeymoon Tours', 'Family Tours', 'Wildlife & Nature Tours', 'Adventure & Trekking Tours', 'Hill Station & Leisure Tours', 'Beach & Coastal Tours', 'Luxury & Wellness Tours', 'Corporate / MICE Tours', or 'Budget Weekend Getaways'. Do not create pilgrimage, religious, festival, cultural or rail-tour packages.",
               "durationDays": number,
               "durationNights": number,
               "startingCity": "Starting city if mentioned, otherwise leave empty.",
@@ -1122,12 +1122,12 @@ JSON Schema to conform to:
                   "title": "Short title of the day's program",
                   "activities": "Detailed, highly descriptive paragraph (at least 4-5 sentences) showcasing the sights, their cultural/natural/historical highlights, specific spots visited, and key experiences",
                   "hotel": "Hotel stay recommendation details or tier matching the package style",
-                  "mealPlan": "Meal plan details (e.g. Breakfast, Lunch, Dinner or MAPAI/CP/EP) and local dining recommendations",
+                  "mealPlan": "Daily Breakfast Included — Breakfast Only",
                   "transport": "Local transfer details, vehicle types, routes, distance, and duration"
                 }
               ],
-              "inclusions": ["List of included items, e.g. '3-star hotel stay', 'Daily breakfast', 'Airport transfers'"],
-              "exclusions": ["List of excluded items, e.g. 'Flight tickets', 'Personal expenses', 'Entry tickets'"],
+              "inclusions": ["List included services and explicitly state Daily Breakfast Included — Breakfast Only"],
+              "exclusions": ["Explicitly list lunch and dinner as excluded, followed by other exclusions"],
               "optionalAddons": ["Optional addons, e.g. 'Houseboat upgrade', 'Candlelight dinner'"],
               "termsAndConditions": "Terms and conditions text if found, otherwise general terms",
               "cancellationPolicy": "Cancellation policy text if found, otherwise general policy",
@@ -1166,7 +1166,29 @@ JSON Schema to conform to:
       packages = [parsedData];
     }
 
-    res.json({ packages: packages.map(pkg => ({ ...pkg, status: 'Draft', isSpecialOffer: false })) });
+    const importedTourCategories = {
+      'Honeymoon Tours': 'Honeymoon & Romance',
+      'Family Tours': 'Family Holidays',
+      'Wildlife & Nature Tours': 'Wildlife & Nature',
+      'Adventure & Trekking Tours': 'Adventure & Trekking',
+      'Hill Station & Leisure Tours': 'Hill Stations & Leisure',
+      'Beach & Coastal Tours': 'Beach & Coastal',
+      'Luxury & Wellness Tours': 'Luxury & Wellness',
+      'Corporate / MICE Tours': 'Corporate & MICE',
+      'Budget Weekend Getaways': 'Budget Weekend Getaways'
+    };
+    const imported = packages.filter(pkg => pkg && ['Domestic', 'International'].includes(pkg.packageCategory)
+      && Object.hasOwn(importedTourCategories, pkg.tourType));
+    res.json({ packages: imported.map(pkg => ({ ...pkg,
+      catalogCategories: [importedTourCategories[pkg.tourType]],
+      mealPlan: 'Daily Breakfast Included — Breakfast Only',
+      inclusions: [...new Set([...(Array.isArray(pkg.inclusions) ? pkg.inclusions : String(pkg.inclusions || '').split(/\r?\n/)),
+        'Daily Breakfast Included — Breakfast Only'].filter(item => !/\b(?:lunch|dinner)\b|மதிய உணவு|இரவு உணவு|दोपहर का भोजन|रात का भोजन/i.test(item)))],
+      exclusions: [...new Set([...(Array.isArray(pkg.exclusions) ? pkg.exclusions : String(pkg.exclusions || '').split(/\r?\n/)), 'Lunch', 'Dinner'])],
+      itinerary: (pkg.itinerary || []).map(day => ({ ...day,
+        mealPlan: 'Breakfast only; lunch and dinner are at the traveller’s own expense.'
+      })),
+      status: 'Draft', isSpecialOffer: false })) });
   } catch (error) {
     console.error('PDF parsing/AI processing failed:', error);
     res.status(500).json({ message: 'Failed to process PDF brochure content', error: error.message });
@@ -1176,7 +1198,24 @@ JSON Schema to conform to:
 // 2. AI Package Content Generator (For Admin Dashboard)
 router.post('/generate-package', checkAdmin, async (req, res) => {
   try {
-    const { prompt, destination, durationDays, durationNights, tourType, packageCategory, mealRequired, suggestTemples } = req.body;
+    const { prompt, destination, durationDays, durationNights } = req.body;
+    const allowedTourTypes = new Set([
+      'Honeymoon Tours', 'Family Tours', 'Wildlife & Nature Tours', 'Adventure & Trekking Tours',
+      'Hill Station & Leisure Tours', 'Beach & Coastal Tours', 'Luxury & Wellness Tours',
+      'Corporate / MICE Tours', 'Budget Weekend Getaways'
+    ]);
+    const tourType = String(req.body?.tourType || 'Family Tours');
+    if (!allowedTourTypes.has(tourType)) return res.status(422).json({ message: 'Choose a permitted non-pilgrimage, non-cultural leisure category.' });
+    if (req.body?.packageCategory && !['Domestic', 'International'].includes(req.body.packageCategory)) {
+      return res.status(422).json({ message: 'Choose Domestic or International for this package.' });
+    }
+    const requestText = `${prompt || ''} ${destination || ''}`;
+    if (/\b(pilgrim(?:age)?|temple|church|mosque|festival|cultur(?:e|al)|national tour|irctc)\b/i.test(requestText)) {
+      return res.status(422).json({ message: 'This generator creates leisure packages only; remove pilgrimage, cultural, festival or religious-tour requests.' });
+    }
+    const packageCategory = req.body?.packageCategory || 'Domestic';
+    const mealRequired = 'CP - Breakfast';
+    const suggestTemples = false;
     const openai = getOpenAIClient(res);
     if (!openai) return;
 
@@ -1185,26 +1224,20 @@ router.post('/generate-package', checkAdmin, async (req, res) => {
     const nights = Number(durationNights) || 1;
     
     // Calculate dynamic word count target per day to prevent exceeding OpenAI's output token limit (max 4096 tokens)
-    const targetWordsPerDay = days <= 3 ? 600 : days === 4 ? 500 : days === 5 ? 400 : 300;
+    const targetWordsPerDay = days <= 3 ? 160 : days === 4 ? 140 : days === 5 ? 120 : 100;
 
     // Set package-level meal plan description
-    let packageMealPlan = "No meals included";
-    if (mealRequired === "CP - Breakfast") packageMealPlan = "CP - Breakfast Only";
-    else if (mealRequired === "MAP - Breakfast + Dinner") packageMealPlan = "MAP - Breakfast & Dinner";
-    else if (mealRequired === "AP - Breakfast + Lunch + Dinner") packageMealPlan = "AP - Breakfast, Lunch & Dinner";
-    else if (mealRequired === "No") packageMealPlan = "No meals included";
-    else if (mealRequired === "Yes") packageMealPlan = "Breakfast & Dinner Included";
+    const packageMealPlan = 'Daily Breakfast Included — Breakfast Only';
 
-    const itineraryMealPlanDesc = mealRequired === "No"
-      ? "Strictly output 'No meals included'. Do NOT suggest any breakfasts, dinners, lunches, or hotel/restaurant dining recommendations."
-      : "Structure according to the day-by-day mapping constraint. Mention the included meals for this day and suggest specific local dishes, cuisines, or restaurants.";
+    const itineraryMealPlanDesc = 'Breakfast only. Include one hotel breakfast on the morning after the overnight stay; lunch and dinner are excluded and at the traveller’s own expense.';
 
     const generatorPrompt = `
       Create a fully written, highly professional travel package matching the following prompt: "${prompt || `Generate a tour package to ${destination || 'a beautiful place'}`}".
       
       ${formattedPreferences ? `Detailed Travel Preferences:\n${formattedPreferences}` : ''}
       
-      You MUST perform thorough, realistic travel research to provide real suggested travel, flight transfers, train numbers or schedules, driving durations/distances, and genuine hotel and meal recommendations.
+      Generate a leisure package only. Do not create a pilgrimage, religious, cultural, festival, national-tour or IRCTC package, and do not add temples, churches or mosques as itinerary stops. Do not claim that hotels, tickets, activities or permits have been booked.
+      Use concrete attraction names, local visit times, short place descriptions and official HTTPS source links. Keep all Tamil Nadu stops inside Tamil Nadu. Mark travel-time and opening-hour checks as date-dependent where needed.
       
       Your response MUST be a valid JSON object ONLY.
       
@@ -1214,42 +1247,32 @@ router.post('/generate-package', checkAdmin, async (req, res) => {
       Your itinerary array MUST contain exactly ${days} items (i.e. one entry per day from Day 1 to Day ${days}).
       For example, if durationDays is 2, your itinerary array MUST contain exactly 2 objects: one for Day 1 and one for Day 2. If it is 1, contain exactly 1 object. Never truncate or skip any day.
 
-      Temples suggest option:
-      - If tourType is "Pilgrimage Tours" or suggestTemples is true (value: ${!!suggestTemples}), suggest 3 to 5 nearby temples at destination, list their names in the "templesList" array, and prioritize visiting them in the day-wise itinerary, detailing specific morning/evening darshan timings.
-
-      Meal Plan day-by-day mapping:
-      - Structure each day's "mealPlan" field strictly according to:
-        * If mealRequired is "CP - Breakfast": Day 1: "No meals included (Arrival day)", Day 2: "Breakfast (CP Plan) at the hotel".
-        * If mealRequired is "MAP - Breakfast + Dinner": Day 1: "Dinner (MAP Plan) at the hotel", Day 2: "Breakfast & Dinner (MAP Plan) at the hotel".
-        * If mealRequired is "AP - Breakfast + Lunch + Dinner": Day 1: "Lunch & Dinner (AP Plan)", Day 2: "Breakfast, Lunch & Dinner (AP Plan)".
-        * If mealRequired is "No": All days: "No meals included".
-      ${mealRequired === 'No' ? 'CRITICAL: Since No meals are included (mealRequired is "No"), you MUST NOT suggest, mention, or include any breakfasts, lunches, dinners, evening dining, or hotel/restaurant meals anywhere in the itinerary day-wise activities, overview, inclusions, or exclusions.' : ''}
+      Meal plan: Use exactly "Daily Breakfast Included — Breakfast Only" at package level. Only the morning after the overnight stay includes hotel breakfast. Lunch and dinner must be shown as excluded, at traveller expense. Do not recommend meal upgrades.
 
       Inclusions & Exclusions formatting:
       - inclusions: Separate each inclusion item with a newline character. Use this template:
-        Airport / Railway Station Pick-up & Drop\\n${nights} Night Accommodation in a 3-Star Hotel\\n${mealRequired === 'CP - Breakfast' ? 'Daily Breakfast (Day 2 Only)' : mealRequired === 'MAP - Breakfast + Dinner' ? 'Daily Breakfast & Dinner' : mealRequired === 'AP - Breakfast + Lunch + Dinner' ? 'Daily Breakfast, Lunch & Dinner' : 'No Meals Included'}\\nPrivate AC Vehicle for Sightseeing\\nDriver Allowance\\nToll Charges\\nParking Charges\\nFuel Charges\\nAll Transfers as per Itinerary
+        ${nights} Night Accommodation\\nDaily Breakfast Included — Breakfast Only\\nPrivate AC Sedan / SUV with Driver\\nScheduled Transfers\\nTolls and Parking
       - exclusions: Separate each exclusion item with a newline character. Use this template:
-        Airfare / Train Fare\\n${mealRequired === 'CP - Breakfast' ? 'Lunch & Dinner' : mealRequired === 'MAP - Breakfast + Dinner' ? 'Lunch Only' : mealRequired === 'No' ? 'All Meals' : 'Personal Expenses'}\\nBoat Ride Charges\\nVIP / Sugam Darshan Charges\\nTemple Pooja / Abhishekam Charges\\nPersonal Expenses\\nTips & Porter Charges\\nCamera Charges (if applicable)\\nGST (if applicable)
+        Lunch\\nDinner\\nAirfare / Train Fare\\nEntry Tickets and Optional Activities Unless Explicitly Included\\nPersonal Expenses and Tips
 
       Daily Activity Detail:
       For each day in the itinerary, the content MUST be extremely descriptive, informative, and engaging:
       * For each day, the "activities" field MUST be extremely detailed, descriptive, and contain at least ${targetWordsPerDay} words. Do NOT write short summaries. Describe every sightseeing location, its history, charm, recommended timings, transit experiences, and local context in depth. Use multiple rich paragraphs and markdown formatting (like bolding and lists).
-      * The package "overview" field MUST be a detailed, multi-paragraph essay of at least 300 to 500 words highlighting the key destinations, experiences, and theme of the trip.
+      * The package "overview" field should be a clear 150–200 word summary highlighting the destinations and practical trip style.
       * The "mealPlan" field must follow the mealRequired constraints: ${itineraryMealPlanDesc}
       
       The JSON object MUST strictly conform to the following schema:
       {
         "title": "Inspiring and premium package title",
         "destination": "Name of destination (e.g. Madurai, India)",
-        "packageCategory": "National" | "International",
-        "tourType": "Family Tours" | "Pilgrimage Tours" | "Honeymoon Tours" | "Hill Station Tours" | "Resort Packages" | "Weekend Tours" | "Group Tours" | "School / College Tours" | "Corporate Tours" | "Festival Tours" | "Cultural Tours" | "Medical Tours" | "Event / Sports Tours" | "Cruise Packages" | "MICE Tours" | "Education Tours" | "Luxury Tours" | "Budget Tours" | "Adventure Tours",
+      "packageCategory": "${packageCategory}",
+      "tourType": "${tourType}",
         "startingCity": "E.g. Madurai",
         "endingCity": "E.g. Madurai",
         "durationDays": ${days},
         "durationNights": ${nights},
         "mealPlan": "${packageMealPlan}",
-        "templesList": ["Temple Name 1", "Temple Name 2"],
-        "overview": "Thorough, engaging, premium description of the package experience. MUST be at least 300 to 500 words, structured in multiple readable paragraphs.",
+        "overview": "A clear 150–200 word summary of the package experience.",
         "imageUrl": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=80",
         "itinerary": [
           {
@@ -1258,7 +1281,11 @@ router.post('/generate-package', checkAdmin, async (req, res) => {
             "activities": "Extremely detailed description of activities and specific spots visited for this day. MUST be at least ${targetWordsPerDay} words in length, containing multiple paragraphs, rich descriptive details of spots, history, timings, and experience using markdown formatting.",
             "hotel": "Name of a specific realistic premium hotel or resort matching the location",
             "mealPlan": "${itineraryMealPlanDesc}",
-            "transport": "Specific flight details (airlines, routes), train options, or car travel/road transfers, with transit times and distance"
+            "transport": "Selected transfer mode and realistic route-time estimate",
+            "schedule": [
+              { "time": "09:00", "kind": "visit", "title": "Visit title", "place": "Named attraction", "description": "Brief, factual explanation of what the traveller will see", "sourceUrl": "Official HTTPS attraction page", "visitingInfo": "Access, timing or ticket note; verify for travel date" },
+              { "time": "12:30", "kind": "meal", "title": "Lunch break", "place": "Destination base", "description": "Lunch is at the traveller’s expense and is not included." }
+            ]
           }
         ],
         "inclusions": "Separate each inclusion item with a newline character.",
@@ -1275,7 +1302,7 @@ router.post('/generate-package', checkAdmin, async (req, res) => {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
-        { role: 'system', content: `You are an API that only returns pure, valid, parsed JSON conforming to the requested schema. Never output markdown format outside the JSON. Crucially, you MUST write extremely detailed, long-form content: the "overview" field MUST be a multi-paragraph text of at least 300 to 500 words, and the "activities" field for each day in the itinerary MUST be at least ${targetWordsPerDay} words long, detailing sightseeing spots, history, culture, recommended timings, and experience in multiple descriptive paragraphs. Do not summarize or truncate.` },
+        { role: 'system', content: `You are an API that only returns pure, valid, parsed JSON conforming to the requested leisure-package schema. Never output markdown outside JSON. Do not create pilgrimage, religious, cultural, festival, national-tour or rail-tour packages, and do not add temples, churches or mosques as stops. Keep Tamil Nadu destinations inside the state. Include concrete visit times, attraction names, concise location descriptions and official HTTPS sources. State that ticket, permit, opening-hour and supplier checks depend on travel dates. Use breakfast only; lunch and dinner are excluded.` },
         { role: 'user', content: generatorPrompt }
       ],
       response_format: { type: "json_object" },
@@ -1294,7 +1321,7 @@ router.post('/generate-package', checkAdmin, async (req, res) => {
     const infantCount = Number(req.body.numInfants || 0);
     const hotelCategory = req.body.hotelCategory || '3 Star';
     const vehicleType = req.body.vehicleType || req.body.carType || null;
-    const mealPlan = req.body.mealRequired || 'MAP';
+    const mealPlan = mealRequired;
     const markupPercent = 35;
     const bufferPercent = Number(req.body.bufferPercent) || 10;
 
@@ -1315,6 +1342,9 @@ router.post('/generate-package', checkAdmin, async (req, res) => {
     const costing = calculateCosting(costingParams);
 
     packageData.costingBreakdown = costing;
+    packageData.packageCategory = packageCategory;
+    packageData.tourType = tourType;
+    packageData.templesList = [];
     packageData.status = 'Draft';
     packageData.baseCost = costing.supplierCost > 0 ? costing.supplierCost : undefined;
     packageData.originalPrice = costing.supplierCost > 0 ? costing.sellingPrice : undefined;
@@ -1613,26 +1643,40 @@ router.post('/compile-draft', checkAdmin, async (req, res) => {
       includeFlight,
       includeTrain,
       includeCar,
-      totalPassengers,
-      selectedTemples,
-      mealRequired
+      totalPassengers
     } = req.body;
+
+    const allowedTourTypes = new Set([
+      'Honeymoon Tours', 'Family Tours', 'Wildlife & Nature Tours', 'Adventure & Trekking Tours',
+      'Hill Station & Leisure Tours', 'Beach & Coastal Tours', 'Luxury & Wellness Tours',
+      'Corporate / MICE Tours', 'Budget Weekend Getaways'
+    ]);
+    const packageCategoryValue = packageCategory || 'Domestic';
+    const tourTypeValue = tourType || 'Family Tours';
+    const categoryByTourType = {
+      'Honeymoon Tours': 'Honeymoon & Romance', 'Family Tours': 'Family Holidays',
+      'Wildlife & Nature Tours': 'Wildlife & Nature', 'Adventure & Trekking Tours': 'Adventure & Trekking',
+      'Hill Station & Leisure Tours': 'Hill Stations & Leisure', 'Beach & Coastal Tours': 'Beach & Coastal',
+      'Luxury & Wellness Tours': 'Luxury & Wellness', 'Corporate / MICE Tours': 'Corporate & MICE',
+      'Budget Weekend Getaways': 'Budget Weekend Getaways'
+    };
+    const catalogCategoryValue = categoryByTourType[tourTypeValue];
+    const requestText = `${destination || ''} ${customPrompt || ''}`;
+    if (!['Domestic', 'International'].includes(packageCategoryValue)
+      || !allowedTourTypes.has(tourTypeValue)
+      || /\b(pilgrim(?:age)?|temple|church|mosque|relig|festival|cultur(?:e|al)|national tour|irctc)\b/i.test(requestText)) {
+      return res.status(422).json({ message: 'This package builder accepts permitted non-religious leisure categories only.' });
+    }
 
     const passengers = Number(totalPassengers) || 2;
     const days = Number(durationDays) || 2;
     const nights = Number(durationNights) || 1;
-    const templesToInclude = Array.isArray(selectedTemples) ? selectedTemples : [];
+    const mealRequired = 'CP - Breakfast';
     
     // Calculate dynamic word count target per day to prevent exceeding OpenAI's output token limit (max 4096 tokens)
-    const targetWordsPerDay = days <= 3 ? 600 : days === 4 ? 500 : days === 5 ? 400 : 300;
+    const targetWordsPerDay = days <= 3 ? 160 : days === 4 ? 140 : days === 5 ? 120 : 100;
     
-    // Set package-level meal plan description
-    let packageMealPlan = "No meals included";
-    if (mealRequired === "CP - Breakfast") packageMealPlan = "CP - Breakfast Only";
-    else if (mealRequired === "MAP - Breakfast + Dinner") packageMealPlan = "MAP - Breakfast & Dinner";
-    else if (mealRequired === "AP - Breakfast + Lunch + Dinner") packageMealPlan = "AP - Breakfast, Lunch & Dinner";
-    else if (mealRequired === "No") packageMealPlan = "No meals included";
-    else if (mealRequired === "Yes") packageMealPlan = "Breakfast & Dinner Included";
+    const packageMealPlan = 'Daily Breakfast Included — Breakfast Only';
 
     const openai = getOpenAIClient(res);
     if (!openai) return;
@@ -1672,7 +1716,7 @@ router.post('/compile-draft', checkAdmin, async (req, res) => {
       durationNights: nights,
       hotelCategory,
       hotelRoomRate,
-      mealPlan: mealRequired || 'MAP',
+      mealPlan: mealRequired,
       vehicleType: selectedCar ? selectedCar.type : null,
       vehicleDailyRate,
       miscCost: flightTrainCost,
@@ -1690,9 +1734,7 @@ router.post('/compile-draft', checkAdmin, async (req, res) => {
 
     const formattedPreferences = formatDetailedPreferences(req.body);
 
-    const itineraryMealPlanDesc = mealRequired === "No"
-      ? "Strictly output 'No meals included'. Do NOT suggest any breakfasts, dinners, lunches, or hotel/restaurant dining recommendations."
-      : "Structure according to the day-by-day mapping constraint. Mention the included meals for this day and suggest specific local dishes, cuisines, or restaurants.";
+    const itineraryMealPlanDesc = 'Breakfast only. Include hotel breakfast after an overnight stay; lunch and dinner are excluded and at the traveller’s expense. Do not recommend meal upgrades.';
 
     const compilePrompt = `
       Create a fully written, highly professional travel package matching the following details.
@@ -1704,8 +1746,8 @@ router.post('/compile-draft', checkAdmin, async (req, res) => {
       - Selected Flight Choice: ${selectedFlight ? JSON.stringify(selectedFlight) : 'None'}
       - Selected Train Choice: ${selectedTrain ? JSON.stringify(selectedTrain) : 'None'}
       - Selected Car/Transfer Choice: ${selectedCar ? JSON.stringify(selectedCar) : 'None'}
-      - Selected Nearby Temples to prioritize: ${templesToInclude.join(', ') || 'None'}
-      - Meal Plan Plan Style: ${mealRequired || 'No'} (Use this to structure the daily mealPlan and inclusions/exclusions)
+      - Religious-site visits are outside this leisure package catalogue and must not be included.
+      - Meal Plan: ${packageMealPlan}
       - Total Passengers: ${passengers}
       
       Package Parameters:
@@ -1713,8 +1755,8 @@ router.post('/compile-draft', checkAdmin, async (req, res) => {
       - Starting City: ${startingCity || 'Not specified'}
       - Ending City: ${endingCity || 'Not specified'}
       - Duration: ${days} Days / ${nights} Nights
-      - Package Category: ${packageCategory || 'National'}
-      - Tour Type: ${tourType || 'Family Tours'}
+      - Package Category: ${packageCategoryValue}
+      - Tour Type: ${tourTypeValue}
       - Additional Prompt Details: ${customPrompt || 'None'}
       ${formattedPreferences ? `\nDetailed Travel Preferences:\n${formattedPreferences}` : ''}
 
@@ -1733,14 +1775,7 @@ router.post('/compile-draft', checkAdmin, async (req, res) => {
 
       Instructions for Itinerary Compilation:
       - Stays: Make sure the day-wise itinerary explicitly mentions the selected hotel (e.g. staying at "${selectedHotel?.name || 'Grand Hyatt'}") for overnight stays.
-      - Temples mapping: If selected temples are provided (${templesToInclude.join(', ')}), prioritize visiting them in order, schedule them with respect to available travel time and darshan timings (incorporate specific morning/evening darshan hours in day activities), and name them explicitly.
-      - Meal Plan day-by-day mapping:
-        * If mealRequired is "CP - Breakfast": Day 1: "No meals included (Arrival day)", Day 2: "Breakfast (CP Plan) at the hotel".
-        * If mealRequired is "MAP - Breakfast + Dinner": Day 1: "Dinner (MAP Plan) at the hotel", Day 2: "Breakfast & Dinner (MAP Plan) at the hotel".
-        * If mealRequired is "AP - Breakfast + Lunch + Dinner": Day 1: "Lunch & Dinner (AP Plan)", Day 2: "Breakfast, Lunch & Dinner (AP Plan)".
-        * If mealRequired is "No": All days: "No meals included".
-        Structure each day's "mealPlan" field strictly according to these plan constraints.
-      ${mealRequired === 'No' ? 'CRITICAL: Since No meals are included (mealRequired is "No"), you MUST NOT suggest, mention, or include any breakfasts, lunches, dinners, evening dining, or hotel/restaurant meals anywhere in the itinerary day-wise activities, overview, inclusions, or exclusions.' : ''}
+      - Meal Plan: Use Breakfast Only. Include hotel breakfast after an overnight stay; state that lunch and dinner are at the traveller’s expense. Do not add meal recommendations or upgrades.
       
       - Transport inclusion constraints:
         1. Flight: Check 'includeFlight' flag (value: ${!!includeFlight}) and 'selectedFlight'. If 'includeFlight' is false (or selectedFlight is null/None), you MUST NOT suggest or mention flight travel, airplane tickets, or airport transfers in the itinerary, overview, inclusions, or exclusions. If true, explicitly detail the flight ("${selectedFlight?.airline || 'IndiGo flight'}") arrival and route on Day 1.
@@ -1748,15 +1783,14 @@ router.post('/compile-draft', checkAdmin, async (req, res) => {
         3. Car/Cab: Check 'includeCar' flag (value: ${!!includeCar}) and 'selectedCar'. If 'includeCar' is false (or selectedCar is null/None), you MUST NOT suggest or mention car rental, private driver, or vehicle transfer in the itinerary, overview, inclusions, or exclusions. If true, explicitly detail the vehicle ("${selectedCar?.type || 'AC Sedan'} operated by ${selectedCar?.operator || 'private driver'}") in the itinerary transfers.
 
       Inclusions & Exclusions formatting:
-      - inclusions: Separate each inclusion item with a newline character. For pilgrimage packages with "${mealRequired}", use this template:
-        Airport / Railway Station Pick-up & Drop\\n${nights} Night Accommodation in ${selectedHotel?.name || 'a 3-Star Hotel'}\\n${mealRequired === 'CP - Breakfast' ? 'Daily Breakfast (Day 2 Only)' : mealRequired === 'MAP - Breakfast + Dinner' ? 'Daily Breakfast & Dinner' : mealRequired === 'AP - Breakfast + Lunch + Dinner' ? 'Daily Breakfast, Lunch & Dinner' : 'No Meals Included'}\\nPrivate ${selectedCar?.type || 'AC Vehicle'} for Sightseeing\\nDriver Allowance\\nToll Charges\\nParking Charges\\nFuel Charges\\nAll Transfers as per Itinerary
+      - inclusions: Separate each inclusion item with a newline character. Include accommodation, Daily Breakfast Included — Breakfast Only, selected transport, transfers, tolls and parking as applicable.
       - exclusions: Separate each exclusion item with a newline character. Use this template:
-        Airfare / Train Fare\\n${mealRequired === 'CP - Breakfast' ? 'Lunch & Dinner' : mealRequired === 'MAP - Breakfast + Dinner' ? 'Lunch Only' : mealRequired === 'No' ? 'All Meals' : 'Personal Expenses'}\\nBoat Ride Charges\\nVIP / Sugam Darshan Charges\\nTemple Pooja / Abhishekam Charges\\nPersonal Expenses\\nTips & Porter Charges\\nCamera Charges (if applicable)\\nGST (if applicable)
+        Lunch\\nDinner\\nAirfare / Train Fare unless explicitly selected and quoted\\nEntry Tickets and Optional Activities unless explicitly included\\nPersonal Expenses and Tips
 
       - Evocative and Detailed Content Rule:
         For each day in the itinerary, the content MUST be extremely descriptive, informative, and engaging:
         * For each day, the "activities" field MUST be extremely detailed, descriptive, and contain at least ${targetWordsPerDay} words. Do NOT write short summaries. Describe every sightseeing location, its history, charm, recommended timings, transit experiences, and local context in depth. Use multiple rich paragraphs and markdown formatting (like bolding and lists).
-        * The package "overview" field MUST be a detailed, multi-paragraph essay of at least 300 to 500 words highlighting the key destinations, experiences, and theme of the trip.
+        * The package "overview" field should be a clear 150–200 word summary highlighting the destinations and practical trip style.
         * The "mealPlan" field must follow the mealRequired constraints: ${itineraryMealPlanDesc}
         * The "transport" field must describe local transfer instructions, routes, vehicles, approximate travel time, and driving distances.
       
@@ -1766,15 +1800,15 @@ router.post('/compile-draft', checkAdmin, async (req, res) => {
       {
         "title": "Inspiring and premium package title incorporating selected elements",
         "destination": "${destination}",
-        "packageCategory": "${packageCategory || 'National'}",
-        "tourType": "${tourType || 'Family Tours'}",
+        "packageCategory": "${packageCategoryValue}",
+        "tourType": "${tourTypeValue}",
         "startingCity": "${startingCity}",
         "endingCity": "${endingCity}",
         "durationDays": ${days},
         "durationNights": ${nights},
         "mealPlan": "${packageMealPlan}",
-        "templesList": ${JSON.stringify(templesToInclude)},
-        "overview": "Thorough, engaging, premium description of the package experience. MUST be at least 300 to 500 words, structured in multiple readable paragraphs.",
+        "catalogCategories": ["${catalogCategoryValue}"],
+        "overview": "A clear 150–200 word summary of the package experience.",
         "imageUrl": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=80",
         "itinerary": [
           {
@@ -1783,7 +1817,11 @@ router.post('/compile-draft', checkAdmin, async (req, res) => {
             "activities": "Extremely detailed description of activities and specific spots visited for this day. MUST be at least ${targetWordsPerDay} words in length, containing multiple paragraphs, rich descriptive details of spots, history, timings, and experience using markdown formatting.",
             "hotel": "${selectedHotel?.name || 'Selected Premium Stay'}",
             "mealPlan": "${itineraryMealPlanDesc}",
-            "transport": "Transit detail using selected flights/trains and selected vehicle"
+            "transport": "Selected transfer mode and realistic route-time estimate",
+            "schedule": [
+              { "time": "09:00", "kind": "visit", "title": "Visit title", "place": "Named attraction", "description": "Brief, factual explanation of what the traveller will see", "sourceUrl": "Official HTTPS attraction page", "visitingInfo": "Access, timing or ticket note; verify for travel date" },
+              { "time": "12:30", "kind": "meal", "title": "Lunch break", "place": "Destination base", "description": "Lunch is at the traveller’s expense and is not included." }
+            ]
           }
         ],
         "inclusions": "Separate each inclusion item with a newline character. Example: Daily Buffet Breakfast\\nStay at ${selectedHotel?.name || 'Premium Room'}\\nTransit in AC ${selectedCar?.type || 'Sedan'}\\nAll entry permits",
@@ -1804,7 +1842,7 @@ router.post('/compile-draft', checkAdmin, async (req, res) => {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
-        { role: 'system', content: `You are an API that only returns pure, valid, parsed JSON conforming to the requested schema. Never output markdown format outside the JSON. Crucially, you MUST write extremely detailed, long-form content: the "overview" field MUST be a multi-paragraph text of at least 300 to 500 words, and the "activities" field for each day in the itinerary MUST be at least ${targetWordsPerDay} words long, detailing sightseeing spots, history, culture, recommended timings, and experience in multiple descriptive paragraphs. Do not summarize or truncate.` },
+        { role: 'system', content: `You return JSON for a permitted leisure package only. Never create pilgrimage, religious, festival, cultural, National-tour or IRCTC packages, and never add temples, churches or mosques as stops. Use packageCategory ${packageCategoryValue}, tourType ${tourTypeValue}, and Breakfast Only with lunch and dinner excluded. The overview and daily activities should be detailed, practical and concise enough to remain useful.` },
         { role: 'user', content: compilePrompt }
       ],
       response_format: { type: "json_object" },
@@ -1824,8 +1862,19 @@ router.post('/compile-draft', checkAdmin, async (req, res) => {
     packageData.profitMarginPercent = costing.profitMarginPercent;
     packageData.isSpecialOffer = false;
     packageData.priceBreakdown = breakdownText;
+    packageData.packageCategory = packageCategoryValue;
+    packageData.tourType = tourTypeValue;
+    packageData.catalogCategories = [catalogCategoryValue];
     packageData.mealPlan = packageMealPlan;
-    packageData.templesList = templesToInclude;
+    packageData.templesList = [];
+    const mealIncludes = Array.isArray(packageData.inclusions) ? packageData.inclusions : String(packageData.inclusions || '').split(/\r?\n/);
+    const mealExcludes = Array.isArray(packageData.exclusions) ? packageData.exclusions : String(packageData.exclusions || '').split(/\r?\n/);
+    packageData.inclusions = [...new Set([...mealIncludes.filter(item => !/\b(?:breakfast|lunch|dinner|meal|food)\b/i.test(item)), 'Daily Breakfast Included — Breakfast Only'])].join('\n');
+    packageData.exclusions = [...new Set([...mealExcludes.filter(item => !/\b(?:breakfast|lunch|dinner|meal|food)\b/i.test(item)), 'Lunch', 'Dinner'])].join('\n');
+    packageData.itinerary = (packageData.itinerary || []).map((day, index) => ({ ...day,
+      mealPlan: index === 0 ? 'No meals included on arrival day; lunch and dinner are at the traveller’s own expense.'
+        : 'Hotel breakfast only is included after the overnight stay; lunch and dinner are at the traveller’s own expense.'
+    }));
 
     // Assign a beautiful preset image if imageUrl is empty or a generic placeholder
     if (!packageData.imageUrl || packageData.imageUrl.includes('photo-1507525428034') || packageData.imageUrl.includes('photo-1469854523086')) {

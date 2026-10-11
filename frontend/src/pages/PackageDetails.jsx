@@ -8,6 +8,8 @@ import {
   Plane
 } from 'lucide-react';
 import { renderRichText } from '../utils/textFormatter';
+import PackageLanguagePicker from '../components/PackageLanguagePicker';
+import { getPackageContent, packagePageCopy } from '../utils/catalogCategories';
 import {
   MANDATORY_GENERAL_TERMS,
   MANDATORY_PAYMENT_POLICY,
@@ -23,6 +25,10 @@ const PackageDetails = () => {
   const [pkg, setPkg] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
+  const [language, setLanguage] = useState(() => {
+    const saved = window.localStorage.getItem('sreepayanam-package-language');
+    return ['en', 'ta', 'hi'].includes(saved) ? saved : 'en';
+  });
   const [enquiry, setEnquiry] = useState({
     name: '', phone: '', email: '', date: '', dateFlexible: false,
     adults: 1, children: 0, childAges: '', rooms: 1, origin: '',
@@ -122,10 +128,16 @@ const PackageDetails = () => {
     </div>
   );
 
-  const inclusions = Array.isArray(pkg.inclusions) ? pkg.inclusions : [];
-  const exclusions = Array.isArray(pkg.exclusions) ? pkg.exclusions : [];
+  const content = getPackageContent(pkg, language);
+  const copy = packagePageCopy[language] || packagePageCopy.en;
+  const selectLanguage = code => {
+    setLanguage(code);
+    window.localStorage.setItem('sreepayanam-package-language', code);
+  };
+  const inclusions = Array.isArray(content.inclusions) ? content.inclusions : [];
+  const exclusions = Array.isArray(content.exclusions) ? content.exclusions : [];
   const addons = Array.isArray(pkg.optionalAddons) ? pkg.optionalAddons : [];
-  const itinerary = Array.isArray(pkg.itinerary) ? pkg.itinerary : [];
+  const itinerary = Array.isArray(content.itinerary) ? content.itinerary : [];
   const tabs = ['overview', 'policy'];
 
   return (
@@ -134,7 +146,7 @@ const PackageDetails = () => {
       <div style={{ position: 'relative', height: 420, overflow: 'hidden' }}>
         <img
           src={pkg.imageUrl}
-          alt={pkg.title}
+          alt={content.title || pkg.title}
           onError={e => { e.target.src = 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=1200&q=80'; }}
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
         />
@@ -142,22 +154,23 @@ const PackageDetails = () => {
 
         {/* Back Button */}
         <button onClick={() => navigate(-1)} style={{ position: 'absolute', top: 24, left: 24, background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
-          <ArrowLeft size={18} /> Back
+          <ArrowLeft size={18} /> {copy.back}
         </button>
+        <div style={{ position: 'absolute', top: 24, right: 24 }}><PackageLanguagePicker value={language} onChange={selectLanguage} /></div>
 
         {/* Hero Info */}
         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '0 40px 32px' }}>
           <div style={{ maxWidth: 1100, margin: '0 auto' }}>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
               <span style={badge('#64748b')}>ID: {pkg.packageId}</span>
-              <span style={badge('#3b82f6')}>{pkg.regionScope || pkg.packageCategory}</span>
-              <span style={badge('#10b981')}>{pkg.tourType}</span>
+              <span style={badge('#3b82f6')}>{content.catalogCategory || pkg.regionScope || pkg.packageCategory}</span>
+              <span style={badge('#10b981')}>{content.tourType || pkg.tourType}</span>
             </div>
-            <h1 style={{ color: 'white', fontSize: '2.4rem', fontWeight: 800, marginBottom: 12, textShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>{pkg.title}</h1>
+            <h1 style={{ color: 'white', fontSize: '2.4rem', fontWeight: 800, marginBottom: 12, textShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>{content.title || pkg.title}</h1>
             <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', color: 'rgba(255,255,255,0.9)' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><MapPin size={16} /> {pkg.destination}</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><MapPin size={16} /> {content.destination || pkg.destination}</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Clock size={16} /> {pkg.durationDays}D / {pkg.durationNights}N</span>
-              {pkg.startingCity && <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><ArrowLeft size={16} style={{ transform: 'rotate(180deg)' }} /> {pkg.startingCity} → {pkg.endingCity}</span>}
+              {pkg.startingCity && <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><ArrowLeft size={16} style={{ transform: 'rotate(180deg)' }} /> {content.startingCity || pkg.startingCity} → {content.endingCity || pkg.endingCity}</span>}
             </div>
           </div>
         </div>
@@ -171,15 +184,15 @@ const PackageDetails = () => {
           {/* Inquiry invitation */}
           <div className="glass-card" style={{ padding: '20px 28px', marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
             <div>
-              <strong style={{ display: 'block', color: 'var(--primary)', fontSize: '1.2rem' }}>Request for price</strong>
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.92rem' }}>Our travel desk checks your dates, party and selected places before pricing.</span>
+              <strong style={{ display: 'block', color: 'var(--primary)', fontSize: '1.2rem' }}>{copy.priceRequest}</strong>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.92rem' }}>{copy.policyNote}</span>
             </div>
             <div style={{ display: 'flex', gap: 12 }}>
               <a href={`https://wa.me/${WHATSAPP_NUMBERS[0]}?text=${waMessage}`} target="_blank" rel="noreferrer"
                 style={{ background: '#25d366', color: 'white', border: 'none', borderRadius: 8, padding: '10px 20px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, textDecoration: 'none' }}>
                 <MessageCircle size={18} /> WhatsApp
               </a>
-              <button onClick={() => navigator.share?.({ title: pkg.title, url: window.location.href })}
+              <button onClick={() => navigator.share?.({ title: content.title || pkg.title, url: window.location.href })}
                 style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Share2 size={18} />
               </button>
@@ -193,7 +206,7 @@ const PackageDetails = () => {
                 style={{ flex: 1, padding: '10px 8px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', transition: 'all 0.2s',
                   background: activeTab === t ? 'var(--primary)' : 'transparent',
                   color: activeTab === t ? 'white' : 'var(--text-muted)' }}>
-                {t === 'overview' ? '📋 Overview' : '📄 Policy'}
+                {t === 'overview' ? `📋 ${copy.overview}` : `📄 ${copy.policy}`}
               </button>
             ))}
           </div>
@@ -202,24 +215,23 @@ const PackageDetails = () => {
           {activeTab === 'overview' && (
             <motion.div key="ov" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
               <div className="glass-card" style={{ padding: 28, marginBottom: 20 }}>
-                <h2 style={{ marginBottom: 16, color: 'var(--dark)', fontSize: '1.3rem', fontWeight: 700 }}>Package Overview</h2>
+                <h2 style={{ marginBottom: 16, color: 'var(--dark)', fontSize: '1.3rem', fontWeight: 700 }}>{copy.overview}</h2>
                 <div style={{ lineHeight: 1.9, color: 'var(--text-main)', fontSize: '1rem' }}>
-                  {renderRichText(pkg.overview || pkg.description)}
+                  {renderRichText(content.overview || pkg.description)}
                 </div>
               </div>
 
               {/* Quick Facts */}
               <div className="glass-card" style={{ padding: 28 }}>
-                <h3 style={{ marginBottom: 18, color: 'var(--dark)', fontWeight: 700 }}>Quick Facts</h3>
+                <h3 style={{ marginBottom: 18, color: 'var(--dark)', fontWeight: 700 }}>{copy.quickFacts}</h3>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 16 }}>
                   {[
-                    { icon: <Clock size={20} color="var(--primary)" />, label: 'Duration', val: `${pkg.durationDays}D / ${pkg.durationNights}N` },
-                    { icon: <MapPin size={20} color="var(--primary)" />, label: 'Destination', val: pkg.destination },
-                    { icon: <Tag size={20} color="var(--primary)" />, label: 'Tour Type', val: pkg.tourType },
-                    { icon: <Home size={20} color="var(--primary)" />, label: pkg.regionScope ? 'Region' : 'Category', val: pkg.regionScope || pkg.packageCategory },
-                    ...(pkg.startingCity ? [{ icon: <ArrowLeft size={20} color="var(--primary)" />, label: 'From', val: pkg.startingCity }] : []),
-                    ...(pkg.endingCity ? [{ icon: <ArrowLeft size={20} color="var(--primary)" style={{ transform: 'rotate(180deg)' }} />, label: 'To', val: pkg.endingCity }] : []),
-                    ...(pkg.mealPlan ? [{ icon: <Utensils size={20} color="var(--primary)" />, label: 'Meal Plan', val: pkg.mealPlan }] : []),
+                    { icon: <Clock size={20} color="var(--primary)" />, label: copy.duration, val: `${pkg.durationDays}D / ${pkg.durationNights}N` },
+                    { icon: <MapPin size={20} color="var(--primary)" />, label: copy.destination, val: content.destination || pkg.destination },
+                    { icon: <Tag size={20} color="var(--primary)" />, label: copy.category, val: content.catalogCategory || content.tourType || pkg.tourType },
+                    ...(pkg.startingCity ? [{ icon: <ArrowLeft size={20} color="var(--primary)" />, label: copy.from, val: content.startingCity || pkg.startingCity }] : []),
+                    ...(pkg.endingCity ? [{ icon: <ArrowLeft size={20} color="var(--primary)" style={{ transform: 'rotate(180deg)' }} />, label: copy.to, val: content.endingCity || pkg.endingCity }] : []),
+                    ...(content.mealPlan ? [{ icon: <Utensils size={20} color="var(--primary)" />, label: copy.mealPlan, val: content.mealPlan }] : []),
                     ...(pkg.templesList && pkg.templesList.length > 0 ? [{ icon: <MapPin size={20} color="var(--primary)" />, label: 'Temples Included', val: pkg.templesList.join(', ') }] : []),
                   ].map((f, i) => (
                     <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 16px', background: '#f8fafc', borderRadius: 10 }}>
@@ -229,45 +241,61 @@ const PackageDetails = () => {
                   ))}
                 </div>
               </div>
+              <section className="glass-card" style={{ padding: 28, marginTop: 20 }}>
+                <h3 style={{ margin: '0 0 16px', color: 'var(--dark)', fontWeight: 800 }}>{copy.bestTime} &amp; {copy.weather}</h3>
+                <p style={{ margin: '0 0 10px', lineHeight: 1.7 }}><strong>{copy.bestTime}:</strong> {content.bestTimeToVisit}</p>
+                <p style={{ margin: 0, lineHeight: 1.7 }}><strong>{copy.weather}:</strong> {content.expectedWeather}</p>
+              </section>
+              <section className="glass-card" style={{ padding: 28, marginTop: 20 }}>
+                <h3 style={{ margin: '0 0 12px', color: 'var(--dark)', fontWeight: 800 }}>{copy.vehicle}</h3>
+                <p style={{ lineHeight: 1.75 }}>{content.vehiclePlan}</p>
+                <h3 style={{ margin: '20px 0 10px', color: 'var(--dark)', fontWeight: 800 }}>{copy.booking}</h3>
+                <ul style={{ paddingLeft: 22, margin: 0, display: 'grid', gap: 10 }}>
+                  {(content.importantBookingInfo || []).map((item, index) => <li key={index} style={{ lineHeight: 1.7 }}>{item}</li>)}
+                </ul>
+              </section>
               {Array.isArray(pkg.destinationReferences) && pkg.destinationReferences.length > 0 && <section className="glass-card package-detail-references" aria-labelledby="package-reference-heading">
-                <h3 id="package-reference-heading">Explore the destinations</h3>
-                <p>Open the source page for more details. Timings and availability should be checked again before travel.</p>
-                <ul>{pkg.destinationReferences.map((reference, index) => <li key={`${reference.name}-${index}`}><a href={reference.url} target="_blank" rel="noopener noreferrer">{reference.name} ↗</a><small>{reference.sourceType || 'Reference'}{reference.lastChecked ? ` · checked ${reference.lastChecked}` : ''}</small></li>)}</ul>
+                <h3 id="package-reference-heading">{copy.references}</h3>
+                <p>{copy.itineraryNote}</p>
+                <ul>{pkg.destinationReferences.map((reference, index) => {
+                  const visits = itinerary.flatMap(day => day.schedule || []).filter(stop => stop.kind === 'visit');
+                  return <li key={`${reference.name}-${index}`}><a href={reference.url} target="_blank" rel="noopener noreferrer">{visits[index]?.place || reference.name} ↗</a><small>{reference.sourceType || 'Reference'}{reference.lastChecked ? ` · ${reference.lastChecked}` : ''}</small></li>;
+                })}</ul>
               </section>}
             </motion.div>
           )}
 
           <section className="package-plan" aria-labelledby="package-plan-heading">
-            <h2 id="package-plan-heading">Day-by-day itinerary</h2>
-            <p className="package-plan-note">These clock times show the planned route. The travel desk checks current opening hours, darshan slots, road conditions and reservations for your travel dates before the final quotation.</p>
+            <h2 id="package-plan-heading">{copy.itinerary}</h2>
+            <p className="package-plan-note">{copy.itineraryNote}</p>
             {itinerary.length === 0 ? <p>Our travel desk is preparing the day plan for this package.</p> : <ol>{itinerary.map((day, index) => <li key={`${day.day}-${index}`}>
-              <div className="package-plan-day"><span>Day {day.day || index + 1}</span><h3>{day.title || `Day ${index + 1}`}</h3></div>
+              <div className="package-plan-day"><span>{language === 'ta' ? 'நாள்' : language === 'hi' ? 'दिन' : 'Day'} {day.day || index + 1}</span><h3>{day.title || `${language === 'ta' ? 'நாள்' : language === 'hi' ? 'दिन' : 'Day'} ${index + 1}`}</h3></div>
               {Array.isArray(day.schedule) && day.schedule.length > 0 ? <ol className="package-timeline">{day.schedule.map((stop, stopIndex) => <li key={`${stop.time}-${stop.place}-${stopIndex}`} className={stop.kind === 'visit' ? 'is-visit' : ''}>
                 <time dateTime={stop.time}>{stop.time}</time>
                 <div className="package-timeline-content">
                   <strong>{stop.title}</strong>
                   {stop.place && <span className="package-timeline-place"><MapPin size={13} aria-hidden="true" /> {stop.place}</span>}
                   {stop.description && <p>{stop.description}</p>}
-                  {stop.kind === 'visit' && stop.visitingInfo && !/^check the venue|^recheck venue/i.test(stop.visitingInfo) && <p className="package-visit-note">Visit note: {stop.visitingInfo}</p>}
-                  {stop.sourceUrl && <a href={stop.sourceUrl} target="_blank" rel="noopener noreferrer">{stop.kind === 'transfer' ? 'View mapped route ↗' : 'About this location ↗'}</a>}
+                  {stop.kind === 'visit' && stop.visitingInfo && <p className="package-visit-note">{copy.visitNote}: {stop.visitingInfo}</p>}
+                  {stop.sourceUrl && <a href={stop.sourceUrl} target="_blank" rel="noopener noreferrer">{copy.aboutLocation}</a>}
                 </div>
                 {stop.kind === 'visit' && stop.imageUrl && <figure className="package-timeline-image"><img src={stop.imageUrl} alt={stop.place} loading="lazy" />{stop.imageCredit && <figcaption>{stop.imageCreditUrl ? <a href={stop.imageCreditUrl} target="_blank" rel="noopener noreferrer">Photo: {stop.imageCredit}</a> : `Photo: ${stop.imageCredit}`}</figcaption>}</figure>}
               </li>)}</ol> : <div>{renderRichText(day.activities)}</div>}
-              <ul className="package-plan-facts">{day.hotel && <li><Home size={16} aria-hidden="true" /> Stay: {day.hotel}</li>}{day.mealPlan && <li><Utensils size={16} aria-hidden="true" /> Meals: {day.mealPlan}</li>}{day.transport && <li><Plane size={16} aria-hidden="true" /> Travel: {day.transport}</li>}</ul>
+              <ul className="package-plan-facts">{day.hotel && <li><Home size={16} aria-hidden="true" /> {copy.stay}: {day.hotel}</li>}{day.mealPlan && <li><Utensils size={16} aria-hidden="true" /> {copy.meals}: {day.mealPlan}</li>}{day.transport && <li><Plane size={16} aria-hidden="true" /> {copy.travel}: {day.transport}</li>}</ul>
             </li>)}</ol>}
-            <div className="package-terms-grid"><section aria-labelledby="package-inclusions-heading"><h3 id="package-inclusions-heading"><CheckCircle size={20} aria-hidden="true" /> Inclusions</h3>{inclusions.length ? <ul>{inclusions.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>Ask the travel desk to confirm inclusions before booking.</p>}</section><section aria-labelledby="package-exclusions-heading"><h3 id="package-exclusions-heading"><XCircle size={20} aria-hidden="true" /> Exclusions</h3>{exclusions.length ? <ul>{exclusions.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>Ask the travel desk to confirm exclusions before booking.</p>}</section></div>
+            <div className="package-terms-grid"><section aria-labelledby="package-inclusions-heading"><h3 id="package-inclusions-heading"><CheckCircle size={20} aria-hidden="true" /> {copy.inclusions}</h3>{inclusions.length ? <ul>{inclusions.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>Ask the travel desk to confirm inclusions before booking.</p>}</section><section aria-labelledby="package-exclusions-heading"><h3 id="package-exclusions-heading"><XCircle size={20} aria-hidden="true" /> {copy.exclusions}</h3>{exclusions.length ? <ul>{exclusions.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>Ask the travel desk to confirm exclusions before booking.</p>}</section></div>
             {addons.length > 0 && <div className="package-addons"><h3>Optional add-ons</h3><ul>{addons.map((item, index) => <li key={index}>{item}</li>)}</ul></div>}
           </section>
 
           {/* Tab: Policy */}
           {activeTab === 'policy' && (() => {
             const getCleanPolicies = () => {
-              let cleanTerms = pkg.termsAndConditions || '';
+              let cleanTerms = content.termsAndConditions || pkg.termsAndConditions || '';
               if (cleanTerms.includes("General Terms & Conditions")) {
                 cleanTerms = cleanTerms.split("General Terms & Conditions")[0].trim();
               }
               
-              let cleanCancellation = pkg.cancellationPolicy || '';
+              let cleanCancellation = content.cancellationPolicy || pkg.cancellationPolicy || '';
               if (cleanCancellation.includes("Cancellation & Refund Policy")) {
                 cleanCancellation = cleanCancellation.split("Cancellation & Refund Policy")[0].trim();
               }
@@ -283,7 +311,7 @@ const PackageDetails = () => {
                 {/* 1. Package Specific Terms & Conditions */}
                 {cleanTerms && (
                   <div className="glass-card" style={{ padding: 28, marginBottom: 20 }}>
-                    <h3 style={{ marginBottom: 16, color: 'var(--dark)', fontWeight: 700 }}>📋 Package Specific Terms &amp; Conditions</h3>
+                    <h3 style={{ marginBottom: 16, color: 'var(--dark)', fontWeight: 700 }}>📋 {copy.terms}</h3>
                     <p style={{ lineHeight: 1.9, color: 'var(--text-main)', whiteSpace: 'pre-line' }}>{cleanTerms}</p>
                   </div>
                 )}
@@ -291,7 +319,7 @@ const PackageDetails = () => {
                 {/* 2. Package Specific Cancellation Policy */}
                 {cleanCancellation && (
                   <div className="glass-card" style={{ padding: 28, marginBottom: 20 }}>
-                    <h3 style={{ marginBottom: 16, color: '#ef4444', fontWeight: 700 }}>🚫 Package Specific Cancellation Policy</h3>
+                    <h3 style={{ marginBottom: 16, color: '#ef4444', fontWeight: 700 }}>🚫 {copy.cancellation}</h3>
                     <p style={{ lineHeight: 1.9, color: 'var(--text-main)', whiteSpace: 'pre-line' }}>{cleanCancellation}</p>
                   </div>
                 )}
@@ -399,7 +427,7 @@ const PackageDetails = () => {
                   </div>
                 ) : (
                   <form onSubmit={handleEnquiry} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <div className="package-enquiry-summary"><strong>{pkg.title}</strong><span>{pkg.packageId} · {pkg.destination}</span></div>
+                    <div className="package-enquiry-summary"><strong>{content.title || pkg.title}</strong><span>{pkg.packageId} · {content.destination || pkg.destination}</span></div>
                     {enquiryError && <div className="form-status is-error" role="alert">{enquiryError}</div>}
                     <label>Full name *<input required className="input-field" autoComplete="name" value={enquiry.name} onChange={e => setEnquiry(f => ({ ...f, name: e.target.value }))} /></label>
                     <label>Mobile / WhatsApp *<input required className="input-field" autoComplete="tel" type="tel" value={enquiry.phone} onChange={e => setEnquiry(f => ({ ...f, phone: e.target.value }))} /></label>
@@ -417,7 +445,11 @@ const PackageDetails = () => {
                     </div>
                     {Array.isArray(pkg.destinationReferences) && pkg.destinationReferences.length > 0 && <fieldset className="package-enquiry-destinations">
                       <legend>Places you want to include</legend>
-                      {pkg.destinationReferences.map(place => <label key={place.name} className="package-enquiry-check"><input type="checkbox" checked={enquiry.selectedDestinations.includes(place.name)} onChange={e => setEnquiry(f => ({ ...f, selectedDestinations: e.target.checked ? [...f.selectedDestinations, place.name] : f.selectedDestinations.filter(name => name !== place.name) }))} /> {place.name}</label>)}
+                      {pkg.destinationReferences.map((place, index) => {
+                        const visits = itinerary.flatMap(day => day.schedule || []).filter(stop => stop.kind === 'visit');
+                        const translatedPlace = visits[index]?.place || place.name;
+                        return <label key={place.name} className="package-enquiry-check"><input type="checkbox" checked={enquiry.selectedDestinations.includes(place.name)} onChange={e => setEnquiry(f => ({ ...f, selectedDestinations: e.target.checked ? [...f.selectedDestinations, place.name] : f.selectedDestinations.filter(name => name !== place.name) }))} /> {translatedPlace}</label>;
+                      })}
                     </fieldset>}
                     <label>Another place to include<input className="input-field" value={enquiry.customDestination} onChange={e => setEnquiry(f => ({ ...f, customDestination: e.target.value }))} /></label>
                     <label>Preferred tier<select className="input-field" value={enquiry.preferredTier} onChange={e => setEnquiry(f => ({ ...f, preferredTier: e.target.value }))}><option value="">Please suggest</option><option>Economic</option><option>Deluxe</option><option>Premium</option></select></label>

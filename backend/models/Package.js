@@ -6,11 +6,16 @@ const packageSchema = new mongoose.Schema({
   destination: { type: String, required: true }, // e.g., Kerala, Dubai
   packageCategory: { 
     type: String, 
-    enum: ['National', 'International'], 
+    // National remains readable for legacy records, but new public packages
+    // use Domestic and publication review rejects the old National label.
+    enum: ['Domestic', 'National', 'International'],
     required: true 
   },
   catalogCategories: [{ type: String, trim: true, maxlength: 80 }],
-  regionScope: { type: String, enum: ['Tamil Nadu', 'South India', 'North India', 'India-wide', 'Other'], default: 'Other', index: true },
+  regionScope: { type: String, enum: ['Tamil Nadu', 'South India', 'North India', 'West India', 'Northeast India', 'Islands', 'India-wide', 'Other'], default: 'Other', index: true },
+  destinationStates: [{ type: String, trim: true, maxlength: 80 }],
+  locationTags: [{ type: String, trim: true, lowercase: true, maxlength: 180 }],
+  translations: { type: mongoose.Schema.Types.Mixed, default: {} },
   hotelCategories: [{ type: String, enum: ['3 Star', '4 Star', '5 Star'] }],
   routeSignature: { type: String, index: true },
   showInMenu: { type: Boolean, default: false },
@@ -22,7 +27,9 @@ const packageSchema = new mongoose.Schema({
   tourType: { 
     type: String, 
     enum: [
-      'Family Tours', 'Pilgrimage Tours', 'Honeymoon Tours', 'Hill Station Tours', 
+      'Family Tours', 'Pilgrimage Tours', 'Honeymoon Tours', 'Hill Station Tours',
+      'Wildlife & Nature Tours', 'Adventure & Trekking Tours', 'Hill Station & Leisure Tours',
+      'Beach & Coastal Tours', 'Luxury & Wellness Tours', 'Corporate / MICE Tours', 'Budget Weekend Getaways',
       'Resort Packages', 'Weekend Tours', 'Group Tours', 'School / College Tours', 
       'Corporate Tours', 'Festival Tours', 'Cultural Tours', 'Medical Tours', 
       'Event / Sports Tours', 'Cruise Packages', 'Luxury Tours', 'Budget Tours', 'MICE Tours',
@@ -39,6 +46,10 @@ const packageSchema = new mongoose.Schema({
   journeyDistanceNotes: String,
   accessibilityNotes: String,
   seasonConstraints: String,
+  bestTimeToVisit: String,
+  expectedWeather: String,
+  vehiclePlan: String,
+  importantBookingInfo: [String],
   imageRightsNote: String,
   contentReviewedBy: String,
   contentReviewedAt: String,

@@ -2,31 +2,21 @@ import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, Clock, Search, SlidersHorizontal, ArrowUpDown, RefreshCw } from 'lucide-react';
-import { CATALOG_CATEGORIES, categoriesForPackage } from '../utils/catalogCategories';
+import { CATALOG_CATEGORIES, categoriesForPackage, getPackageContent, localizeCategory } from '../utils/catalogCategories';
+import PackageLanguagePicker from '../components/PackageLanguagePicker';
 
 const FALLBACK_IMG = 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=600&q=80';
 
 const TOUR_TYPE_INFO = {
   'Family Tours': { icon: '👨‍👩‍👧‍👦', color: '#3b82f6' },
-  'Pilgrimage Tours': { icon: '🛕', color: '#f59e0b' },
   'Honeymoon Tours': { icon: '💑', color: '#ec4899' },
-  'Hill Station Tours': { icon: '🏔️', color: '#10b981' },
-  'Resort Packages': { icon: '🏖️', color: '#06b6d4' },
-  'Weekend Tours': { icon: '🚗', color: '#8b5cf6' },
-  'Group Tours': { icon: '🎒', color: '#f97316' },
-  'School / College Tours': { icon: '🎓', color: '#ef4444' },
-  'Corporate Tours': { icon: '🏢', color: '#64748b' },
-  'Festival Tours': { icon: '🎆', color: '#d946ef' },
-  'Cultural Tours': { icon: '🎭', color: '#84cc16' },
-  'Medical Tours': { icon: '🏥', color: '#ef4444' },
-  'Event / Sports Tours': { icon: '⚽', color: '#f59e0b' },
-  'Cruise Packages': { icon: '🚢', color: '#06b6d4' },
-  'Luxury Tours': { icon: '💎', color: '#a855f7' },
-  'Budget Tours': { icon: '🏷️', color: '#10b981' },
-  'MICE Tours': { icon: '💼', color: '#3b82f6' },
-  'Education Tours': { icon: '📚', color: '#f97316' },
-  'Adventure Tours': { icon: '🧗', color: '#f43f5e' }
-  , 'IRCTC Rail Tours': { icon: '🚆', color: '#0b3d91' }
+  'Wildlife & Nature Tours': { icon: '🦌', color: '#17835d' },
+  'Adventure & Trekking Tours': { icon: '🥾', color: '#c45c2d' },
+  'Hill Station & Leisure Tours': { icon: '🏞️', color: '#168a91' },
+  'Beach & Coastal Tours': { icon: '🌊', color: '#1680b5' },
+  'Luxury & Wellness Tours': { icon: '🪷', color: '#9a59a8' },
+  'Corporate / MICE Tours': { icon: '🏢', color: '#476aa5' },
+  'Budget Weekend Getaways': { icon: '🚗', color: '#448264' }
 };
 
 const Packages = () => {
@@ -36,6 +26,10 @@ const Packages = () => {
   const [catalogCategories, setCatalogCategories] = useState(CATALOG_CATEGORIES);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [language, setLanguage] = useState(() => {
+    const saved = window.localStorage.getItem('sreepayanam-package-language');
+    return ['en', 'ta', 'hi'].includes(saved) ? saved : 'en';
+  });
 
   // Search & Filter State
   const [sortBy, setSortBy] = useState('recommended');
@@ -90,6 +84,10 @@ const Packages = () => {
     });
     setSearchParams(params);
   };
+  const selectLanguage = code => {
+    setLanguage(code);
+    window.localStorage.setItem('sreepayanam-package-language', code);
+  };
 
   // Reset all filters
   const resetFilters = () => {
@@ -99,9 +97,9 @@ const Packages = () => {
 
   // Filter & Sort Logic
   const filteredPackages = packages.filter(pkg => {
-    const matchesSearch = 
-      pkg.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      pkg.destination.toLowerCase().includes(searchQuery.toLowerCase());
+    const content = getPackageContent(pkg, language);
+    const matchesSearch =
+      `${pkg.title} ${pkg.destination} ${content.title || ''} ${content.destination || ''}`.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesCategory = 
       selectedCategory === 'All' || 
@@ -177,11 +175,15 @@ const Packages = () => {
         </div>
       </section>
 
+      <div className="container" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -24, marginBottom: 24, position: 'relative', zIndex: 2 }}>
+        <PackageLanguagePicker value={language} onChange={selectLanguage} />
+      </div>
+
       <div className="container">
         {availableCategories.length > 0 && <section className="catalog-category-section" aria-labelledby="catalog-categories-heading">
           <div><h2 id="catalog-categories-heading">Browse by travel style</h2><p>Choose a published route and ask our team for a quote tailored to your dates.</p></div>
           <div className="catalog-category-grid">{availableCategories.map(({ category, count }) => <button type="button" key={category} className={selectedCatalog === category ? 'is-selected' : ''} onClick={() => updateQueryParams({ catalog: selectedCatalog === category ? null : category, category: null, type: null, page: null })} aria-pressed={selectedCatalog === category}>
-              <strong>{category}</strong><span>{count} tours</span>
+              <strong>{localizeCategory(category, language)}</strong><span>{count} tours</span>
             </button>)}</div>
         </section>}
         <div className="catalog-results-layout" style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 32, alignItems: 'start' }}>
@@ -242,14 +244,14 @@ const Packages = () => {
               <label>Starting location<input className="input-field" value={selectedStart} onChange={event => updateQueryParams({ start: event.target.value, page: null })} placeholder="e.g. Chennai" /></label>
               <label>Ending location<input className="input-field" value={selectedEnd} onChange={event => updateQueryParams({ end: event.target.value, page: null })} placeholder="e.g. Madurai" /></label>
               <label>Hotel category<select className="input-field" value={selectedHotel} onChange={event => updateQueryParams({ hotel: event.target.value, page: null })}><option value="">Any category</option><option value="3 Star">3-star</option><option value="4 Star">4-star</option><option value="5 Star">5-star</option></select></label>
-              <label>Route region<select className="input-field" value={selectedRegion} onChange={event => updateQueryParams({ region: event.target.value, page: null })}><option value="">Any region</option><option>Tamil Nadu</option><option>South India</option><option>North India</option><option>India-wide</option><option>Other</option></select></label>
+              <label>Route region<select className="input-field" value={selectedRegion} onChange={event => updateQueryParams({ region: event.target.value, page: null })}><option value="">Any region</option><option>Tamil Nadu</option><option>South India</option><option>North India</option><option>West India</option><option>Northeast India</option><option>Islands</option><option>India-wide</option><option>Other</option></select></label>
             </div>
 
             {/* Category Segment Tabs */}
             <div style={{ marginBottom: 24 }}>
               <label style={filterLabel}>Package Category</label>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4, background: '#f1f5f9', padding: 4, borderRadius: 10 }}>
-                {['All', 'National', 'International'].map(cat => {
+                {['All', 'Domestic', 'International'].map(cat => {
                   const isActive = selectedCategory === cat;
                   return (
                     <button 
@@ -438,7 +440,7 @@ const Packages = () => {
               >
                 <AnimatePresence>
                   {visiblePackages.map((pkg, i) => (
-                    <PackageCard key={pkg.packageId} pkg={pkg} index={i} />
+                    <PackageCard key={pkg.packageId} pkg={pkg} index={i} language={language} />
                   ))}
                 </AnimatePresence>
               </motion.div>
@@ -459,8 +461,9 @@ const Packages = () => {
 };
 
 // Internal Card Component
-const PackageCard = ({ pkg, index }) => {
+const PackageCard = ({ pkg, index, language }) => {
   const navigate = useNavigate();
+  const content = getPackageContent(pkg, language);
   
   const typeInfo = TOUR_TYPE_INFO[pkg.tourType] || { icon: '🏝️', color: 'var(--primary)' };
 
@@ -480,7 +483,7 @@ const PackageCard = ({ pkg, index }) => {
       <div style={{ position: 'relative', height: 210, overflow: 'hidden' }}>
         <img
           src={pkg.imageUrl || FALLBACK_IMG}
-          alt={pkg.title}
+          alt={content.title || pkg.title}
           onError={e => { e.target.src = FALLBACK_IMG; }}
           style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s' }}
           onMouseEnter={e => e.target.style.transform = 'scale(1.05)'}
@@ -497,7 +500,7 @@ const PackageCard = ({ pkg, index }) => {
             fontWeight: 700, 
             backdropFilter: 'blur(4px)' 
           }}>
-            {pkg.regionScope || pkg.packageCategory || 'National'}
+              {pkg.regionScope || pkg.packageCategory || 'Domestic'}
           </span>
         </div>
         <div style={{ position: 'absolute', top: 12, right: 12 }}>
@@ -524,7 +527,7 @@ const PackageCard = ({ pkg, index }) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontSize: '1rem' }}>{typeInfo.icon}</span>
             <span style={{ fontSize: '0.78rem', color: typeInfo.color, fontWeight: 700 }}>
-              {pkg.tourType || 'Tour'}
+              {content.tourType || pkg.tourType || 'Tour'}
             </span>
           </div>
           <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>
@@ -544,11 +547,11 @@ const PackageCard = ({ pkg, index }) => {
           WebkitBoxOrient: 'vertical',
           overflow: 'hidden'
         }}>
-          {pkg.title}
+          {content.title || pkg.title}
         </h3>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 14, color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-          <MapPin size={13} color="var(--primary)" /> {pkg.destination}
+          <MapPin size={13} color="var(--primary)" /> {content.destination || pkg.destination}
         </div>
 
         <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

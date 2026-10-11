@@ -6,7 +6,7 @@ const CatalogCategory = require('../models/CatalogCategory');
 const { ensureDefaults } = require('./catalogCategoryRoutes');
 const { publicationProblems } = require('../utils/catalogReadiness');
 const { checkAdmin } = require('../middleware/auth');
-const { packages: curatedPackages, byId: curatedById, isPublicPackage, withOverrides } = require('../utils/regionalCatalog');
+const { packages: curatedPackages, byId: curatedById, hasLeisureClassification, isPublicPackage, withOverrides } = require('../utils/regionalCatalog');
 
 const safeEqual = (left, right) => {
   if (typeof left !== 'string' || typeof right !== 'string' || !left || !right) return false;
@@ -16,6 +16,7 @@ const safeEqual = (left, right) => {
 };
 
 const isAdminRequest = req => safeEqual(req.headers['x-admin-password'], process.env.ADMIN_PASSWORD);
+const forbiddenCatalogLabel = value => /national|pilgrim|festival|cultur|irctc|temple|church|mosque|relig|hajj|umrah/i.test(String(value || ''));
 
 const normalized = value => String(value || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim();
 const routeSignature = pkg => crypto.createHash('sha256').update(JSON.stringify([
@@ -25,6 +26,7 @@ const routeSignature = pkg => crypto.createHash('sha256').update(JSON.stringify(
 const validateCategories = async names => {
   await ensureDefaults();
   const unique = [...new Set((Array.isArray(names) ? names : []).map(name => String(name).trim()).filter(Boolean))];
+  if (!unique.length || unique.length !== 1 || unique.some(forbiddenCatalogLabel)) return false;
   const count = await CatalogCategory.countDocuments({ name: { $in: unique }, active: true });
   return count === unique.length;
 };
@@ -32,10 +34,16 @@ const duplicatePublishedRoute = async (signature, pkg, exceptId) => {
   const candidates = await Package.find({
     isActive: true, status: { $in: ['Approved', 'Published'] },
     ...(exceptId ? { packageId: { $ne: exceptId } } : {}),
-    $or: [{ routeSignature: signature }, { startingCity: pkg.startingCity, endingCity: pkg.endingCity, durationDays: pkg.durationDays }]
-  }).select('packageId title routeSignature startingCity endingCity destination durationDays itinerary').lean();
-  return candidates.find(candidate => (candidate.routeSignature || routeSignature(candidate)) === signature)
-    || curatedPackages.find(candidate => candidate.packageId !== exceptId && routeSignature(candidate) === signature) || null;
+    $or: [{ routeSignature: signature }, { startingCity: pkg.startingCity, endingCity: pkg.endingCity, durationDays: pkg.durationDays },
+      ...(pkg.locationTags?.length ? [{ locationTags: { $in: pkg.locationTags } }] : [])]
+  }).select('packageId title routeSignature startingCity endingCity destination durationDays itinerary isActive status seasonStart seasonEnd packageCategory tourType catalogCategories regionScope destinationStates locationTags translations mealPlan inclusions').lean();
+  const publicCandidates = [...candidates, ...curatedPackages].filter(candidate => candidate.packageId !== exceptId
+    && isPublicPackage(candidate));
+  const currentCategories = new Set(pkg.catalogCategories || []);
+  const currentLocations = new Set((pkg.locationTags || []).map(normalized));
+  return publicCandidates.find(candidate => routeSignature(candidate) === signature
+      || (candidate.catalogCategories || []).some(category => !currentCategories.has(category)
+        && (candidate.locationTags || []).some(location => currentLocations.has(normalized(location))))) || null;
 };
 
 const toPublicPackage = packageDocument => {
@@ -59,10 +67,16 @@ const toPublicPackage = packageDocument => {
 const toPublicSummary = packageDocument => {
   const { packageId, title, destination, packageCategory, tourType, catalogCategories,
     regionScope, hotelCategories, startingCity, endingCity, durationDays, durationNights,
-    overview, imageUrl, status } = toPublicPackage(packageDocument);
+    overview, imageUrl, status, translations, mealPlan, bestTimeToVisit, expectedWeather,
+    vehiclePlan, importantBookingInfo } = toPublicPackage(packageDocument);
+  const cardTranslations = Object.fromEntries(['en', 'ta', 'hi'].map(language => [language, {
+    title: translations?.[language]?.title || '', destination: translations?.[language]?.destination || '',
+    tourType: translations?.[language]?.tourType || '', catalogCategory: translations?.[language]?.catalogCategory || ''
+  }]));
   return { packageId, title, destination, packageCategory, tourType, catalogCategories,
     regionScope, hotelCategories, startingCity, endingCity, durationDays, durationNights,
-    overview, imageUrl, status };
+    overview, imageUrl, status, translations: cardTranslations, mealPlan, bestTimeToVisit, expectedWeather,
+    vehiclePlan, importantBookingInfo };
 };
 const matchesFilters = (pkg, filters) => (!filters.durationDays || pkg.durationDays === Number(filters.durationDays))
   && (!filters.startingCity || normalized(pkg.startingCity) === normalized(filters.startingCity))
@@ -136,7 +150,7 @@ router.get('/', async (req, res) => {
       query.hotelCategories = req.query.hotelCategory;
     }
     if (req.query.regionScope) {
-      if (!['Tamil Nadu', 'South India', 'North India', 'India-wide', 'Other'].includes(req.query.regionScope)) return res.status(400).json({ message: 'Choose a valid route region.' });
+      if (!['Tamil Nadu', 'South India', 'North India', 'West India', 'Northeast India', 'Islands', 'India-wide', 'Other'].includes(req.query.regionScope)) return res.status(400).json({ message: 'Choose a valid route region.' });
       query.regionScope = req.query.regionScope;
     }
     
@@ -179,8 +193,8 @@ router.get('/brochures', async (_req, res) => {
     const packages = await Package.find({ isActive: true, status: { $in: ['Approved', 'Published'] }, brochureUrl: /^https:\/\//,
       $and: [{ $or: [{ seasonStart: { $exists: false } }, { seasonStart: null }, { seasonStart: { $lte: now } }] },
         { $or: [{ seasonEnd: { $exists: false } }, { seasonEnd: null }, { seasonEnd: { $gte: now } }] }] })
-      .select('packageId title destination durationDays brochureUrl').sort({ createdAt: -1 }).lean();
-    res.json(packages.filter(pkg => /^https:\/\/[^\s]+\.pdf(?:[?#]|$)/i.test(pkg.brochureUrl || ''))
+      .select('packageId title destination durationDays brochureUrl packageCategory tourType catalogCategories regionScope destinationStates locationTags translations mealPlan inclusions isActive status seasonStart seasonEnd itinerary').sort({ createdAt: -1 }).lean();
+    res.json(packages.filter(pkg => isPublicPackage(pkg) && /^https:\/\/[^\s]+\.pdf(?:[?#]|$)/i.test(pkg.brochureUrl || ''))
       .map(pkg => ({ packageId: pkg.packageId, title: pkg.title, destination: pkg.destination, durationDays: pkg.durationDays, url: pkg.brochureUrl })));
   } catch (error) {
     console.error('[Packages] Brochures failed:', error.message);
@@ -215,7 +229,7 @@ router.post('/', checkAdmin, async (req, res) => {
       ...req.body,
       overview: req.body.overview || req.body.description,
       originalPrice: req.body.originalPrice || req.body.price || undefined,
-      packageCategory: req.body.packageCategory || 'National',
+      packageCategory: req.body.packageCategory || 'Domestic',
       tourType: req.body.tourType || 'Family Tours',
       durationNights: req.body.durationNights || (req.body.durationDays - 1) || 1,
       isActive: true,
@@ -223,6 +237,7 @@ router.post('/', checkAdmin, async (req, res) => {
       isSpecialOffer: false,
     };
     if (data.packageId && curatedById.has(data.packageId)) return res.status(409).json({ message: 'Edit this regional listing instead of creating a second copy.' });
+    if (!hasLeisureClassification(data)) return res.status(422).json({ message: 'Create packages only in an approved leisure category.' });
     if (!await validateCategories(data.catalogCategories)) return res.status(422).json({ message: 'Choose only active catalogue categories.' });
     data.routeSignature = routeSignature(data);
     
@@ -237,7 +252,7 @@ router.post('/', checkAdmin, async (req, res) => {
       data.baseCost = calculatedCost.supplierCost;
     }
     
-    // Ensure mandatory policies for National packages
+    // Preserve standard booking terms for domestic and legacy national routes.
     data = ensureMandatoryPolicies(data);
     
     const pkg = new Package(data);
@@ -266,6 +281,7 @@ router.put('/:id', checkAdmin, async (req, res) => {
     data.isSpecialOffer = false;
     if (!await validateCategories(data.catalogCategories || existing.catalogCategories)) return res.status(422).json({ message: 'Choose only active catalogue categories.' });
     const prior = existing.toObject ? existing.toObject() : existing;
+    if (!hasLeisureClassification({ ...prior, ...data })) return res.status(422).json({ message: 'Create packages only in an approved leisure category.' });
     data.routeSignature = routeSignature({ ...prior, ...data });
     
     // Process and run costing engine calculation if fields are present
@@ -279,7 +295,7 @@ router.put('/:id', checkAdmin, async (req, res) => {
       data.baseCost = calculatedCost.supplierCost;
     }
     
-    // Ensure mandatory policies for National packages
+    // Preserve standard booking terms for domestic and legacy national routes.
     data = ensureMandatoryPolicies(data);
     if (['Approved', 'Published'].includes(data.status)) {
       const problems = publicationProblems(data);

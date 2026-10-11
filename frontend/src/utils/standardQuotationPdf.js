@@ -2,7 +2,7 @@
 // The public route brief uses its quotation layout with unpriced draft content.
 import travelPackTemplate from '../../../shared/standardTravelPack.json';
 import { dayDirectionsUrl } from './mapDirections';
-const logoSrc = new URL('../assets/sreepayanam-letterhead-logo.png', import.meta.url).href;
+const logoSrc = '/sreepayanam-letterhead-logo.png';
 const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
 const SCALE = 2.5;

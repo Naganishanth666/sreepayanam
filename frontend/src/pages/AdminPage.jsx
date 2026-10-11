@@ -11,11 +11,9 @@ import { calculateCosting } from '../utils/costingEngine';
 import { CATALOG_CATEGORIES, categoriesForPackage } from '../utils/catalogCategories';
 
 const TOUR_TYPES = [
-  'Family Tours','Pilgrimage Tours','Honeymoon Tours','Hill Station Tours',
-  'Resort Packages','Weekend Tours','Group Tours','School / College Tours',
-  'Corporate Tours','Festival Tours','Cultural Tours','Medical Tours',
-  'Event / Sports Tours','Cruise Packages','Luxury Tours','Budget Tours',
-  'MICE Tours','Education Tours','Adventure Tours','IRCTC Rail Tours'
+  'Honeymoon Tours', 'Family Tours', 'Wildlife & Nature Tours', 'Adventure & Trekking Tours',
+  'Hill Station & Leisure Tours', 'Beach & Coastal Tours', 'Luxury & Wellness Tours',
+  'Corporate / MICE Tours', 'Budget Weekend Getaways'
 ];
 
 const ADMIN_VERIFY_TIMEOUT_MS = 20_000;
@@ -28,14 +26,16 @@ const formatAccountDate = value => {
 };
 
 const emptyForm = {
-  title: '', destination: '', packageCategory: 'National', tourType: 'Family Tours', catalogCategories: [], regionScope: 'Other', hotelCategories: [],
+  title: '', destination: '', packageCategory: 'Domestic', tourType: 'Family Tours', catalogCategories: [], regionScope: 'Other', hotelCategories: [],
   uniquenessReviewedBy: '', uniquenessReviewedAt: '', brochureUrl: '', showInMenu: false, menuOrder: 100,
   startingCity: '', endingCity: '', durationDays: '', durationNights: '', seasonStart: '', seasonEnd: '',
   overview: '', imageUrl: '', journeyTimeNotes: '', journeyDistanceNotes: '',
   accessibilityNotes: '', seasonConstraints: '', imageRightsNote: '', contentReviewedBy: '', contentReviewedAt: '',
   itinerary: [{ day: 1, title: '', activities: '', hotel: '', mealPlan: '', transport: '', schedule: [] }],
   inclusions: '', exclusions: '', optionalAddons: '',
-  templesList: [], destinationReferences: [], priceBreakdown: '', mealPlan: '', baseCost: '',
+  templesList: [], destinationReferences: [], priceBreakdown: '', mealPlan: 'Daily Breakfast Included — Breakfast Only', baseCost: '',
+  destinationStates: '', locationTags: '', bestTimeToVisit: '', expectedWeather: '', vehiclePlan: '', importantBookingInfo: '',
+  translations: {}, translationItineraryEn: '[]', translationItineraryTa: '[]', translationItineraryHi: '[]',
   originalPrice: '', offerPrice: '', isSpecialOffer: false, offerValidity: '',
   termsAndConditions: '', cancellationPolicy: '',
   seoTitle: '', seoMetaDescription: '',
@@ -301,7 +301,7 @@ const AdminPage = () => {
     suggestTemples: false,
     
     // Additional AI customer-side fields
-    travelCategory: 'National',
+    travelCategory: 'Domestic',
     tourType: 'Family Tours',
     dateFlexibility: 'Exact Dates',
     
@@ -328,8 +328,8 @@ const AdminPage = () => {
     wheelchairFriendly: false,
     
     // Meal details
-    mealRequired: 'MAP - Breakfast + Dinner',
-    mealPlan: 'MAP (Breakfast + Dinner)',
+    mealRequired: 'CP - Breakfast',
+    mealPlan: 'Daily Breakfast Included — Breakfast Only',
     foodPreference: 'Veg',
     specialMeal: '',
     
@@ -615,8 +615,10 @@ const AdminPage = () => {
     setFormData({
       title: data.title || '',
       destination: data.destination || '',
-      packageCategory: data.packageCategory || 'National',
+      packageCategory: data.packageCategory || 'Domestic',
       tourType: data.tourType || 'Family Tours',
+      catalogCategories: data.catalogCategories || categoriesForPackage(data),
+      translationItineraryEn: JSON.stringify(data.itinerary || [], null, 2),
       startingCity: data.startingCity || '',
       endingCity: data.endingCity || '',
       durationDays: data.durationDays || '',
@@ -750,14 +752,14 @@ const AdminPage = () => {
           ...builderParams,
           durationDays: Number(builderParams.durationDays),
           durationNights: Number(builderParams.durationNights),
-          packageCategory: builderParams.travelCategory || (builderParams.destination.toLowerCase().includes('india') || builderParams.destination.toLowerCase().includes('kerala') || builderParams.destination.toLowerCase().includes('munnar') ? 'National' : 'International'),
+          packageCategory: builderParams.travelCategory || (builderParams.destination.toLowerCase().includes('india') || builderParams.destination.toLowerCase().includes('kerala') || builderParams.destination.toLowerCase().includes('munnar') ? 'Domestic' : 'International'),
           tourType: builderParams.tourType || 'Family Tours',
           selectedHotel,
           selectedFlight: builderParams.includeFlight ? selectedFlight : null,
           selectedTrain: builderParams.includeTrain ? selectedTrain : null,
           selectedCar: builderParams.includeCar ? selectedCar : null,
           selectedTemples,
-          mealRequired: builderParams.mealRequired || 'No',
+          mealRequired: 'CP - Breakfast',
         })
       });
       const data = await res.json();
@@ -766,8 +768,10 @@ const AdminPage = () => {
       setFormData({
         title: data.title || '',
         destination: data.destination || '',
-        packageCategory: data.packageCategory || 'National',
+        packageCategory: data.packageCategory || 'Domestic',
         tourType: data.tourType || 'Family Tours',
+        catalogCategories: data.catalogCategories || categoriesForPackage(data),
+        translationItineraryEn: JSON.stringify(data.itinerary || [], null, 2),
         startingCity: data.startingCity || '',
         endingCity: data.endingCity || '',
         durationDays: data.durationDays || '',
@@ -1170,6 +1174,14 @@ const AdminPage = () => {
     });
   };
 
+  const updateTranslation = (language, field, value) => setFormData(current => ({
+    ...current,
+    translations: {
+      ...(current.translations || {}),
+      [language]: { ...(current.translations?.[language] || {}), [field]: value }
+    }
+  }));
+
 
   const updateItinerary = (index, field, value) => {
     setFormData(f => {
@@ -1223,10 +1235,19 @@ const AdminPage = () => {
     setFormData({
       title: pkg.title || '',
       destination: pkg.destination || '',
-      packageCategory: pkg.packageCategory || 'National',
+      packageCategory: pkg.packageCategory === 'National' ? 'Domestic' : (pkg.packageCategory || 'Domestic'),
       tourType: pkg.tourType || 'Family Tours',
       catalogCategories: categoriesForPackage(pkg),
       regionScope: pkg.regionScope || 'Other', hotelCategories: pkg.hotelCategories || [],
+      destinationStates: Array.isArray(pkg.destinationStates) ? pkg.destinationStates.join(', ') : '',
+      locationTags: Array.isArray(pkg.locationTags) ? pkg.locationTags.join(', ') : '',
+      bestTimeToVisit: pkg.bestTimeToVisit || '', expectedWeather: pkg.expectedWeather || '',
+      vehiclePlan: pkg.vehiclePlan || '',
+      importantBookingInfo: Array.isArray(pkg.importantBookingInfo) ? pkg.importantBookingInfo.join('\n') : '',
+      translations: pkg.translations || {},
+      translationItineraryEn: JSON.stringify(pkg.translations?.en?.itinerary || [], null, 2),
+      translationItineraryTa: JSON.stringify(pkg.translations?.ta?.itinerary || [], null, 2),
+      translationItineraryHi: JSON.stringify(pkg.translations?.hi?.itinerary || [], null, 2),
       uniquenessReviewedBy: pkg.uniquenessReviewedBy || '', uniquenessReviewedAt: pkg.uniquenessReviewedAt || '',
       brochureUrl: pkg.brochureUrl || '', showInMenu: Boolean(pkg.showInMenu), menuOrder: pkg.menuOrder ?? 100,
       startingCity: pkg.startingCity || '',
@@ -1297,6 +1318,19 @@ const AdminPage = () => {
           throw new Error(`Use an HTTPS detail link for ${reference.name.trim()}.`);
         }
       }
+      const translations = { ...(formData.translations || {}) };
+      for (const [language, fieldName] of [['en', 'translationItineraryEn'], ['ta', 'translationItineraryTa'], ['hi', 'translationItineraryHi']]) {
+        let localizedItinerary = [];
+        try { localizedItinerary = JSON.parse(formData[fieldName] || '[]'); }
+        catch { throw new Error(`Enter valid JSON for the ${language.toUpperCase()} itinerary translation.`); }
+        if (!Array.isArray(localizedItinerary)) throw new Error(`The ${language.toUpperCase()} itinerary must be a JSON array.`);
+        translations[language] = {
+          ...(translations[language] || {}), itinerary: localizedItinerary,
+          importantBookingInfo: Array.isArray(translations[language]?.importantBookingInfo) ? translations[language].importantBookingInfo : [],
+          inclusions: Array.isArray(translations[language]?.inclusions) ? translations[language].inclusions : [],
+          exclusions: Array.isArray(translations[language]?.exclusions) ? translations[language].exclusions : []
+        };
+      }
       const costingParams = {
         adultCount: Number(formData.adultCount) || 2,
         childWithBedCount: Number(formData.childWithBedCount) || 0,
@@ -1340,6 +1374,10 @@ const AdminPage = () => {
 
       const payload = {
         ...formData,
+        itinerary: (formData.itinerary || []).map((day, index) => ({
+          ...day,
+          schedule: translations.en?.itinerary?.[index]?.schedule || day.schedule || []
+        })),
         markupPercent: 35,
         discountPercent: 0,
         discountAmount: 0,
@@ -1353,6 +1391,10 @@ const AdminPage = () => {
         exclusions: formData.exclusions.split('\n').map(s => s.trim()).filter(Boolean),
         optionalAddons: formData.optionalAddons.split('\n').map(s => s.trim()).filter(Boolean),
         destinationReferences: (formData.destinationReferences || []).map(item => ({ name: item.name.trim(), url: item.url.trim(), sourceType: item.sourceType, lastChecked: item.lastChecked })),
+        destinationStates: String(formData.destinationStates || '').split(',').map(value => value.trim()).filter(Boolean),
+        locationTags: String(formData.locationTags || '').split(',').map(value => value.trim().toLowerCase()).filter(Boolean),
+        importantBookingInfo: String(formData.importantBookingInfo || '').split('\n').map(value => value.trim()).filter(Boolean),
+        translations,
         status: formData.status || 'Draft',
         costingBreakdown: calculated
       };
@@ -1791,7 +1833,7 @@ const AdminPage = () => {
                       <div style={fld}>
                         <label style={lbl}>🏷️ Package Category</label>
                         <select name="travelCategory" className="input-field" value={builderParams.travelCategory} onChange={handleParamChange}>
-                          <option value="National">National</option>
+                          <option value="Domestic">Domestic</option>
                           <option value="International">International</option>
                         </select>
                       </div>
@@ -1801,28 +1843,6 @@ const AdminPage = () => {
                           {TOUR_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
                       </div>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4, marginBottom: 8 }}>
-                      <input 
-                        type="checkbox" 
-                        name="suggestTemples" 
-                        id="suggestTemples" 
-                        checked={builderParams.suggestTemples} 
-                        onChange={(e) => {
-                          const val = e.target.checked;
-                          setBuilderParams(prev => ({ 
-                            ...prev, 
-                            suggestTemples: val,
-                            // If user turns on suggestTemples, automatically set Tour Type to Pilgrimage
-                            tourType: val ? 'Pilgrimage Tours' : prev.tourType
-                          }));
-                        }} 
-                        style={{ width: 18, height: 18, cursor: 'pointer' }} 
-                      />
-                      <label htmlFor="suggestTemples" style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--dark)', cursor: 'pointer' }}>
-                        ⛩️ Suggest Nearby Temples (Include Darshan Timings & priority mapping)
-                      </label>
                     </div>
 
                     <div>
@@ -1854,11 +1874,8 @@ const AdminPage = () => {
                             </div>
                             <div style={fld}>
                               <label style={lbl}>Meal Required</label>
-                              <select name="mealRequired" className="input-field" value={builderParams.mealRequired} onChange={handleParamChange}>
-                                <option value="CP - Breakfast">CP – Breakfast</option>
-                                <option value="MAP - Breakfast + Dinner">MAP - Breakfast + Dinner</option>
-                                <option value="AP - Breakfast + Lunch + Dinner">AP - Breakfast + Lunch + Dinner</option>
-                                <option value="No">No meals</option>
+                              <select name="mealRequired" className="input-field" value="CP - Breakfast" disabled aria-label="Breakfast only">
+                                <option value="CP - Breakfast">Daily Breakfast Included — Breakfast Only</option>
                               </select>
                             </div>
                             <div style={fld}>
@@ -1933,21 +1950,24 @@ const AdminPage = () => {
                             setFormData({
                               title: data.title || '',
                               destination: data.destination || '',
-                              packageCategory: data.packageCategory || 'National',
+                              packageCategory: data.packageCategory || 'Domestic',
                               tourType: data.tourType || 'Family Tours',
+                              catalogCategories: data.catalogCategories || categoriesForPackage(data),
                               startingCity: data.startingCity || '',
                               endingCity: data.endingCity || '',
                               durationDays: data.durationDays || '',
                               durationNights: data.durationNights || '',
                               overview: data.overview || '',
                               imageUrl: data.imageUrl || '',
+                              translationItineraryEn: JSON.stringify(data.itinerary || [], null, 2),
                               itinerary: Array.isArray(data.itinerary) ? data.itinerary.map(day => ({
                                 day: day.day || 1,
                                 title: day.title || '',
                                 activities: day.activities || '',
                                 hotel: day.hotel || '',
                                 mealPlan: day.mealPlan || '',
-                                transport: day.transport || ''
+                                transport: day.transport || '',
+                                schedule: Array.isArray(day.schedule) ? day.schedule : []
                               })) : [{ day: 1, title: '', activities: '', hotel: '', mealPlan: '', transport: '' }],
                               inclusions: data.inclusions || '',
                               exclusions: data.exclusions || '',
@@ -2249,7 +2269,7 @@ const AdminPage = () => {
                     </Field>
                     <Field label="Package Category *">
                       <select name="packageCategory" className="input-field" value={formData.packageCategory} onChange={handleChange}>
-                        <option value="National">National</option>
+                        <option value="Domestic">Domestic</option>
                         <option value="International">International</option>
                       </select>
                     </Field>
@@ -2269,29 +2289,10 @@ const AdminPage = () => {
                     <div>{catalogCategories.map(category => <label key={category}><input type="checkbox" checked={(formData.catalogCategories || []).includes(category)} onChange={event => setFormData(current => ({ ...current, catalogCategories: event.target.checked ? [...(current.catalogCategories || []), category] : (current.catalogCategories || []).filter(item => item !== category) }))} /> {category}</label>)}</div>
                   </fieldset>
                   <Row>
-                    <Field label="Pilgrimage region"><select name="regionScope" className="input-field" value={formData.regionScope} onChange={handleChange}><option>Other</option><option>Tamil Nadu</option><option>South India</option><option>North India</option><option>India-wide</option></select></Field>
+                    <Field label="Route region"><select name="regionScope" className="input-field" value={formData.regionScope} onChange={handleChange}><option>Other</option><option>Tamil Nadu</option><option>South India</option><option>North India</option><option>West India</option><option>Northeast India</option><option>Islands</option><option>India-wide</option></select></Field>
                     <Field label="Hotel categories offered"><div className="admin-hotel-categories">{['3 Star', '4 Star', '5 Star'].map(category => <label key={category}><input type="checkbox" checked={formData.hotelCategories.includes(category)} onChange={event => setFormData(current => ({ ...current, hotelCategories: event.target.checked ? [...current.hotelCategories, category] : current.hotelCategories.filter(item => item !== category) }))} /> {category.replace(' Star', '-star')}</label>)}</div></Field>
                   </Row>
-                  <Row>
-                    <Field label="Meal Plan (e.g. CP/MAP/AP)">
-                      <input name="mealPlan" className="input-field" placeholder="e.g. MAP Plan - Daily Breakfast & Dinner" value={formData.mealPlan} onChange={handleChange} />
-                    </Field>
-                    <Field label="Temples Included (Comma-separated)">
-                      <input 
-                        name="templesList" 
-                        className="input-field" 
-                        placeholder="e.g. Guruvayur Temple, Vadakkunnathan Temple" 
-                        value={Array.isArray(formData.templesList) ? formData.templesList.join(', ') : formData.templesList} 
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setFormData(prev => ({
-                            ...prev,
-                            templesList: val.split(',').map(s => s.trim()).filter(Boolean)
-                          }));
-                        }} 
-                      />
-                    </Field>
-                  </Row>
+                  <Field label="Meal Plan *"><input required name="mealPlan" className="input-field" placeholder="Daily Breakfast Included — Breakfast Only" value={formData.mealPlan} onChange={handleChange} /></Field>
                   <Row>
                     <Field label="Starting City">
                       <input name="startingCity" className="input-field" placeholder="e.g. Chennai" value={formData.startingCity} onChange={handleChange} />
@@ -2317,6 +2318,16 @@ const AdminPage = () => {
                   <Field label="Marketing brochure PDF URL"><input name="brochureUrl" type="url" className="input-field" value={formData.brochureUrl || ''} onChange={handleChange} placeholder="https://example.com/brochure.pdf" /></Field>
                   <Row><Field label="Packages menu"><label className="admin-menu-toggle"><input name="showInMenu" type="checkbox" checked={Boolean(formData.showInMenu)} onChange={event => setFormData(current => ({ ...current, showInMenu: event.target.checked }))} /> Feature this package in the dropdown after publication</label></Field><Field label="Menu order"><input name="menuOrder" type="number" className="input-field" value={formData.menuOrder ?? 100} onChange={handleChange} min="0" /></Field></Row>
                   <div className="package-reference-editor"><div className="package-reference-heading"><div><strong>Content review before publication</strong><small>Save new packages as drafts, then complete and check these details before changing status to Approved or Published.</small></div></div><Row><Field label="Approximate road journey times and basis"><input name="journeyTimeNotes" className="input-field" value={formData.journeyTimeNotes || ''} onChange={handleChange} placeholder="e.g. city-to-city drive estimates; source/date" /></Field><Field label="Approximate road distances and basis"><input name="journeyDistanceNotes" className="input-field" value={formData.journeyDistanceNotes || ''} onChange={handleChange} placeholder="e.g. route distances; source/date" /></Field></Row><Row><Field label="Accessibility and fitness notes"><input name="accessibilityNotes" className="input-field" value={formData.accessibilityNotes || ''} onChange={handleChange} placeholder="Steps, walking, mobility support" /></Field><Field label="Season and operating constraints"><input name="seasonConstraints" className="input-field" value={formData.seasonConstraints || ''} onChange={handleChange} placeholder="Weather, closure or session limits" /></Field></Row><Row><Field label="Image source and usage rights"><input name="imageRightsNote" className="input-field" value={formData.imageRightsNote || ''} onChange={handleChange} placeholder="Owner/licence/source and permitted use" /></Field><Field label="Content reviewed by"><input name="contentReviewedBy" className="input-field" value={formData.contentReviewedBy || ''} onChange={handleChange} placeholder="Reviewer name" /></Field><Field label="Last reviewed"><input name="contentReviewedAt" type="date" className="input-field" value={formData.contentReviewedAt || ''} onChange={handleChange} /></Field></Row></div>
+                  <Row>
+                    <Field label="Best Time to Visit *"><input name="bestTimeToVisit" className="input-field" value={formData.bestTimeToVisit || ''} onChange={handleChange} placeholder="Months or season" /></Field>
+                    <Field label="Expected Peak-Season Weather *"><input name="expectedWeather" className="input-field" value={formData.expectedWeather || ''} onChange={handleChange} placeholder="Typical temperature range and climate notes" /></Field>
+                  </Row>
+                  <Row>
+                    <Field label="Vehicle Plan *"><input name="vehiclePlan" className="input-field" value={formData.vehiclePlan || ''} onChange={handleChange} placeholder="Private AC sedan/SUV, driver, transfers, tolls and parking" /></Field>
+                    <Field label="States or Territories Visited *"><input name="destinationStates" className="input-field" value={formData.destinationStates || ''} onChange={handleChange} placeholder="Comma-separated; Tamil Nadu routes must stay in Tamil Nadu" /></Field>
+                  </Row>
+                  <Field label="Important Booking Information (one point per line) *"><textarea name="importantBookingInfo" className="input-field resize-none" rows="3" value={formData.importantBookingInfo || ''} onChange={handleChange} placeholder="Tickets, check-in/out, permits, gear and access notes" /></Field>
+                  <Field label="Unique Locations and Stops (comma-separated) *"><input name="locationTags" className="input-field" value={formData.locationTags || ''} onChange={handleChange} placeholder="Unique attractions used to prevent route overlap across categories" /></Field>
                   <Row>
                     <Field label="Duration (Days) *">
                       <input required type="number" name="durationDays" className="input-field" min="1" value={formData.durationDays} onChange={handleChange} />
@@ -2465,6 +2476,32 @@ const AdminPage = () => {
                     <textarea name="optionalAddons" className="input-field resize-none" rows="3"
                       placeholder="Houseboat upgrade&#10;Ayurvedic massage" value={formData.optionalAddons} onChange={handleChange} />
                   </Field>
+                </Section>
+
+                <Section id="translations" title="🌐 English, Tamil & Hindi Package Content" openSection={openSection} setOpenSection={setOpenSection}>
+                  <p>Complete all three language versions before publishing. Keep the itinerary JSON aligned with the English day and time sequence.</p>
+                  {[
+                    { code: 'en', label: 'English', raw: 'translationItineraryEn' },
+                    { code: 'ta', label: 'Tamil (தமிழ்)', raw: 'translationItineraryTa' },
+                    { code: 'hi', label: 'Hindi (हिंदी)', raw: 'translationItineraryHi' }
+                  ].map(({ code, label, raw }) => {
+                    const localized = formData.translations?.[code] || {};
+                    const lines = field => Array.isArray(localized[field]) ? localized[field].join('\n') : '';
+                    return <fieldset key={code} className="admin-locale-editor" style={{ margin: '16px 0', padding: 16, border: '1px solid #d8e0ea', borderRadius: 12 }}>
+                      <legend style={{ fontWeight: 800, color: 'var(--primary)' }}>{label}</legend>
+                      <Row><Field label="Translated title *"><input className="input-field" value={localized.title || ''} onChange={event => updateTranslation(code, 'title', event.target.value)} /></Field><Field label="Translated destination *"><input className="input-field" value={localized.destination || ''} onChange={event => updateTranslation(code, 'destination', event.target.value)} /></Field></Row>
+                      <Field label="Translated category name"><input className="input-field" value={localized.catalogCategory || ''} onChange={event => updateTranslation(code, 'catalogCategory', event.target.value)} /></Field>
+                      <Field label="Translated overview *"><textarea className="input-field resize-none" rows="4" value={localized.overview || ''} onChange={event => updateTranslation(code, 'overview', event.target.value)} /></Field>
+                      <Row><Field label="Best time to visit *"><textarea className="input-field resize-none" rows="2" value={localized.bestTimeToVisit || ''} onChange={event => updateTranslation(code, 'bestTimeToVisit', event.target.value)} /></Field><Field label="Expected weather *"><textarea className="input-field resize-none" rows="2" value={localized.expectedWeather || ''} onChange={event => updateTranslation(code, 'expectedWeather', event.target.value)} /></Field></Row>
+                      <Field label="Vehicle plan *"><textarea className="input-field resize-none" rows="2" value={localized.vehiclePlan || ''} onChange={event => updateTranslation(code, 'vehiclePlan', event.target.value)} /></Field>
+                      <Field label="Breakfast-only meal plan *"><input className="input-field" value={localized.mealPlan || ''} onChange={event => updateTranslation(code, 'mealPlan', event.target.value)} /></Field>
+                      <Field label="Important booking information, one point per line *"><textarea className="input-field resize-none" rows="4" value={lines('importantBookingInfo')} onChange={event => updateTranslation(code, 'importantBookingInfo', event.target.value.split('\n').map(value => value.trim()).filter(Boolean))} /></Field>
+                      <Row><Field label="Inclusions, one per line *"><textarea className="input-field resize-none" rows="4" value={lines('inclusions')} onChange={event => updateTranslation(code, 'inclusions', event.target.value.split('\n').map(value => value.trim()).filter(Boolean))} /></Field><Field label="Exclusions, one per line *"><textarea className="input-field resize-none" rows="4" value={lines('exclusions')} onChange={event => updateTranslation(code, 'exclusions', event.target.value.split('\n').map(value => value.trim()).filter(Boolean))} /></Field></Row>
+                      <Field label="Translated terms and booking information"><textarea className="input-field resize-none" rows="2" value={localized.termsAndConditions || ''} onChange={event => updateTranslation(code, 'termsAndConditions', event.target.value)} /></Field>
+                      <Field label="Translated cancellation information"><textarea className="input-field resize-none" rows="2" value={localized.cancellationPolicy || ''} onChange={event => updateTranslation(code, 'cancellationPolicy', event.target.value)} /></Field>
+                      <Field label="Translated timed itinerary (JSON array) *"><textarea className="input-field resize-none" rows="10" spellCheck="false" value={formData[raw] || '[]'} onChange={event => setFormData(current => ({ ...current, [raw]: event.target.value }))} placeholder='[ { "day": 1, "title": "...", "schedule": [ { "time": "09:00", "kind": "visit", "title": "...", "place": "...", "description": "...", "sourceUrl": "https://..." } ] } ]' /></Field>
+                    </fieldset>;
+                  })}
                 </Section>
 
                 {/* Private costing is optional for a price-free catalogue draft. */}
@@ -2881,7 +2918,7 @@ const AdminPage = () => {
                 <h3 style={{ marginBottom: 20, color: 'var(--dark)', fontSize: '1.2rem', fontWeight: 700 }}>
                   📦 All Packages ({packages.length})
                 </h3>
-                <div className="catalog-coverage" aria-label="Pilgrimage catalogue coverage"><strong>Regional catalogue targets</strong><p>Distinct reviewed, published routes count toward the target.</p><ul>{[['Tamil Nadu', 80], ['South India', 60], ['North India', 80]].map(([region, target]) => { const count = new Set(packages.filter(pkg => pkg.isActive && ['Approved', 'Published'].includes(pkg.status) && pkg.regionScope === region && pkg.routeSignature).map(pkg => pkg.routeSignature)).size; return <li key={region}><span>{region}</span><b>{count} / {target}</b></li>; })}</ul></div>
+                <div className="catalog-coverage" aria-label="Leisure catalogue coverage"><strong>Leisure catalogue coverage</strong><p>Three distinct routes are planned in each public category. New routes stay drafts until reviewed.</p><ul>{CATALOG_CATEGORIES.map(category => { const count = new Set(packages.filter(pkg => pkg.isActive && ['Approved', 'Published'].includes(pkg.status) && (pkg.catalogCategories || []).includes(category)).map(pkg => pkg.packageId)).size; return <li key={category}><span>{category}</span><b>{count} / 3</b></li>; })}</ul></div>
                 <CategoryManager password={password} onChange={setCatalogCategories} />
                 {packages.length === 0 ? (
                   <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '20px 0' }}>No packages yet. Add one!</p>
