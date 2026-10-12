@@ -1,20 +1,24 @@
 const { packages: legacyPilgrimagePackages, byId: legacyPilgrimageById } = require('../data/curatedRegionalCatalog');
-const { packages: leisurePackages } = require('../data/curatedLeisureCatalog');
+const { packages: leisurePackages } = require('../data/curatedCatalogExpansion');
 
 // Keep the former pilgrimage records available to authenticated editors while
 // replacing them in the public catalogue with the commissioned leisure set.
 const packages = [...leisurePackages, ...legacyPilgrimagePackages];
 const byId = new Map([...leisurePackages, ...legacyPilgrimagePackages].map(pkg => [pkg.packageId, pkg]));
-const forbiddenLabel = value => /national|pilgrim|festival|cultur|irctc|temple|church|mosque|relig|hajj|umrah/i.test(String(value || ''));
+const forbiddenLabel = value => {
+  const label = String(value || '').trim();
+  return !['National', 'International', 'National Tours', 'International Tours'].includes(label)
+    && /national|pilgrim|festival|cultur|irctc|temple|church|mosque|relig|hajj|umrah/i.test(label);
+};
 const allowedTourTypes = new Set([
   'Honeymoon Tours', 'Family Tours', 'Wildlife & Nature Tours', 'Adventure & Trekking Tours',
   'Hill Station & Leisure Tours', 'Beach & Coastal Tours', 'Luxury & Wellness Tours',
-  'Corporate / MICE Tours', 'Budget Weekend Getaways'
+  'Corporate / MICE Tours', 'Budget Weekend Getaways', 'National Tours', 'International Tours'
 ]);
 const hasLeisureClassification = pkg => ['Domestic', 'International'].includes(pkg.packageCategory)
   && allowedTourTypes.has(pkg.tourType)
-  && !forbiddenLabel(pkg.tourType)
   && Array.isArray(pkg.catalogCategories) && pkg.catalogCategories.length === 1
+  && !forbiddenLabel(pkg.tourType)
   && pkg.catalogCategories.every(category => !forbiddenLabel(category));
 const hasCompleteTranslations = pkg => ['en', 'ta', 'hi'].every(language => {
   const translation = pkg.translations?.[language];

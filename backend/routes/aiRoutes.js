@@ -1086,7 +1086,7 @@ JSON Schema to conform to:
       
       const generatorPrompt = `
         You are an expert travel coordinator at "SreePayanam Tours & Travels".
-        Your task is to analyze the text content of a travel brochure PDF and extract only distinct leisure packages in the permitted categories. Exclude pilgrimage, religious, festival, cultural, national-tour and rail-tour packages.
+        Your task is to analyze the text content of a travel brochure PDF and extract only distinct leisure packages in the permitted categories. Exclude pilgrimage, religious, festival, cultural and rail-tour packages.
         
         CRITICAL INSTRUCTION: Scan the entire text very carefully. Do NOT skip, omit, or merge any package. Every different itinerary (whether different duration, different destinations, or different pricing) must be returned as a separate entry in the "packages" array.
 
@@ -1175,7 +1175,9 @@ JSON Schema to conform to:
       'Beach & Coastal Tours': 'Beach & Coastal',
       'Luxury & Wellness Tours': 'Luxury & Wellness',
       'Corporate / MICE Tours': 'Corporate & MICE',
-      'Budget Weekend Getaways': 'Budget Weekend Getaways'
+      'Budget Weekend Getaways': 'Budget Weekend Getaways',
+      'National Tours': 'National',
+      'International Tours': 'International'
     };
     const imported = packages.filter(pkg => pkg && ['Domestic', 'International'].includes(pkg.packageCategory)
       && Object.hasOwn(importedTourCategories, pkg.tourType));
@@ -1202,7 +1204,7 @@ router.post('/generate-package', checkAdmin, async (req, res) => {
     const allowedTourTypes = new Set([
       'Honeymoon Tours', 'Family Tours', 'Wildlife & Nature Tours', 'Adventure & Trekking Tours',
       'Hill Station & Leisure Tours', 'Beach & Coastal Tours', 'Luxury & Wellness Tours',
-      'Corporate / MICE Tours', 'Budget Weekend Getaways'
+      'Corporate / MICE Tours', 'Budget Weekend Getaways', 'National Tours', 'International Tours'
     ]);
     const tourType = String(req.body?.tourType || 'Family Tours');
     if (!allowedTourTypes.has(tourType)) return res.status(422).json({ message: 'Choose a permitted non-pilgrimage, non-cultural leisure category.' });
@@ -1210,7 +1212,7 @@ router.post('/generate-package', checkAdmin, async (req, res) => {
       return res.status(422).json({ message: 'Choose Domestic or International for this package.' });
     }
     const requestText = `${prompt || ''} ${destination || ''}`;
-    if (/\b(pilgrim(?:age)?|temple|church|mosque|festival|cultur(?:e|al)|national tour|irctc)\b/i.test(requestText)) {
+    if (/\b(pilgrim(?:age)?|temple|church|mosque|festival|cultur(?:e|al)|irctc)\b/i.test(requestText)) {
       return res.status(422).json({ message: 'This generator creates leisure packages only; remove pilgrimage, cultural, festival or religious-tour requests.' });
     }
     const packageCategory = req.body?.packageCategory || 'Domestic';
@@ -1236,7 +1238,7 @@ router.post('/generate-package', checkAdmin, async (req, res) => {
       
       ${formattedPreferences ? `Detailed Travel Preferences:\n${formattedPreferences}` : ''}
       
-      Generate a leisure package only. Do not create a pilgrimage, religious, cultural, festival, national-tour or IRCTC package, and do not add temples, churches or mosques as itinerary stops. Do not claim that hotels, tickets, activities or permits have been booked.
+      Generate a package in the selected leisure, National or International category only. Do not create pilgrimage, religious, cultural, festival or IRCTC packages, and do not add temples, churches or mosques as itinerary stops. Do not claim that hotels, tickets, activities or permits have been booked.
       Use concrete attraction names, local visit times, short place descriptions and official HTTPS source links. Keep all Tamil Nadu stops inside Tamil Nadu. Mark travel-time and opening-hour checks as date-dependent where needed.
       
       Your response MUST be a valid JSON object ONLY.
@@ -1302,7 +1304,7 @@ router.post('/generate-package', checkAdmin, async (req, res) => {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
-        { role: 'system', content: `You are an API that only returns pure, valid, parsed JSON conforming to the requested leisure-package schema. Never output markdown outside JSON. Do not create pilgrimage, religious, cultural, festival, national-tour or rail-tour packages, and do not add temples, churches or mosques as stops. Keep Tamil Nadu destinations inside the state. Include concrete visit times, attraction names, concise location descriptions and official HTTPS sources. State that ticket, permit, opening-hour and supplier checks depend on travel dates. Use breakfast only; lunch and dinner are excluded.` },
+        { role: 'system', content: `You are an API that only returns pure, valid, parsed JSON conforming to the requested package schema. Never output markdown outside JSON. Do not create pilgrimage, religious, cultural, festival or rail-tour packages, and do not add temples, churches or mosques as stops. Keep Tamil Nadu destinations inside the state. Include concrete visit times, attraction names, concise location descriptions and official HTTPS sources. State that ticket, permit, opening-hour and supplier checks depend on travel dates. Use breakfast only; lunch and dinner are excluded.` },
         { role: 'user', content: generatorPrompt }
       ],
       response_format: { type: "json_object" },
@@ -1649,7 +1651,7 @@ router.post('/compile-draft', checkAdmin, async (req, res) => {
     const allowedTourTypes = new Set([
       'Honeymoon Tours', 'Family Tours', 'Wildlife & Nature Tours', 'Adventure & Trekking Tours',
       'Hill Station & Leisure Tours', 'Beach & Coastal Tours', 'Luxury & Wellness Tours',
-      'Corporate / MICE Tours', 'Budget Weekend Getaways'
+      'Corporate / MICE Tours', 'Budget Weekend Getaways', 'National Tours', 'International Tours'
     ]);
     const packageCategoryValue = packageCategory || 'Domestic';
     const tourTypeValue = tourType || 'Family Tours';
@@ -1658,13 +1660,14 @@ router.post('/compile-draft', checkAdmin, async (req, res) => {
       'Wildlife & Nature Tours': 'Wildlife & Nature', 'Adventure & Trekking Tours': 'Adventure & Trekking',
       'Hill Station & Leisure Tours': 'Hill Stations & Leisure', 'Beach & Coastal Tours': 'Beach & Coastal',
       'Luxury & Wellness Tours': 'Luxury & Wellness', 'Corporate / MICE Tours': 'Corporate & MICE',
-      'Budget Weekend Getaways': 'Budget Weekend Getaways'
+      'Budget Weekend Getaways': 'Budget Weekend Getaways',
+      'National Tours': 'National', 'International Tours': 'International'
     };
     const catalogCategoryValue = categoryByTourType[tourTypeValue];
     const requestText = `${destination || ''} ${customPrompt || ''}`;
     if (!['Domestic', 'International'].includes(packageCategoryValue)
       || !allowedTourTypes.has(tourTypeValue)
-      || /\b(pilgrim(?:age)?|temple|church|mosque|relig|festival|cultur(?:e|al)|national tour|irctc)\b/i.test(requestText)) {
+      || /\b(pilgrim(?:age)?|temple|church|mosque|relig|festival|cultur(?:e|al)|irctc)\b/i.test(requestText)) {
       return res.status(422).json({ message: 'This package builder accepts permitted non-religious leisure categories only.' });
     }
 
@@ -1842,7 +1845,7 @@ router.post('/compile-draft', checkAdmin, async (req, res) => {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
-        { role: 'system', content: `You return JSON for a permitted leisure package only. Never create pilgrimage, religious, festival, cultural, National-tour or IRCTC packages, and never add temples, churches or mosques as stops. Use packageCategory ${packageCategoryValue}, tourType ${tourTypeValue}, and Breakfast Only with lunch and dinner excluded. The overview and daily activities should be detailed, practical and concise enough to remain useful.` },
+        { role: 'system', content: `You return JSON for a permitted leisure, National or International package only. Never create pilgrimage, religious, festival, cultural or IRCTC packages, and never add temples, churches or mosques as stops. Use packageCategory ${packageCategoryValue}, tourType ${tourTypeValue}, and Breakfast Only with lunch and dinner excluded. The overview and daily activities should be detailed, practical and concise enough to remain useful.` },
         { role: 'user', content: compilePrompt }
       ],
       response_format: { type: "json_object" },

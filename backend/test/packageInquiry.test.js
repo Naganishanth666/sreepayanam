@@ -6,6 +6,7 @@ const Enquiry = require('../models/Enquiry');
 const packageRoutes = require('../routes/packageRoutes');
 const enquiryRoutes = require('../routes/enquiryRoutes');
 const bookingRoutes = require('../routes/bookingRoutes');
+const { byId: curatedPackageById } = require('../data/curatedCatalogExpansion');
 
 const originalFindOne = Package.findOne;
 const originalEnquiryFindOne = Enquiry.findOne;
@@ -23,11 +24,6 @@ const withServer = async callback => {
     await callback(`http://127.0.0.1:${server.address().port}`);
   } finally { await new Promise(resolve => server.close(resolve)); }
 };
-const visitDay = (day, place) => ({ day, title: place, activities: `09:00 Visit ${place}`,
-  hotel: 'Hotel to be confirmed', mealPlan: 'Breakfast', transport: 'Car',
-  schedule: [{ time: '09:00', kind: 'visit', place, title: `Visit ${place}`,
-    description: `Explore the heritage of ${place}.`, sourceUrl: 'https://example.com/place' }] });
-
 test.after(() => {
   Package.findOne = originalFindOne;
   Enquiry.findOne = originalEnquiryFindOne;
@@ -35,18 +31,18 @@ test.after(() => {
 });
 
 test('public package response excludes all stored commercial amounts', async () => {
-  Package.findOne = async () => ({
-    packageId: 'SP-PKG-TEST', title: 'Trichy temples', status: 'Approved', isActive: true,
-    durationDays: 1, itinerary: [visitDay(1, 'Rockfort')],
+  const curated = curatedPackageById.get('SP-LEI-HR-TN-001');
+  Package.findOne = async ({ packageId }) => packageId === curated.packageId ? {
+    ...curated,
     baseCost: 100000, originalPrice: 154000, offerPrice: 146300,
     priceBreakdown: 'Private supplier cost', costingBreakdown: { targetMarginPercent: 35 },
     brochureUrl: 'https://example.com/old-priced-brochure.pdf'
-  });
+  } : null;
   await withServer(async base => {
-    const response = await fetch(`${base}/api/packages/SP-PKG-TEST`);
+    const response = await fetch(`${base}/api/packages/${curated.packageId}`);
     assert.equal(response.status, 200);
     const body = await response.json();
-    assert.equal(body.title, 'Trichy temples');
+    assert.equal(body.title, curated.title);
     for (const key of ['baseCost', 'originalPrice', 'offerPrice', 'priceBreakdown', 'costingBreakdown', 'brochureUrl']) {
       assert.ok(!(key in body), `${key} must stay private`);
     }
@@ -54,19 +50,16 @@ test('public package response excludes all stored commercial amounts', async () 
 });
 
 test('package enquiry requires consent and saves a staff-review route with selected places', async () => {
-  Package.findOne = async () => ({
-    packageId: 'SP-PKG-TEST', title: 'Trichy temples', destination: 'Trichy',
-    status: 'Approved', isActive: true,
-    durationDays: 2, durationNights: 1, startingCity: 'Chennai', endingCity: 'Chennai',
-    overview: 'A temple circuit', itinerary: [visitDay(1, 'Rockfort'), visitDay(2, 'Srirangam')]
-  });
+  const curated = curatedPackageById.get('SP-LEI-HR-TN-001');
+  const selectedPlace = curated.itinerary.flatMap(day => day.schedule).find(stop => stop.kind === 'visit').place;
+  Package.findOne = async ({ packageId }) => packageId === curated.packageId ? curated : null;
   Enquiry.findOne = async () => null;
   let saved;
   Enquiry.prototype.save = async function save() { saved = this.toObject(); };
   await withServer(async base => {
     const payload = {
       enquiryType: 'Tour Package', customerName: 'Test Traveller', mobileNumber: '9280077182', emailId: 'test@example.com',
-      packageId: 'SP-PKG-TEST', quoteReference: 'SP-PKG-TEST-REF', selectedDestinations: ['Rockfort Temple'],
+      packageId: curated.packageId, quoteReference: 'SP-PKG-TEST-REF', selectedDestinations: [selectedPlace],
       travelDate: '2026-11-10', adultCount: 2, childCount: 0, hotelRooms: 1, fromLocation: 'Chennai',
       detailedPreferences: { preferredTier: 'Deluxe' }
     };
@@ -74,8 +67,8 @@ test('package enquiry requires consent and saves a staff-review route with selec
     assert.equal(refused.status, 400);
     const response = await fetch(`${base}/api/enquiries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, contactConsent: true }) });
     assert.equal(response.status, 201);
-    assert.deepEqual(saved.selectedDestinations, ['Rockfort Temple']);
-    assert.equal(saved.detailedPreferences.routeDraft.itinerary[0].hotel.name, 'Hotel to be confirmed');
+    assert.deepEqual(saved.selectedDestinations, [selectedPlace]);
+    assert.equal(saved.detailedPreferences.routeDraft.itinerary[0].hotel.name, curated.itinerary[0].hotel);
     assert.equal(saved.detailedPreferences.routeDraft.planningReview.status, 'tight');
     assert.equal(saved.detailedPreferences.preferredTier, 'Deluxe');
   });

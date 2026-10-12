@@ -1,7 +1,7 @@
 export const CATALOG_CATEGORIES = [
   'Honeymoon & Romance', 'Family Holidays', 'Wildlife & Nature', 'Adventure & Trekking',
   'Hill Stations & Leisure', 'Beach & Coastal', 'Luxury & Wellness', 'Corporate & MICE',
-  'Budget Weekend Getaways'
+  'Budget Weekend Getaways', 'National', 'International'
 ];
 
 const tourTypeCategories = {
@@ -13,12 +13,15 @@ const tourTypeCategories = {
   'Beach & Coastal Tours': 'Beach & Coastal',
   'Luxury & Wellness Tours': 'Luxury & Wellness',
   'Corporate / MICE Tours': 'Corporate & MICE',
-  'Budget Weekend Getaways': 'Budget Weekend Getaways'
+  'Budget Weekend Getaways': 'Budget Weekend Getaways',
+  'National Tours': 'National',
+  'International Tours': 'International'
 };
 
 export const categoriesForPackage = pkg => [...new Set([
   tourTypeCategories[pkg?.tourType],
-  ...(pkg?.catalogCategories || []).filter(category => !/national|pilgrim|festival|cultur|irctc|temple|church|mosque|relig|hajj|umrah/i.test(category))
+  ...(pkg?.catalogCategories || []).filter(category => ['National', 'International'].includes(category)
+    || !/national|pilgrim|festival|cultur|irctc|temple|church|mosque|relig|hajj|umrah/i.test(category))
 ].filter(Boolean))];
 
 const regionTranslations = {
@@ -41,7 +44,9 @@ export const categoryTranslations = {
   'Beach & Coastal': { ta: 'கடற்கரை மற்றும் கடலோரப் பயணங்கள்', hi: 'समुद्र तट और तटीय यात्राएँ' },
   'Luxury & Wellness': { ta: 'ஆடம்பரம் மற்றும் நலவாழ்வு', hi: 'लक्ज़री और वेलनेस' },
   'Corporate & MICE': { ta: 'நிறுவன மற்றும் MICE பயணங்கள்', hi: 'कॉर्पोरेट और MICE यात्राएँ' },
-  'Budget Weekend Getaways': { ta: 'குறைந்த செலவு வார இறுதிப் பயணங்கள்', hi: 'कम बजट सप्ताहांत यात्राएँ' }
+  'Budget Weekend Getaways': { ta: 'குறைந்த செலவு வார இறுதிப் பயணங்கள்', hi: 'कम बजट सप्ताहांत यात्राएँ' },
+  National: { ta: 'தேசிய', hi: 'राष्ट्रीय' },
+  International: { ta: 'சர்வதேச', hi: 'अंतरराष्ट्रीय' }
 };
 
 export const localizeCategory = (category, language = 'en') =>

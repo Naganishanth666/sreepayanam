@@ -21,7 +21,9 @@ const TOUR_TYPE_INFO = {
   'Beach & Coastal Tours': { icon: '🌊', color: '#1680b5' },
   'Luxury & Wellness Tours': { icon: '🪷', color: '#9a59a8' },
   'Corporate / MICE Tours': { icon: '🏢', color: '#476aa5' },
-  'Budget Weekend Getaways': { icon: '🚗', color: '#448264' }
+  'Budget Weekend Getaways': { icon: '🚗', color: '#448264' },
+  'National Tours': { icon: '🗺️', color: '#3159a4' },
+  'International Tours': { icon: '✈️', color: '#3159a4' }
 };
 
 const Packages = () => {

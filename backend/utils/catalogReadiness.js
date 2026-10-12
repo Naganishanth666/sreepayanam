@@ -3,7 +3,8 @@ const publicationProblems = pkg => {
   const text = value => typeof value === 'string' && value.trim().length > 0;
   const checkedDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '')
     && !Number.isNaN(Date.parse(`${value}T00:00:00Z`)) && value <= new Date().toISOString().slice(0, 10);
-  const forbidden = value => /national|pilgrim|festival|cultur|irctc|temple|church|mosque|relig|hajj|umrah/i.test(String(value || ''));
+  const forbidden = value => !['National', 'International', 'National Tours', 'International Tours'].includes(String(value || '').trim())
+    && /national|pilgrim|festival|cultur|irctc|temple|church|mosque|relig|hajj|umrah/i.test(String(value || ''));
   const days = Number(pkg.durationDays);
   if (!Array.isArray(pkg.catalogCategories) || !pkg.catalogCategories.length) problems.push('Choose at least one active catalogue category.');
   if (!['Domestic', 'International'].includes(pkg.packageCategory) || pkg.packageCategory === 'National' || forbidden(pkg.tourType)

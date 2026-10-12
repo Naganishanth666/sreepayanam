@@ -16,7 +16,11 @@ const safeEqual = (left, right) => {
 };
 
 const isAdminRequest = req => safeEqual(req.headers['x-admin-password'], process.env.ADMIN_PASSWORD);
-const forbiddenCatalogLabel = value => /national|pilgrim|festival|cultur|irctc|temple|church|mosque|relig|hajj|umrah/i.test(String(value || ''));
+const forbiddenCatalogLabel = value => {
+  const label = String(value || '').trim();
+  return !['National', 'International'].includes(label)
+    && /national|pilgrim|festival|cultur|irctc|temple|church|mosque|relig|hajj|umrah/i.test(label);
+};
 
 const normalized = value => String(value || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim();
 const routeSignature = pkg => crypto.createHash('sha256').update(JSON.stringify([

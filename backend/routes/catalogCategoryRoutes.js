@@ -7,7 +7,11 @@ const { checkAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 const DEFAULTS = Object.keys(categoryLabels);
-const isForbiddenCategory = value => /national|pilgrim|festival|cultur|irctc|temple|church|mosque|relig|hajj|umrah/i.test(String(value || ''));
+const isForbiddenCategory = value => {
+  const label = String(value || '').trim();
+  return !['National', 'International'].includes(label)
+    && /national|pilgrim|festival|cultur|irctc|temple|church|mosque|relig|hajj|umrah/i.test(label);
+};
 
 const ensureDefaults = async () => {
   await CatalogCategory.bulkWrite(DEFAULTS.map((name, order) => ({

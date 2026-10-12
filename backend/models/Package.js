@@ -6,8 +6,8 @@ const packageSchema = new mongoose.Schema({
   destination: { type: String, required: true }, // e.g., Kerala, Dubai
   packageCategory: { 
     type: String, 
-    // National remains readable for legacy records, but new public packages
-    // use Domestic and publication review rejects the old National label.
+    // Legacy National values remain readable. New domestic National listings
+    // use packageCategory Domestic and catalogCategories ['National'].
     enum: ['Domestic', 'National', 'International'],
     required: true 
   },
@@ -30,6 +30,7 @@ const packageSchema = new mongoose.Schema({
       'Family Tours', 'Pilgrimage Tours', 'Honeymoon Tours', 'Hill Station Tours',
       'Wildlife & Nature Tours', 'Adventure & Trekking Tours', 'Hill Station & Leisure Tours',
       'Beach & Coastal Tours', 'Luxury & Wellness Tours', 'Corporate / MICE Tours', 'Budget Weekend Getaways',
+      'National Tours', 'International Tours',
       'Resort Packages', 'Weekend Tours', 'Group Tours', 'School / College Tours', 
       'Corporate Tours', 'Festival Tours', 'Cultural Tours', 'Medical Tours', 
       'Event / Sports Tours', 'Cruise Packages', 'Luxury Tours', 'Budget Tours', 'MICE Tours',
