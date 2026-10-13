@@ -110,6 +110,7 @@ export const packagesPageCopy = {
     longest: 'Duration: longest', loadError: 'Tour packages could not be loaded. Please refresh and try again.',
     noMatches: 'No matching packages found', noMatchesNote: 'No package matches these filters. Try changing your search or clearing a filter.',
     resetFilters: 'Reset all filters', previous: 'Previous', next: 'Next', page: 'Page {page} of {total}',
+    photo: 'Photo',
     requestPrice: 'Request for price', priceNote: 'Price confirmed after your enquiry', openPackage: 'Open package details for {title}',
     stars: { 3: '3-star', 4: '4-star', 5: '5-star' }
   },
@@ -127,6 +128,7 @@ export const packagesPageCopy = {
     loadError: 'சுற்றுலாத் தொகுப்புகளை ஏற்ற முடியவில்லை. பக்கத்தைப் புதுப்பித்து மீண்டும் முயற்சிக்கவும்.',
     noMatches: 'பொருந்தும் தொகுப்புகள் எதுவும் இல்லை', noMatchesNote: 'இந்த வடிகட்டிகளுக்கு ஏற்ற தொகுப்பு இல்லை. தேடலை மாற்றவும் அல்லது வடிகட்டிகளை அழிக்கவும்.',
     resetFilters: 'அனைத்து வடிகட்டிகளையும் அழிக்கவும்', previous: 'முந்தையது', next: 'அடுத்து', page: 'பக்கம் {page} / {total}',
+    photo: 'புகைப்படம்',
     requestPrice: 'விலைப்பட்டியல் கோருங்கள்', priceNote: 'விசாரித்த பிறகு விலை உறுதிப்படுத்தப்படும்', openPackage: '{title} தொகுப்பு விவரங்களைத் திறக்கவும்',
     stars: { 3: '3 நட்சத்திரம்', 4: '4 நட்சத்திரம்', 5: '5 நட்சத்திரம்' }
   },
@@ -144,6 +146,7 @@ export const packagesPageCopy = {
     loadError: 'यात्रा पैकेज लोड नहीं हो सके। पेज रीफ़्रेश करके फिर कोशिश करें।',
     noMatches: 'कोई मेल खाता पैकेज नहीं मिला', noMatchesNote: 'इन फ़िल्टरों से कोई पैकेज नहीं मिला। खोज बदलें या फ़िल्टर हटाएँ।',
     resetFilters: 'सभी फ़िल्टर हटाएँ', previous: 'पिछला', next: 'अगला', page: 'पेज {page} / {total}',
+    photo: 'फ़ोटो',
     requestPrice: 'कोटेशन माँगें', priceNote: 'पूछताछ के बाद कीमत की पुष्टि होगी', openPackage: '{title} पैकेज का विवरण खोलें',
     stars: { 3: '3 सितारा', 4: '4 सितारा', 5: '5 सितारा' }
   }

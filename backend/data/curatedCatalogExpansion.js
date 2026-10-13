@@ -1,5 +1,6 @@
 const crypto = require('node:crypto');
 const { packages: seeds } = require('./curatedLeisureCatalog');
+const routeImages = require('./curatedRouteImages.json');
 
 const PACKAGES_PER_SEED = 20;
 const REQUIRED_CATEGORIES = [
@@ -41,26 +42,54 @@ const routePlanLabel = {
 
 const createEdition = (seed, index, stopOrder) => {
   const pkg = copy(seed);
+  const seedVisits = visitStops(seed);
+  const routePhotoFor = place => routeImages[seed.packageId]?.[place];
+
   if (index > 1) {
     pkg.packageId = `${seed.packageId}-R${String(index).padStart(2, '0')}`;
-    for (const language of ['en', 'ta', 'hi']) {
-      const translation = pkg.translations[language];
+  }
+
+  for (const language of ['en', 'ta', 'hi']) {
+    const translation = pkg.translations[language];
+    if (index > 1) {
       translation.title = `${translation.title}${routePlanLabel[language](index)}`;
       translation.overview = `${translation.overview} ${editionCopy[language](index)}`;
-      const itinerary = translation.itinerary;
-      const visits = itinerary.flatMap(day => day.schedule.filter(item => item.kind === 'visit'));
-      const slots = visits.map(item => item.time);
-      const ordered = stopOrder.map(position => ({ ...visits[position] }));
-      ordered.forEach((item, position) => { item.time = slots[position]; });
-      let visitIndex = 0;
-      for (const day of itinerary) {
-        day.schedule = day.schedule.map(item => item.kind === 'visit' ? ordered[visitIndex++] : item);
+    }
+
+    const itinerary = translation.itinerary;
+    const visits = itinerary.flatMap(day => day.schedule.filter(item => item.kind === 'visit'));
+    const slots = visits.map(item => item.time);
+    const ordered = stopOrder.map(position => {
+      const item = { ...visits[position] };
+      const photo = routePhotoFor(seedVisits[position]?.place);
+      if (photo) {
+        item.imageUrl = photo.imageUrl;
+        item.imageCredit = photo.imageCredit;
+        item.imageCreditUrl = photo.imageCreditUrl;
       }
+      return item;
+    });
+    ordered.forEach((item, position) => { item.time = slots[position]; });
+    let visitIndex = 0;
+    for (const day of itinerary) {
+      day.schedule = day.schedule.map(item => item.kind === 'visit' ? ordered[visitIndex++] : item);
+    }
+    if (index > 1) {
       dayTitles(translation.itinerary, language, index);
     }
-    pkg.title = pkg.translations.en.title;
-    pkg.overview = pkg.translations.en.overview;
   }
+
+  const routePhotos = seedVisits.map(stop => routePhotoFor(stop.place)).filter(Boolean);
+  const cover = routePhotos.length
+    ? routePhotos[(index - 1) % routePhotos.length]
+    : routeImages[seed.packageId]?.__routeCover;
+  if (cover) {
+    pkg.imageUrl = cover.imageUrl;
+    pkg.imageRightsNote = cover.imageCredit;
+    pkg.imageCreditUrl = cover.imageCreditUrl;
+  }
+  pkg.title = pkg.translations.en.title;
+  pkg.overview = pkg.translations.en.overview;
   pkg.itinerary = pkg.translations.en.itinerary;
   pkg.routeSignature = routeSignature(pkg);
   return pkg;

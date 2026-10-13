@@ -156,6 +156,14 @@ const PackageDetails = () => {
           <ArrowLeft size={18} /> {copy.back}
         </button>
         <div style={{ position: 'absolute', top: 24, right: 24 }}><PackageLanguagePicker value={language} onChange={selectLanguage} label={copy.languageLabel} /></div>
+        {pkg.imageCreditUrl && pkg.imageRightsNote && <a
+          href={pkg.imageCreditUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`${copy.photo}: ${pkg.imageRightsNote}`}
+          title={`${copy.photo}: ${pkg.imageRightsNote}`}
+          style={{ position: 'absolute', right: 24, bottom: 8, zIndex: 2, maxWidth: 'min(42rem, calc(100% - 48px))', padding: '5px 8px', color: 'white', background: 'rgba(8, 24, 48, 0.78)', borderRadius: 5, fontSize: '0.7rem', lineHeight: 1.35, textDecoration: 'none' }}
+        >{copy.photo}: {pkg.imageRightsNote}</a>}
 
         {/* Hero Info */}
         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '0 40px 32px' }}>

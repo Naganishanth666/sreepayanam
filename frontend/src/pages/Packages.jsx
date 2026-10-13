@@ -519,6 +519,20 @@ const PackageCard = ({ pkg, index, language, copy }) => {
             <Clock size={11} /> {formatPackageDuration(pkg.durationDays, pkg.durationNights || (pkg.durationDays - 1), language)}
           </span>
         </div>
+        {pkg.imageCreditUrl && pkg.imageRightsNote && <a
+          href={pkg.imageCreditUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={event => event.stopPropagation()}
+          aria-label={`${copy.photo}: ${pkg.imageRightsNote}`}
+          title={`${copy.photo}: ${pkg.imageRightsNote}`}
+          style={{
+            position: 'absolute', left: 8, bottom: 8, zIndex: 1, maxWidth: 'calc(100% - 16px)',
+            padding: '4px 7px', color: 'white', background: 'rgba(8, 24, 48, 0.82)',
+            borderRadius: 5, fontSize: '0.62rem', lineHeight: 1.3, textDecoration: 'none',
+            display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden'
+          }}
+        >{copy.photo}: {pkg.imageRightsNote}</a>}
       </div>
 
       {/* Content Info */}

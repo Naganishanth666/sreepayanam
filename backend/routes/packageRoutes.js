@@ -68,18 +68,57 @@ const toPublicPackage = packageDocument => {
   delete result.isDefaultCatalogPackage;
   return result;
 };
+const withCuratedRoutePhotos = packageData => {
+  const curated = curatedById.get(packageData?.packageId);
+  if (!curated || packageData.imageCreditUrl) return packageData;
+
+  const applyVisitPhotos = (targetItinerary, sourceItinerary) => (targetItinerary || []).map((day, dayIndex) => {
+    const sourceVisits = (sourceItinerary?.[dayIndex]?.schedule || []).filter(item => item.kind === 'visit');
+    let visitIndex = 0;
+    return {
+      ...day,
+      schedule: (day.schedule || []).map(item => {
+        if (item.kind !== 'visit') return item;
+        const source = sourceVisits[visitIndex++];
+        if (!source?.imageUrl || !source.imageCreditUrl) return item;
+        return { ...item, imageUrl: source.imageUrl, imageCredit: source.imageCredit, imageCreditUrl: source.imageCreditUrl };
+      })
+    };
+  });
+
+  const translations = { ...(packageData.translations || {}) };
+  for (const language of ['en', 'ta', 'hi']) {
+    const translation = translations[language];
+    const curatedTranslation = curated.translations?.[language];
+    if (translation?.itinerary && curatedTranslation?.itinerary) {
+      translations[language] = {
+        ...translation,
+        itinerary: applyVisitPhotos(translation.itinerary, curatedTranslation.itinerary)
+      };
+    }
+  }
+
+  return {
+    ...packageData,
+    imageUrl: curated.imageUrl,
+    imageRightsNote: curated.imageRightsNote,
+    imageCreditUrl: curated.imageCreditUrl,
+    itinerary: applyVisitPhotos(packageData.itinerary, curated.itinerary),
+    translations
+  };
+};
 const toPublicSummary = packageDocument => {
   const { packageId, title, destination, packageCategory, tourType, catalogCategories,
     regionScope, hotelCategories, startingCity, endingCity, durationDays, durationNights,
-    overview, imageUrl, status, translations, mealPlan, bestTimeToVisit, expectedWeather,
-    vehiclePlan, importantBookingInfo } = toPublicPackage(packageDocument);
+    overview, imageUrl, imageRightsNote, imageCreditUrl, status, translations, mealPlan, bestTimeToVisit, expectedWeather,
+    vehiclePlan, importantBookingInfo } = withCuratedRoutePhotos(toPublicPackage(packageDocument));
   const cardTranslations = Object.fromEntries(['en', 'ta', 'hi'].map(language => [language, {
     title: translations?.[language]?.title || '', destination: translations?.[language]?.destination || '',
     tourType: translations?.[language]?.tourType || '', catalogCategory: translations?.[language]?.catalogCategory || ''
   }]));
   return { packageId, title, destination, packageCategory, tourType, catalogCategories,
     regionScope, hotelCategories, startingCity, endingCity, durationDays, durationNights,
-    overview, imageUrl, status, translations: cardTranslations, mealPlan, bestTimeToVisit, expectedWeather,
+    overview, imageUrl, imageRightsNote, imageCreditUrl, status, translations: cardTranslations, mealPlan, bestTimeToVisit, expectedWeather,
     vehiclePlan, importantBookingInfo };
 };
 const matchesFilters = (pkg, filters) => (!filters.durationDays || pkg.durationDays === Number(filters.durationDays))
@@ -216,7 +255,7 @@ router.get('/:id', async (req, res) => {
       return res.status(403).json({ message: 'Access denied. Package is in draft status.' });
     }
     
-    res.json(isAdmin ? pkg : toPublicPackage(pkg));
+    res.json(isAdmin ? pkg : withCuratedRoutePhotos(toPublicPackage(pkg)));
   } catch (error) {
     console.error('[Packages] Detail failed:', error.message);
     res.status(500).json({ message: 'Could not load the package.' });

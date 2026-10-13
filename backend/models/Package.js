@@ -52,6 +52,7 @@ const packageSchema = new mongoose.Schema({
   vehiclePlan: String,
   importantBookingInfo: [String],
   imageRightsNote: String,
+  imageCreditUrl: String,
   contentReviewedBy: String,
   contentReviewedAt: String,
   

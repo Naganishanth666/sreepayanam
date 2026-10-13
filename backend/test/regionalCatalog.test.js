@@ -51,6 +51,20 @@ test('the earlier 220 regional pilgrimage packages remain stored and excluded fr
   assert.ok(legacyPackages.every(pkg => !isPublicPackage(pkg)));
 });
 
+test('route variants use relevant, credited destination photos instead of one repeated seed cover', () => {
+  const kodaiVariants = packages.filter(pkg => pkg.packageId.startsWith('SP-LEI-HR-TN-001'));
+  assert.equal(kodaiVariants.length, 20);
+  assert.ok(new Set(kodaiVariants.map(pkg => pkg.imageUrl)).size >= 4);
+
+  const verifiedPhotoUrls = new Set(kodaiVariants.flatMap(pkg => pkg.translations.en.itinerary.flatMap(day => day.schedule)
+    .filter(stop => stop.kind === 'visit' && stop.imageUrl && stop.imageCredit && stop.imageCreditUrl)
+    .map(stop => stop.imageUrl)));
+  for (const pkg of kodaiVariants) {
+    assert.ok(verifiedPhotoUrls.has(pkg.imageUrl), `${pkg.packageId} cover is not one of its credited route photos`);
+    assert.ok(pkg.imageRightsNote && /^https:\/\/commons\.wikimedia\.org\/wiki\/File:/.test(pkg.imageCreditUrl), pkg.packageId);
+  }
+});
+
 test('a draft or archived override hides its code-backed catalogue listing', () => {
   const original = packages[0];
   const override = { ...original, status: 'Draft', isActive: false };
