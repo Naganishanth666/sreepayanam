@@ -78,6 +78,14 @@ worldwide, as confirmed by its owner. Structured data includes the confirmed cit
 and the existing public phone number. No street address, reviews or ratings are
 invented. Search appearance and rankings remain decisions of each search engine.
 
+Google Search Console ownership of the current CloudFront HTTPS URL prefix was
+verified on 21 October 2026 using the public HTML verification tag in
+`frontend/index.html`. Keep this tag in future builds; the runtime metadata helper
+does not remove it. Google successfully processed `/sitemap.xml` and discovered
+all 677 submitted URLs. Discovery does not mean those pages are already indexed.
+The future custom domain will need its own Search Console property. No Bing
+Webmaster property or Google Business Profile was created.
+
 The requested `sreepayanam.com` is not owned or connected yet. Domain registration
 has a separate annual fee. Keep AWS on its Free plan and use the registrar's DNS
 to avoid a paid hosted zone. After the owner registers the name:
@@ -100,6 +108,25 @@ to avoid a paid hosted zone. After the owner registers the name:
 
 Keep ACM validation CNAME records for automatic certificate renewal. Do not use
 the proposed name as the canonical URL before registration and working HTTPS.
+
+## Observed performance
+
+Two sequential public checks from the migration computer on 21 October 2026
+measured homepage HTML at 1.05 and 0.33 seconds, API health at 0.84 and 0.91 seconds,
+and the full tour catalogue at 5.25 and 5.37 seconds. The catalogue contains 660
+public summaries and is 2,611,680 bytes before transfer compression. Lambda logs
+showed new-process initialization around 3.75 to 4.22 seconds. These are individual
+measurements, not a service-level guarantee or a complete browser load metric.
+
+The full catalogue route reads large package documents twice, then merges curated
+overrides and constructs public summaries. A read-only comparison preserved the
+exact catalogue hash but did not show a consistent speed benefit from switching
+only to lean database results, so no database-query change was deployed. Future
+performance work should reduce the data needed for list cards, avoid repeated
+catalogue work, and measure cold and warm paths while preserving publication,
+translation and admin-override behavior. Avoid paid provisioned capacity or EC2
+changes without a new explicit cost decision. No EC2 instances were present in
+the selected Region at the check; this application uses ordinary on-demand Lambda.
 
 ## Costs and recovery
 
