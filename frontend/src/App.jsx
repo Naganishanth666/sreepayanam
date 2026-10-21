@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Navbar';
@@ -7,8 +7,6 @@ import ProtectedRoute from './components/ProtectedRoute';
 import SiteMetadata from './components/SiteMetadata';
 
 import LandingPage from './pages/LandingPage';
-import AdminPage from './pages/AdminPage';
-import AiAssistant from './pages/AiAssistant';
 import AboutUs from './pages/AboutUs';
 import Packages from './pages/Packages';
 import ContactUs from './pages/ContactUs';
@@ -19,6 +17,10 @@ import Services from './pages/Services';
 import { Blogs, Brochures } from './pages/BlogsBrochures';
 import SavedRoute from './pages/SavedRoute';
 import { NotFoundPage } from './pages/AccessPages';
+
+const AdminPage = lazy(() => import('./pages/AdminPage'));
+const AiAssistant = lazy(() => import('./pages/AiAssistant'));
+const PageLoading = () => <main className="page-container"><div className="container"><p role="status">Loading page…</p></div></main>;
 
 const PageScroll = () => {
   const location = useLocation();
@@ -55,7 +57,7 @@ function App() {
           <Route path="/route"        element={<SavedRoute />} />
           <Route path="/route/:reference" element={<SavedRoute />} />
           <Route path="/services/:slug" element={<Services />} />
-          <Route path="/ai-assistant" element={<AiAssistant />} />
+          <Route path="/ai-assistant" element={<Suspense fallback={<PageLoading />}><AiAssistant /></Suspense>} />
           <Route path="/login"        element={<Login />} />
 
           {/* Protected: Any logged-in user */}
@@ -67,7 +69,7 @@ function App() {
           } />
 
           {/* Admin Page — keeps its own password gate inside the component */}
-          <Route path="/admin" element={<AdminPage />} />
+          <Route path="/admin" element={<Suspense fallback={<PageLoading />}><AdminPage /></Suspense>} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
         <Chatbot />

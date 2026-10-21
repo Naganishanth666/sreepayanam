@@ -118,10 +118,19 @@ public summaries and is 2,611,680 bytes before transfer compression. Lambda logs
 showed new-process initialization around 3.75 to 4.22 seconds. These are individual
 measurements, not a service-level guarantee or a complete browser load metric.
 
+The admin console and trip-planner modules now load only when their routes open.
+The main application chunk dropped from 149.36 KB to 62.38 KB gzipped; including
+the unchanged shared vendor/runtime code, initial JavaScript fell by about 32%.
+An actual public transfer check using CloudFront's Brotli responses measured
+246,254 bytes before and 171,392 bytes after, a 30.4% reduction.
+The public shell stays mounted and an accessible loading status covers the first
+module load. No application dependency or feature was removed.
+
 The full catalogue route reads large package documents twice, then merges curated
 overrides and constructs public summaries. A read-only comparison preserved the
-exact catalogue hash but did not show a consistent speed benefit from switching
-only to lean database results, so no database-query change was deployed. Future
+exact catalogue hash but did not show a consistent speed benefit from lean
+results or fetching only missing overrides, so no database-query change was
+deployed. Future
 performance work should reduce the data needed for list cards, avoid repeated
 catalogue work, and measure cold and warm paths while preserving publication,
 translation and admin-override behavior. Avoid paid provisioned capacity or EC2

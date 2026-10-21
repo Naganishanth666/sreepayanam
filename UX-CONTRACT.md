@@ -19,6 +19,7 @@ This contract covers the public planner/route-brief workflow, the package catalo
 ## Canonical owners
 
 - Navigation: `frontend/src/components/Navbar.jsx` and `.site-nav` styles.
+- Route loading: `frontend/src/App.jsx` keeps the public shell mounted and uses an accessible, page-sized loading status while the admin or trip-planner module loads. Their existing authentication and workflow components retain ownership after loading.
 - Package language: `frontend/src/hooks/usePackageLanguage.js` owns the persisted selection; `frontend/src/utils/catalogCategories.js` owns UI copy and field-level content fallback; `PackageLanguagePicker.jsx` is shared by `Packages.jsx` and `PackageDetails.jsx`.
 - Package destination references: `backend/models/Package.js` stores staff-entered HTTPS source links, and `frontend/src/pages/PackageDetails.jsx` presents their type and last-check date.
 - Home hero: `frontend/src/pages/LandingPage.jsx`, `frontend/src/data/heroSlides.js` and `.hero-carousel` styles. It is a twelve-slide package-style carousel with pause-on-hover/focus and manual controls.
