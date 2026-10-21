@@ -51,7 +51,7 @@ test('sitemap contains public services and package URLs without personal or filt
 });
 
 test('edge routing serves the matching public HTML and keeps new tours, private routes and query strings working', async () => {
-  const template = await readFile(new URL('../../aws/website.yaml', import.meta.url), 'utf8');
+  const template = (await readFile(new URL('../../aws/website.yaml', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
   const code = template.split('      FunctionCode: |\n')[1].split('\n  Distribution:')[0].split('\n').map(line => line.slice(8)).join('\n');
   const context = vm.createContext({});
   vm.runInContext(code, context);
