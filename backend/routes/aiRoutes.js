@@ -7,6 +7,7 @@ const multer = require('multer');
 const { PDFParse } = require('pdf-parse');
 const Package = require('../models/Package');
 const { checkAdmin } = require('../middleware/auth');
+const { createBrochureUploadHandler, createBrochureUploadResolver } = require('../utils/brochureUploads');
 const { sanitizeHotelSuggestions } = require('../utils/hotelSuggestions');
 const { getPlaceContexts } = require('../utils/placeContext');
 const { sanitizeVisitResearch } = require('../utils/visitResearch');
@@ -940,7 +941,9 @@ router.post('/plan-structured', async (req, res) => {
 });
 
 // 1.6 AI PDF Brochure Parser & Package Creator (Admin only)
-router.post('/parse-brochure', checkAdmin, upload.single('brochure'), async (req, res) => {
+router.post('/brochure-uploads', checkAdmin, createBrochureUploadHandler());
+
+router.post('/parse-brochure', checkAdmin, createBrochureUploadResolver(), upload.single('brochure'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No PDF brochure file uploaded.' });

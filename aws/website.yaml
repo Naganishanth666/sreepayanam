@@ -1,0 +1,383 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Sreepayanam static website and private Express API, retaining its existing MongoDB database and application features.
+Metadata:
+  AWSToolsMetrics:
+    AWSAgentToolkit: aws-cloudformation@3
+  com.aws.cloudformation.Context:
+    Purpose: See aws/README.md for preservation constraints, encrypted configuration, deployment and rollback.
+Parameters:
+  ArtifactsBucket:
+    Type: String
+    Description: Private artifact bucket from the foundation stack in the selected Region.
+  CodeKey:
+    Type: String
+    Description: Immutable release ZIP key, containing the original locked application dependencies.
+  ConfigParameter:
+    Type: String
+    Default: /sreepayanam/production/config
+    AllowedPattern: '^/[a-zA-Z0-9_./-]+$'
+    Description: Name only of the existing Standard SecureString. Its value never enters this template.
+  ConfigKeyArn:
+    Type: String
+    Description: Exact AWS managed SSM encryption key ARN used by the configuration parameter.
+  ConfigurationRevision:
+    Type: String
+    Default: initial
+    Description: Nonsecret revision forces fresh processes after encrypted settings change.
+Resources:
+  WebsiteBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Metadata:
+      com.aws.cloudformation.Context:
+        Purpose: Standard private S3 origin; versioning retains the previous frontend for rollback.
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      OwnershipControls:
+        Rules: [{ ObjectOwnership: BucketOwnerEnforced }]
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration: { Status: Enabled }
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpirePreviousSiteVersions
+            Status: Enabled
+            NoncurrentVersionExpiration: { NoncurrentDays: 30 }
+      Tags: [{ Key: Application, Value: Sreepayanam }]
+  BrochureUploadsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Metadata:
+      com.aws.cloudformation.Context:
+        Purpose: Temporary private PDF handoff preserves 10 MB imports beyond Lambda request limits. Not the database.
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      OwnershipControls:
+        Rules: [{ ObjectOwnership: BucketOwnerEnforced }]
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins: ['https://*.cloudfront.net']
+            AllowedMethods: [PUT]
+            AllowedHeaders: [content-type, content-length, 'x-amz-*']
+            MaxAge: 300
+      LifecycleConfiguration:
+        Rules:
+          - Id: RemoveTemporaryBrochures
+            Status: Enabled
+            Prefix: brochure-uploads/
+            ExpirationInDays: 1
+            AbortIncompleteMultipartUpload: { DaysAfterInitiation: 1 }
+      Tags: [{ Key: Application, Value: Sreepayanam }]
+  BrochureUploadsPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref BrochureUploadsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: RequireTls
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: [!GetAtt BrochureUploadsBucket.Arn, !Sub '${BrochureUploadsBucket.Arn}/*']
+            Condition: { Bool: { 'aws:SecureTransport': false } }
+  AccessLogsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Metadata:
+      com.aws.cloudformation.Context:
+        Purpose: Short lived edge access logs. BucketOwnerPreferred supports CloudFront standard logging ACL delivery.
+    Properties:
+      OwnershipControls:
+        Rules: [{ ObjectOwnership: BucketOwnerPreferred }]
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireAccessLogs
+            Status: Enabled
+            ExpirationInDays: 14
+      Tags: [{ Key: Application, Value: Sreepayanam }]
+  AccessLogsPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AccessLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: RequireTls
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: [!GetAtt AccessLogsBucket.Arn, !Sub '${AccessLogsBucket.Arn}/*']
+            Condition: { Bool: { 'aws:SecureTransport': false } }
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-api'
+      RetentionInDays: 7
+  ApiRole:
+    Type: AWS::IAM::Role
+    Metadata:
+      com.aws.cloudformation.Context:
+        Purpose: Autopilot baseline refined to exact configuration, upload prefix and log group. No database AWS credentials.
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ApplicationResources
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ConfigParameter}'
+              - Effect: Allow
+                Action: kms:Decrypt
+                Resource: !Ref ConfigKeyArn
+                Condition:
+                  StringEquals:
+                    kms:ViaService: !Sub 'ssm.${AWS::Region}.${AWS::URLSuffix}'
+                    kms:EncryptionContext:PARAMETER_ARN: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ConfigParameter}'
+              - Effect: Allow
+                Action: [s3:PutObject, s3:GetObject, s3:DeleteObject]
+                Resource: !Sub '${BrochureUploadsBucket.Arn}/brochure-uploads/*'
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub '${ApiLogGroup.Arn}'
+      Tags: [{ Key: Application, Value: Sreepayanam }]
+  ApiFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: ApiLogGroup
+    Metadata:
+      com.aws.cloudformation.Context:
+        Purpose: Express runs with the AWS web adapter in Sydney; limited concurrency and on demand billing avoid idle server costs.
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-api'
+      Description: Sreepayanam Express API; existing MongoDB data and locked dependencies.
+      Runtime: nodejs22.x
+      Architectures: [x86_64]
+      Handler: run.sh
+      Role: !GetAtt ApiRole.Arn
+      MemorySize: 1024
+      Timeout: 120
+      ReservedConcurrentExecutions: 5
+      Code:
+        S3Bucket: !Ref ArtifactsBucket
+        S3Key: !Ref CodeKey
+      Layers:
+        - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:753240598075:layer:LambdaAdapterLayerX86:30'
+      Environment:
+        Variables:
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/bootstrap
+          AWS_LWA_PORT: '5000'
+          PORT: '5000'
+          AWS_LWA_READINESS_CHECK_PATH: /api/health
+          AWS_LWA_READINESS_CHECK_HEALTHY_STATUS: '200'
+          AWS_LWA_ASYNC_INIT: 'true'
+          AWS_LWA_ENABLE_COMPRESSION: 'true'
+          AWS_LWA_AUTHORIZATION_SOURCE: x-application-authorization
+          CONFIG_SSM_PARAMETER: !Ref ConfigParameter
+          CONFIGURATION_REVISION: !Ref ConfigurationRevision
+          BROCHURE_UPLOAD_BUCKET: !Ref BrochureUploadsBucket
+          NODE_ENV: production
+          RUN_STARTUP_MIGRATIONS: 'false'
+      Tags: [{ Key: Application, Value: Sreepayanam }]
+  ApiUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !GetAtt ApiFunction.Arn
+      AuthType: AWS_IAM
+      InvokeMode: BUFFERED
+  WebsiteOac:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${AWS::StackName}-static'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+  ApiOac:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${AWS::StackName}-api'
+        OriginAccessControlOriginType: lambda
+        SigningBehavior: always
+        SigningProtocol: sigv4
+  StaticCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: !Sub '${AWS::StackName}-static'
+        MinTTL: 0
+        DefaultTTL: 86400
+        MaxTTL: 31536000
+        ParametersInCacheKeyAndForwardedToOrigin:
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+          CookiesConfig: { CookieBehavior: none }
+          HeadersConfig: { HeaderBehavior: none }
+          QueryStringsConfig: { QueryStringBehavior: none }
+  BrowserHeaders:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub '${AWS::StackName}-browser'
+        SecurityHeadersConfig:
+          ContentTypeOptions: { Override: true }
+          FrameOptions: { FrameOption: DENY, Override: true }
+          ReferrerPolicy: { ReferrerPolicy: strict-origin-when-cross-origin, Override: true }
+          StrictTransportSecurity: { AccessControlMaxAgeSec: 31536000, IncludeSubdomains: true, Override: true }
+          ContentSecurityPolicy:
+            Override: true
+            ContentSecurityPolicy: !Sub "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://images.unsplash.com https://upload.wikimedia.org https://thumb.wikimedia.org https://api.qrserver.com; connect-src 'self' https://${BrochureUploadsBucket.RegionalDomainName}; font-src 'self' data:; form-action 'self' https://wa.me"
+        CustomHeadersConfig:
+          Items:
+            - Header: Permissions-Policy
+              Value: camera=(), microphone=(), geolocation=()
+              Override: true
+  SpaRouter:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub '${AWS::StackName}-spa'
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Preserve React routes without changing API error responses.
+        Runtime: cloudfront-js-2.0
+      FunctionCode: |
+        function handler(event) {
+          var request = event.request;
+          var last = request.uri.split('/').pop();
+          if (request.uri === '/' || !last || last.indexOf('.') === -1) request.uri = '/index.html';
+          return request;
+        }
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: Sreepayanam website with a private Sydney API.
+        Enabled: true
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        DefaultRootObject: index.html
+        PriceClass: PriceClass_All
+        ViewerCertificate: { CloudFrontDefaultCertificate: true }
+        Logging:
+          Bucket: !GetAtt AccessLogsBucket.DomainName
+          IncludeCookies: false
+          Prefix: cloudfront/
+        Origins:
+          - Id: Website
+            DomainName: !GetAtt WebsiteBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt WebsiteOac.Id
+            S3OriginConfig: { OriginAccessIdentity: '' }
+          - Id: Api
+            DomainName: !Select [2, !Split ['/', !GetAtt ApiUrl.FunctionUrl]]
+            OriginAccessControlId: !GetAtt ApiOac.Id
+            ConnectionAttempts: 1
+            CustomOriginConfig:
+              HTTPSPort: 443
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
+              OriginReadTimeout: 120
+        DefaultCacheBehavior:
+          TargetOriginId: Website
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD]
+          CachePolicyId: !Ref StaticCachePolicy
+          ResponseHeadersPolicyId: !Ref BrowserHeaders
+          Compress: true
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt SpaRouter.FunctionARN
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: Api
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, PATCH, POST, DELETE]
+            CachedMethods: [GET, HEAD]
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+            Compress: true
+  WebsitePolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebsiteBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: RequireTls
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: [!GetAtt WebsiteBucket.Arn, !Sub '${WebsiteBucket.Arn}/*']
+            Condition: { Bool: { 'aws:SecureTransport': false } }
+          - Sid: CloudFrontOnly
+            Effect: Allow
+            Principal: { Service: cloudfront.amazonaws.com }
+            Action: s3:GetObject
+            Resource: !Sub '${WebsiteBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceAccount: !Ref AWS::AccountId
+                AWS:SourceArn: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
+  AllowCloudFrontFunctionUrl:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ApiFunction
+      Action: lambda:InvokeFunctionUrl
+      Principal: cloudfront.amazonaws.com
+      FunctionUrlAuthType: AWS_IAM
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
+  AllowCloudFrontInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ApiFunction
+      Action: lambda:InvokeFunction
+      Principal: cloudfront.amazonaws.com
+      InvokedViaFunctionUrl: true
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
+Outputs:
+  WebsiteUrl:
+    Value: !Sub 'https://${Distribution.DomainName}'
+  DistributionId:
+    Value: !Ref Distribution
+  WebsiteBucket:
+    Value: !Ref WebsiteBucket
+  BrochureUploadsBucket:
+    Value: !Ref BrochureUploadsBucket
+  ApiFunction:
+    Value: !Ref ApiFunction
+  PrivateApiUrl:
+    Value: !GetAtt ApiUrl.FunctionUrl
