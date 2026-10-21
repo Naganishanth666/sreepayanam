@@ -266,17 +266,34 @@ Resources:
               Override: true
   SpaRouter:
     Type: AWS::CloudFront::Function
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Serve route-specific search metadata from private S3 while retaining the React application.
+        must:
+          - Keep API requests on their existing uncached origin and preserve query strings.
+          - New packages must work before the next static build; saved itineraries and account pages must use noindex HTML.
     Properties:
       Name: !Sub '${AWS::StackName}-spa'
       AutoPublish: true
       FunctionConfig:
-        Comment: Preserve React routes without changing API error responses.
+        Comment: Public search metadata and private-page noindex; preserve React routes and API responses.
         Runtime: cloudfront-js-2.0
       FunctionCode: |
         function handler(event) {
           var request = event.request;
-          var last = request.uri.split('/').pop();
-          if (request.uri === '/' || !last || last.indexOf('.') === -1) request.uri = '/index.html';
+          var uri = request.uri.replace(/\/+$/, '') || '/';
+          if (uri.indexOf('/api/') === 0) return request;
+          if (uri === '/' || uri === '/index.html') {
+            request.uri = '/index.html';
+          } else if (/^\/(about|packages|contact|services|blogs|brochures|ai-assistant)$/.test(uri) || /^\/services\/(flights|hotels|visa|attestation|passport|insurance|cars|buses|vans)$/.test(uri)) {
+            request.uri = '/seo' + uri + '.html';
+          } else if (/^\/package\/[a-zA-Z0-9_-]+$/.test(uri)) {
+            request.uri = '/seo/package.html';
+          } else if (/^\/(admin|login|bookings|checkout|route)(\/|$)/.test(uri)) {
+            request.uri = '/seo/private.html';
+          } else if (uri.split('/').pop().indexOf('.') === -1) {
+            request.uri = '/seo/notfound.html';
+          }
           return request;
         }
   Distribution:

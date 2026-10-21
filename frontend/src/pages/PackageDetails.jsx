@@ -11,6 +11,7 @@ import { renderRichText } from '../utils/textFormatter';
 import PackageLanguagePicker from '../components/PackageLanguagePicker';
 import { formatPackageDuration, getPackageContent, localizeCategory, localizeTourType, packagePageCopy } from '../utils/catalogCategories';
 import usePackageLanguage from '../hooks/usePackageLanguage';
+import { applyMetadata, metadataForPath, DEFAULT_SITE_ORIGIN } from '../utils/seoMetadata.js';
 import {
   MANDATORY_GENERAL_TERMS,
   MANDATORY_PAYMENT_POLICY,
@@ -45,11 +46,21 @@ const PackageDetails = () => {
   useEffect(() => {
     fetch(`/api/packages/${id}`)
       .then(r => {
-        if (!r.ok) throw new Error('package-unavailable');
+        if (!r.ok) throw Object.assign(new Error('package-unavailable'), { status: r.status });
         return r.json();
       })
-      .then(data => { setPkg(data); setLoading(false); })
-      .catch(() => { setLoadFailed(true); setLoading(false); });
+      .then(data => {
+        setPkg(data); setLoading(false);
+        if (window.location.pathname.replace(/\/$/, '') === `/package/${id}`) {
+          applyMetadata(metadataForPath(`/package/${id}`, import.meta.env.VITE_PUBLIC_SITE_URL || DEFAULT_SITE_ORIGIN, data));
+        }
+      })
+      .catch(error => {
+        setLoadFailed(true); setLoading(false);
+        if (error.status === 404 && window.location.pathname.replace(/\/$/, '') === `/package/${id}`) {
+          applyMetadata({ ...metadataForPath(`/package/${id}`, import.meta.env.VITE_PUBLIC_SITE_URL || DEFAULT_SITE_ORIGIN), robots: 'noindex,follow' });
+        }
+      });
   }, [id]);
 
   useEffect(() => {

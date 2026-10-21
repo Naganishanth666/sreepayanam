@@ -4,6 +4,7 @@ import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import Chatbot from './components/Chatbot';
 import ProtectedRoute from './components/ProtectedRoute';
+import SiteMetadata from './components/SiteMetadata';
 
 import LandingPage from './pages/LandingPage';
 import AdminPage from './pages/AdminPage';
@@ -18,32 +19,6 @@ import Services from './pages/Services';
 import { Blogs, Brochures } from './pages/BlogsBrochures';
 import SavedRoute from './pages/SavedRoute';
 import { NotFoundPage } from './pages/AccessPages';
-
-const routeTitles = {
-  '/': 'SreePayanam | Travel Smarter. Journey Better.',
-  '/about': 'About | SreePayanam',
-  '/packages': 'Packages | SreePayanam',
-  '/contact': 'Contact | SreePayanam',
-  '/ai-assistant': 'Trip planner | SreePayanam',
-  '/login': 'Log in | SreePayanam',
-  '/bookings': 'Book services | SreePayanam',
-  '/services': 'Travel services | SreePayanam',
-  '/blogs': 'Travel articles | SreePayanam',
-  '/brochures': 'Brochures | SreePayanam',
-  '/route': 'Find your itinerary | SreePayanam',
-  '/admin': 'Admin dashboard | SreePayanam'
-};
-
-const PageTitle = () => {
-  const location = useLocation();
-
-  useEffect(() => {
-    const baseTitle = routeTitles[location.pathname] || (location.pathname.startsWith('/route/') ? 'Find your itinerary | SreePayanam' : location.pathname.startsWith('/package/') ? 'Package details | SreePayanam' : location.pathname.startsWith('/services/') ? 'Travel service | SreePayanam' : 'Page not found | SreePayanam');
-    document.title = baseTitle;
-  }, [location.pathname]);
-
-  return null;
-};
 
 const PageScroll = () => {
   const location = useLocation();
@@ -64,7 +39,7 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <PageTitle />
+        <SiteMetadata />
         <PageScroll />
         <Navbar />
         <Routes>

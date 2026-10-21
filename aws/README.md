@@ -38,7 +38,10 @@ CloudFront origins, while signed URLs and admin authentication control access.
 1. Verify AWS profile `Naga`, selected Region `ap-southeast-2`, and the Free plan.
 2. Run the existing backend and frontend Node test suites.
 3. Install deployment SDK packages with `npm ci` inside `aws/runtime`.
-4. Build the frontend with `VITE_AWS_PRIVATE_ORIGIN=true` and the normal build script.
+4. Build the frontend with `VITE_AWS_PRIVATE_ORIGIN=true`,
+   `VITE_PUBLIC_SITE_URL=https://d16c3ka2ufm5ie.cloudfront.net` and
+   `VITE_SITEMAP_API_ORIGIN=https://d16c3ka2ufm5ie.cloudfront.net`, using the normal
+   build script. The sitemap reads only the existing public catalogue endpoint.
 5. Run `build-release.py --output <new-release-directory> --node <node-executable>
    --npm-cli <npm-cli.js>` with Python 3. It installs the existing locked backend
    dependencies for Linux x64 and verifies the PDF canvas native binary and ZIP
@@ -58,7 +61,45 @@ CloudFront origins, while signed URLs and admin authentication control access.
 10. Wait for CloudFront to finish deployment. Verify public routes/assets, database
     readiness, catalogue parity, authentication and private-origin denial. Test
     large uploads without triggering paid AI generation. Invalidate `/index.html`
-    after subsequent frontend releases.
+    and `/seo/*`, `/sitemap.xml` and `/robots.txt` after subsequent frontend releases.
+
+## Search visibility and custom domain
+
+Public pages have route-specific titles, descriptions, canonical links and social
+metadata in their initial HTML. The existing React app still renders the page
+content. Package detail metadata updates from the public API after loading; new
+packages continue to work before the next build. The sitemap includes all public
+service pages and the published package IDs returned at build time. Rebuild after
+catalogue changes to refresh that list. Personal itinerary, login, admin, booking
+and unknown pages use `noindex`; API authorization continues to protect data.
+
+The business is based in Trichy (Tiruchirappalli), Tamil Nadu, and serves tours
+worldwide, as confirmed by its owner. Structured data includes the confirmed city
+and the existing public phone number. No street address, reviews or ratings are
+invented. Search appearance and rankings remain decisions of each search engine.
+
+The requested `sreepayanam.com` is not owned or connected yet. Domain registration
+has a separate annual fee. Keep AWS on its Free plan and use the registrar's DNS
+to avoid a paid hosted zone. After the owner registers the name:
+
+1. Request a non-exportable ACM public certificate for the apex and `www` names in
+   `us-east-1`, required by global CloudFront. Application resources stay in Sydney.
+2. Add ACM's DNS validation records at the registrar and wait for `ISSUED`.
+3. Add the certificate and alternate names to this distribution through a validated
+   CloudFormation update. Add the new browser origins to temporary-upload CORS and
+   to the encrypted runtime configuration, retaining the current origin during
+   verification. Restart Lambda with a new configuration revision.
+4. Point the apex using the registrar's ALIAS/flattening support and point `www`
+   with CNAME to the distribution. Verify HTTPS, deep links, login and uploads.
+5. Rebuild with the owned, working apex as `VITE_PUBLIC_SITE_URL`, publish all
+   generated HTML and search files, and invalidate those paths. Only then update
+   the old Vercel browser redirect and redirect alternate hosts to the apex.
+6. Verify ownership in Google Search Console and Bing Webmaster Tools and submit
+   `/sitemap.xml`. A Google Business Profile additionally needs the owner's real
+   business details and verification; publishing metadata does not create one.
+
+Keep ACM validation CNAME records for automatic certificate renewal. Do not use
+the proposed name as the canonical URL before registration and working HTTPS.
 
 ## Costs and recovery
 

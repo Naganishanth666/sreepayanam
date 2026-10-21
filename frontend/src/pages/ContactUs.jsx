@@ -73,7 +73,7 @@ const ContactUs = () => {
         <section className="contact-copy">
           <span className="eyebrow">Talk to the travel desk</span>
           <h1>Tell us where the route should lead.</h1>
-          <p>Share a destination, a date, or simply the kind of trip you have in mind. A SreePayanam planner will shape the next step with you.</p>
+          <p>Based in Trichy (Tiruchirappalli), SreePayanam plans holidays across India and around the world. Share a destination, a date, or the kind of trip you have in mind, and our travel team will help with the next step.</p>
           <div className="contact-methods">
             <div className="contact-method"><span className="contact-method-icon">01</span><div><strong>Quick planning</strong><span>Package ideas, stays, vehicles, and sightseeing in one conversation.</span></div></div>
             <div className="contact-method"><span className="contact-method-icon">02</span><div><strong>Human follow-up</strong><span>We use your details only to respond to this enquiry.</span></div></div>
