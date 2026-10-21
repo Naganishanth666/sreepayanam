@@ -413,7 +413,7 @@ const LandingPage = () => {
         <div className="container footer-inner">
           <div className="footer-brand">
             <img src={logoImg} alt="SreePayanam Tours and Travels" width="360" height="120" />
-            <p>Travel smarter. Journey better.</p>
+            <p>Tours and travels in Trichy, planning holidays across India and worldwide.</p>
           </div>
           <div>
             <div className="footer-links">

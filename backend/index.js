@@ -13,6 +13,7 @@ const quotationRoutes = require('./routes/quotationRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const catalogCategoryRoutes = require('./routes/catalogCategoryRoutes');
 const { checkAdmin } = require('./middleware/auth');
+const { createReadinessHandler } = require('./middleware/readiness');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -107,6 +108,9 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/sreepayan
 })
 .then(async () => {
   console.log('Connected to MongoDB');
+
+  // Deployments can reuse the existing database without rerunning write migrations.
+  if (process.env.RUN_STARTUP_MIGRATIONS === 'false') return;
   
   // Run migration to populate packageId for legacy packages if missing
   try {
@@ -167,6 +171,8 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/sreepayan
   }
 })
 .catch((err) => console.error('MongoDB connection error:', err));
+
+app.get('/api/health', createReadinessHandler(mongoose.connection));
 
 // Basic route
 app.get('/', (req, res) => {

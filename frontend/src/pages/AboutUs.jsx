@@ -104,7 +104,7 @@ const AboutUs = () => {
             transition={{ duration: 0.8, delay: 0.4 }}
             style={styles.heroSubtitle}
           >
-            Your trusted travel and tourism service provider offering complete, customized, and AI-enabled travel solutions across the globe.
+            Based in Trichy (Tiruchirappalli), Tamil Nadu, SreePayanam arranges domestic and international tours, with customized itineraries and AI-assisted planning for destinations worldwide.
           </motion.p>
         </div>
       </section>
